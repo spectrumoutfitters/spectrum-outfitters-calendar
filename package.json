@@ -1,0 +1,14 @@
+{
+  "name": "spectrum-outfitters-app",
+  "version": "1.0.0",
+  "description": "Employee Task Management & Time Clock System",
+  "type": "module",
+  "scripts": {
+    "launcher": "node launcher/launcher.js",
+    "deploy": "node scripts/deploy.cjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
+

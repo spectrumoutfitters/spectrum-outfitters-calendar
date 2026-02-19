@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spectrum Server Monitor</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    .app { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; margin: 0 0 20px; color: #f8fafc; display: flex; align-items: center; gap: 10px; }
+    .badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+    .badge-ok { background: #166534; color: #dcfce7; }
+    .badge-err { background: #991b1b; color: #fecaca; }
+    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #e2e8f0;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn:hover { background: #334155; }
+    .btn-primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .settings-panel {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .settings-panel h2 { margin: 0 0 12px; font-size: 1rem; color: #94a3b8; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+    .field input {
+      width: 100%;
+      max-width: 480px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 14px;
+    }
+    .field input::placeholder { color: #64748b; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .stat-value { font-size: 1.75rem; font-weight: 700; color: #f8fafc; }
+    .stat-label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+    .section {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .section h3 { margin: 0 0 12px; font-size: 0.95rem; color: #cbd5e1; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #334155; }
+    th { color: #94a3b8; font-weight: 600; }
+    tr:last-child td { border-bottom: 0; }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .status-online { background: #22c55e; }
+    .status-idle { background: #eab308; }
+    .status-ok { color: #22c55e; }
+    .status-fail { color: #ef4444; }
+    .muted { color: #64748b; font-size: 12px; }
+    .error-msg { background: #7f1d1d; color: #fecaca; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+    .empty { color: #64748b; padding: 24px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>
+      <span>Spectrum Server Monitor</span>
+      <span id="healthBadge" class="badge badge-err" style="display:none;">Offline</span>
+      <span id="healthBadgeOk" class="badge badge-ok" style="display:none;">Server OK</span>
+    </h1>
+
+    <div class="toolbar">
+      <button type="button" class="btn" id="btnSettings">Settings</button>
+      <button type="button" class="btn btn-primary" id="btnRefresh">Refresh now</button>
+      <span id="lastUpdate" class="muted"></span>
+    </div>
+
+    <div id="settingsPanel" class="settings-panel" style="display:none;">
+      <h2>Connection</h2>
+      <div class="field">
+        <label>API Base URL</label>
+        <input id="inputApiUrl" type="text" placeholder="https://login.spectrumoutfitters.com/api" />
+      </div>
+      <div class="field">
+        <label>Admin token (JWT) — get from browser after logging in: DevTools → Application → Local Storage → token</label>
+        <input id="inputToken" type="password" placeholder="Paste your JWT token" />
+      </div>
+      <button type="button" class="btn btn-primary" id="btnSaveConfig">Save</button>
+    </div>
+
+    <div id="errorBox" class="error-msg" style="display:none;"></div>
+
+    <div id="statsRow" class="stats"></div>
+    <div id="sessionsSection" class="section">
+      <h3>Active sessions</h3>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>User</th><th>Role</th><th>Status</th><th>IP</th><th>Device</th><th>Last seen</th></tr></thead>
+          <tbody id="sessionsBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="eventsSection" class="section">
+      <h3>Recent login events</h3>
+      <div style="overflow-x:auto; max-height:320px; overflow-y:auto;">
+        <table>
+          <thead><tr><th>Time</th><th>User</th><th>Result</th><th>IP</th><th>Location</th><th>On‑prem</th></tr></thead>
+          <tbody id="eventsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

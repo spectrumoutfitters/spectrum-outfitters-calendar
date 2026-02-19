@@ -1,0 +1,14 @@
+{
+  "name": "spectrum-outfitters-launcher",
+  "version": "1.0.0",
+  "description": "Desktop launcher for Spectrum Outfitters Application",
+  "main": "launcher.js",
+  "type": "module",
+  "scripts": {
+    "start": "node launcher.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
+

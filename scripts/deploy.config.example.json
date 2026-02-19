@@ -1,0 +1,6 @@
+{
+  "host": "YOUR_VPS_IP",
+  "user": "root",
+  "path": "/var/www/spectrum-outfitters",
+  "sshKeyPath": ""
+}

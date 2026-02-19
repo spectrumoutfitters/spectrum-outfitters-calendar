@@ -1,0 +1,116 @@
+/**
+ * Run at server startup so all routes see required tables/columns.
+ * Idempotent - safe to run every time.
+ */
+import db from './db.js';
+import { seedFeb2026Changelog } from './seed-changelog-feb2026.js';
+import { addPlaidTables } from './add_plaid_tables.js';
+import { addShopmonkeyRevenueTable } from './add_shopmonkey_revenue_table.js';
+import { addSecurityTables } from './add_security_tables.js';
+
+export async function ensureUserColumns() {
+  const columns = [
+    { name: 'is_active', sql: 'ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1' },
+    { name: 'weekly_salary', sql: 'ALTER TABLE users ADD COLUMN weekly_salary DECIMAL(10,2) DEFAULT 0' },
+    { name: 'show_clock_in_header', sql: 'ALTER TABLE users ADD COLUMN show_clock_in_header BOOLEAN DEFAULT 1' },
+    { name: 'payroll_access', sql: 'ALTER TABLE users ADD COLUMN payroll_access BOOLEAN DEFAULT 0' },
+    { name: 'is_master_admin', sql: 'ALTER TABLE users ADD COLUMN is_master_admin BOOLEAN DEFAULT 0' },
+    { name: 'last_login', sql: 'ALTER TABLE users ADD COLUMN last_login DATETIME' }
+  ];
+  try {
+    const info = await db.allAsync('PRAGMA table_info(users)');
+    const names = new Set((info || []).map(c => c.name));
+    for (const col of columns) {
+      if (!names.has(col.name)) {
+        await db.runAsync(col.sql).catch(() => {});
+      }
+    }
+  } catch (_) {}
+}
+
+export async function ensureAppSettingsTable() {
+  try {
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await db.runAsync('CREATE UNIQUE INDEX IF NOT EXISTS idx_app_settings_key ON app_settings(key)').catch(() => {});
+  } catch (_) {}
+}
+
+export async function ensureSystemUpdatesTables() {
+  try {
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS system_updates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        version TEXT,
+        update_type TEXT CHECK(update_type IN ('feature', 'bugfix', 'improvement', 'announcement', 'maintenance')) DEFAULT 'feature',
+        priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'critical')) DEFAULT 'medium',
+        is_active INTEGER DEFAULT 1,
+        is_pending INTEGER DEFAULT 1,
+        approved_by INTEGER REFERENCES users(id),
+        approved_at DATETIME,
+        show_on_login INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_by INTEGER REFERENCES users(id)
+      )
+    `);
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS system_updates_read (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        update_id INTEGER NOT NULL REFERENCES system_updates(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        read_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(update_id, user_id)
+      )
+    `).catch(() => {});
+  } catch (_) {}
+}
+
+export async function ensureNewItemRequestsTable() {
+  try {
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS inventory_new_item_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        requested_by INTEGER NOT NULL REFERENCES users(id),
+        item_name TEXT NOT NULL,
+        notes TEXT,
+        barcode TEXT,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'addressed', 'dismissed')),
+        addressed_at DATETIME,
+        addressed_by INTEGER REFERENCES users(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_new_item_requests_status ON inventory_new_item_requests(status)').catch(() => {});
+  } catch (_) {}
+}
+
+/** Ensure Neel (by username or name) has master admin and payroll access. */
+export async function ensureNeelMasterAdmin() {
+  try {
+    await db.runAsync(`
+      UPDATE users SET is_master_admin = 1, payroll_access = 1
+      WHERE LOWER(username) = 'neel' OR LOWER(full_name) LIKE '%neel%'
+    `);
+  } catch (_) {}
+}
+
+export async function runStartupMigrations() {
+  await ensureUserColumns();
+  await ensureNeelMasterAdmin();
+  await ensureAppSettingsTable();
+  await ensureSystemUpdatesTables();
+  await ensureNewItemRequestsTable();
+  await seedFeb2026Changelog();
+  await addPlaidTables();
+  await addShopmonkeyRevenueTable();
+  await addSecurityTables();
+}

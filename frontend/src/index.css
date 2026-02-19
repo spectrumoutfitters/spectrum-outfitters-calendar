@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply text-neutral-800 bg-neutral-100;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  *:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px white, 0 0 0 4px #B8860B;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-neutral-50 rounded-2xl border border-neutral-200/80 shadow-sm;
+  }
+
+  .card-hover {
+    @apply card transition-shadow duration-200 hover:shadow-md;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center font-medium rounded-xl px-5 py-2.5 text-white transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none;
+    background-color: #B8860B;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: #8B6914;
+  }
+  .btn-primary:focus-visible {
+    box-shadow: 0 0 0 2px white, 0 0 0 4px #B8860B;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center font-medium rounded-xl px-5 py-2.5 border-2 border-neutral-200 text-neutral-700 bg-white transition-colors duration-150 hover:border-neutral-300 hover:bg-neutral-50 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-secondary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px white, 0 0 0 4px #B8860B;
+  }
+
+  .input-base {
+    @apply w-full px-4 py-3 rounded-xl border border-neutral-200 bg-white text-neutral-800 placeholder-neutral-400 transition-colors focus:ring-2 focus:outline-none;
+  }
+  .input-base:focus {
+    border-color: #B8860B;
+    box-shadow: 0 0 0 2px rgba(184, 134, 11, 0.2);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+input[type="checkbox"] {
+  appearance: checkbox !important;
+  -webkit-appearance: checkbox !important;
+  -moz-appearance: checkbox !important;
+  @apply rounded border-neutral-300;
+}

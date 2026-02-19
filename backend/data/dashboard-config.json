@@ -1,0 +1,152 @@
+{
+  "items": [
+    {
+      "id": "item-71f6305ae6bf1-19c587778f4",
+      "name": "Xl Parts",
+      "type": "url",
+      "path": "https://rapid.xlparts.com/login",
+      "windowBehavior": "reuse",
+      "category": "Suppliers",
+      "username": "Neel@gotospectrum.com",
+      "password": "Nikesock1!",
+      "windowConfig": {}
+    },
+    {
+      "id": "item-4f05bc4e2be1c-19c4eaf0080",
+      "name": "Jasper Engines",
+      "type": "url",
+      "path": "https://myjasperaccount.com/index.asp",
+      "windowBehavior": "new",
+      "category": "Suppliers",
+      "username": "neel@gotospectrum.com",
+      "password": "SPECTRUM2025!",
+      "windowConfig": {}
+    },
+    {
+      "id": "item-3d7e36366058b-19c339743b6",
+      "name": "Shop Monkey",
+      "type": "url",
+      "path": "https://app.shopmonkey.cloud/dashboard",
+      "windowBehavior": "reuse",
+      "category": "Internal Tools",
+      "windowConfig": {}
+    },
+    {
+      "id": "item-1e45687f475bf-19c33968ad6",
+      "name": "Junk Yard Search",
+      "type": "url",
+      "path": "https://www.car-part.com/",
+      "windowBehavior": "new",
+      "windowConfig": {},
+      "category": "Suppliers"
+    },
+    {
+      "id": "item-380b61312a6e2-19c2f9dd131",
+      "name": "Westcott Designs",
+      "type": "url",
+      "path": "https://westcottdesigns.net/my-account/",
+      "windowBehavior": "reuse",
+      "category": "Suppliers",
+      "windowConfig": {},
+      "username": "Spectrum Outfitters",
+      "password": "Nikesock1!"
+    },
+    {
+      "id": "item-128a921898d98-19c2f5c6770",
+      "name": "Oreilly Auto Parts",
+      "type": "url",
+      "path": "https://www.firstcallonline.com/FirstCallOnline/index.html",
+      "windowBehavior": "reuse",
+      "category": "Suppliers",
+      "windowConfig": {},
+      "username": "Nbhatt",
+      "password": "Nikesock1!"
+    },
+    {
+      "id": "item-81958651654fa-19c2f528b40",
+      "name": "Start Spectrum Website",
+      "type": "app",
+      "path": "C:\\Users\\pearl\\Documents\\Spectrum Outfitters\\Applications\\Spectrum Outfitters Calendar\\START_APPLICATION.bat",
+      "windowBehavior": "reuse",
+      "windowConfig": {},
+      "icon": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAC+ElEQVRYhe2UwU8TaRiHn1FaOl11tVMCnaJ0C4pA3I1xWZAuVRH14InEPZjs32BiovHg2cNmTUz8EzTRxOzGmOweTJFdRstyc5e1GDDWorQ1WDDCtKSdhteDtkHFOtXoQfld5vsy+eZ55nu/74XVfOlRSoMzv5yVTwk+feqEArDmY4N6Qz0rPkupWT45efzYR5Ho/uF7RISuzl0A3IyOlN/Z2oFkKk3kL4N8ocD8gskf1yPEE1O2BURkxbEtgWQqTWT4ForDhREd5c/rEdwbNnFjOPrBcFsCft2Hw+Ek0NwCjloav2lGb9yMy62WBauBvy5R88aql4knphgyRlDdbjRvHYoCgWALIkuICB6PxsUrVykWLQ7u7cWv+6qGVxQYn5iktb2Dxi1NiAiTd2M8zcwA8LXHS/O2VoIiTD2IMz5x7xUBu3AqlSDcs5vpxH0ep5MULYunmRmOHhng6JEBns1lUBSFh4kHrF0qEg5124bbPoS1tU68msZiLresXb0a1e0mMztLPl94LziVSmBER6lxfUWwZSuCsKmunsu/XQVgo1aHoijU1/uwChZG9B8OH+qvGl5RoL11K4NGlHQqieato7WtHdnehoggS8LkxF3mMk9YzC3SF37R3f79P8b8wgK9u7veCrd9C/y6j/5wCL/u49Lv11Bo53E6RTZrEgg2Mzeb4eefBhARBv82uDkyitOlIsCFy1fQfQ3s39P7/iUoSQDksjkePUwwnYjj1TQS8fsULYvpZAq/7iOZSrNjZyeqW0VEyJomsbHbtkpgqxX3hXt4NjvD4UMHCIe6kcJieXdKf666VYZvRDCGBnGpKg6ni7E742/AbZdgeYKBJoKBpvK8f2+4PF6/bh3CzAoQYd40P6wEK+X1D363o4P/7sTImiahPftelCBrYhXyhLo6K8KrFnjbPdd9DcTGbuNwugDBKuTRGxoqrqtaoFKTKZ32IeMWmsfDtx1ttuC2Bex2uL7wj++8/xV34Ndz5+34rGY1q/m88hzMAbnr9FZMhAAAAABJRU5ErkJggg==",
+      "category": "Internal Tools"
+    },
+    {
+      "id": "item-a4f839cf0750a-19c2f47bab6",
+      "name": "OEM Wheel Finder ( Wheels America )",
+      "type": "url",
+      "path": "https://oemwheelfinder.com/",
+      "windowBehavior": "reuse",
+      "windowConfig": {},
+      "category": "Suppliers",
+      "hotkey": "Ctrl+3",
+      "username": "SpectrumOutfitters",
+      "password": "SpectrumOutfitters77043"
+    },
+    {
+      "id": "item-0ddf4cf0ba53f-19c2f475414",
+      "name": "Tire Rack Wholesale",
+      "type": "url",
+      "path": "https://www.tirerackwholesale.com/main.jsp",
+      "windowBehavior": "reuse",
+      "windowConfig": {},
+      "category": "Suppliers",
+      "username": "Spectrum Outfitters",
+      "password": "32835318d9ee99c0d63af7afd58ab84b:9b5b6825f277345cdd7bbc17cc453e3f"
+    },
+    {
+      "id": "item-4ea4fcd09f1f2-19c2f457931",
+      "name": "Turn 14",
+      "type": "url",
+      "path": "https://turn14.com/",
+      "windowBehavior": "reuse",
+      "windowConfig": {},
+      "category": "Suppliers",
+      "username": "spectrum2025",
+      "password": "Nikesock1!"
+    },
+    {
+      "id": "item-2284d31a21ded-19c2ec14a95",
+      "name": "Meyer Distributing",
+      "type": "url",
+      "path": "https://online.meyerdistributing.com/home",
+      "windowBehavior": "reuse",
+      "windowConfig": {},
+      "category": "Suppliers",
+      "username": "SpectrumOutfitters",
+      "password": "Nikesock1994!"
+    },
+    {
+      "id": "spectrum-portal",
+      "name": "Spectrum Portal",
+      "type": "url",
+      "path": "http://192.168.1.100:5173/dashboard",
+      "icon": "",
+      "windowBehavior": "reuse",
+      "windowConfig": {},
+      "category": "Internal Tools"
+    },
+    {
+      "id": "open-documents",
+      "name": "Documents Folder",
+      "type": "file",
+      "path": "C:\\Users\\pearl\\Documents\\Spectrum Outfitters",
+      "icon": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACi0lEQVRYhe2WTU8TQQCG35nZpkUiEgnptVuMJgaE41YvaArnmhiUE/oHNP4EExIvmsYbbUlM/4BwMtF48CCJN7kYDkA6C9xMqLalne3szniQLq1dYWkgeOibbLKZr+fJfO0C/fTTTz8XHBJYulIaxn3zJz6WH0MjAWASlAyD0GkAQHoouF8PMfy3D+WVDghAQNnbswKdLMBY5rxhQaEXAf2vBC48R7v5U0V31KSHSFdZe11bNjZKidilSEYq+fm6aa6fRsAI0SYwLSjRZIEwMgUAURoF39njWmNVKlkMI9PTDPBr1fUW9LhorU6UORL4+x44RsC+UTuJHVom8EbLftubylzF9LtqNLvnEnwXFBVF8LXOehYAAKUUXClRrx/wyVvjJtr3QNCaPrgiewIFQYUQEKIBIQQcx0m06n2BbPZliRCKm+PjSKXuIB6PnzUUUjbhui48T/ltO07Bzo6NtbUvKOSWYCaTSM/MhpZRSkFKCUcINEQDjmjAcZodUKUUtNbQ+mhr+QKUUhiGAcYYtNawOcdyPodCbgnJsTGk07OwUrc7ZP5Am4dQEQLasacHATR9gVgshoGBAUQiEb9D67E5x3Ihh+VCDqaZxMNH85iYmEDjcIqb4aEAAK281inw/FOwuLioo9EoNjc3wTlHpVLxB2kN6MQdQALGDwOvXmdPDfWAYsN1V5/Mz/OuJRgdHX3BGFuwLCthWRb29/extbUF27ZRrVahlMLBzAHkL4mR9yOo1Wo9Q9vTdQ/k8/kpxtiC1jpDKU0AQLlcxvb2NnZ3d32Zp8+eB0KVp7jWZLWumm/+BT1WIIxMqVTC9N17XVBCvOLc3NypPkah/+3aZRhjicHByz1D+2nPb9ME3b+nKVeNAAAAAElFTkSuQmCC",
+      "windowBehavior": "reuse",
+      "windowConfig": {},
+      "category": "Files"
+    }
+  ],
+  "categoryOrder": [
+    "Suppliers",
+    "Internal Tools",
+    "Files"
+  ],
+  "spectrumServer": {
+    "projectPath": "C:\\Users\\pearl\\Documents\\Spectrum Outfitters\\Applications\\Spectrum Outfitters Calendar",
+    "startCommand": "",
+    "healthUrl": "http://localhost:3000/"
+  },
+  "updatedAt": "2026-02-13T21:47:35.953Z"
+}
