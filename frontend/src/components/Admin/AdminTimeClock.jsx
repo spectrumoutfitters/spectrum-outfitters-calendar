@@ -141,7 +141,7 @@ const AdminTimeClock = () => {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-800">Admin Time Clock</h1>
 
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
         <div className="flex flex-wrap gap-4 mb-6">
           <div className="flex-1 min-w-[200px]">
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -182,7 +182,7 @@ const AdminTimeClock = () => {
         </div>
 
         {selectedUser && (
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+          <div className="mb-6 p-4 bg-gray-50 dark:bg-neutral-800 rounded-lg">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <p className="text-sm text-gray-600">Employee</p>
@@ -234,7 +234,7 @@ const AdminTimeClock = () => {
               if (isToday && !hasWorkEntries && !hasLunchBreaks) {
                 return (
                   <div key={day.date} className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                    <div className="bg-gray-50 dark:bg-neutral-800 px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
                       <div className="flex justify-between items-center">
                         <h3 className="text-lg font-semibold">{formatDate(day.date)} <span className="text-sm text-primary font-normal">(Today)</span></h3>
                         <div className="flex gap-6 text-sm">
@@ -258,7 +258,7 @@ const AdminTimeClock = () => {
               if (isToday && !hasWorkEntries && hasLunchBreaks) {
                 return (
                   <div key={day.date} className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                    <div className="bg-gray-50 dark:bg-neutral-800 px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
                       <div className="flex justify-between items-center">
                         <h3 className="text-lg font-semibold">{formatDate(day.date)} <span className="text-sm text-primary font-normal">(Today)</span></h3>
                         <div className="flex gap-6 text-sm">
@@ -304,7 +304,7 @@ const AdminTimeClock = () => {
               
               return (
               <div key={day.date} className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                <div className="bg-gray-50 dark:bg-neutral-800 px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-semibold">{formatDate(day.date)}</h3>
                     <div className="flex gap-6 text-sm">
@@ -320,7 +320,7 @@ const AdminTimeClock = () => {
                 
                 <div className="p-4">
                   <table className="w-full">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gray-50 dark:bg-neutral-800">
                       <tr>
                         <th className="text-left py-2 px-4 text-sm font-medium">Clock In</th>
                         <th className="text-left py-2 px-4 text-sm font-medium">Clock Out</th>
@@ -407,7 +407,7 @@ const AdminTimeClock = () => {
                           : entry.clock_out;
 
                         return (
-                          <tr key={entry.id} className="border-b hover:bg-gray-50">
+                          <tr key={entry.id} className="border-b border-gray-100 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
                             <td className="py-2 px-4">
                               {entry.clock_in ? formatTime(entry.clock_in) : '—'}
                             </td>

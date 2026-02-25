@@ -53,13 +53,11 @@ const ChatWindow = ({
     ? conversations 
     : (adminBoardConv ? [teamBoardConv, adminBoardConv] : [teamBoardConv]);
   
-  const currentConv = selectedConversation || allConversations[0];
+  const currentConv = selectedConversation;
 
   useEffect(() => {
     if (currentConv) {
       loadMessages();
-      onSelectConversation(currentConv);
-      // Notify SocketContext which conversation is being viewed
       if (setViewingConversation) {
         setViewingConversation(currentConv.id);
       }
@@ -387,7 +385,7 @@ const ChatWindow = ({
       }
       // Add highlighted mention
       parts.push(
-        <span key={match.index} className="font-semibold text-blue-600 bg-blue-50 px-1 rounded">
+        <span key={match.index} className="font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1 rounded">
           @{match[1]}
         </span>
       );
@@ -452,11 +450,11 @@ const ChatWindow = ({
   };
 
   return (
-    <div className="fixed inset-0 md:inset-auto md:bottom-6 md:right-6 md:w-[800px] md:h-[700px] md:rounded-lg bg-white shadow-2xl z-50 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 lg:inset-auto lg:bottom-6 lg:right-6 lg:w-[800px] lg:max-w-[calc(100vw-2rem)] lg:h-[700px] lg:max-h-[calc(100vh-3rem)] lg:rounded-xl bg-white dark:bg-neutral-900 shadow-2xl z-50 flex flex-col overflow-hidden border-0 lg:border border-neutral-200 dark:border-neutral-700">
       {/* Header */}
       <div className="bg-primary text-white p-3 md:p-4 flex justify-between items-center flex-shrink-0">
         <h3 className="font-semibold text-base md:text-lg">Messages</h3>
-        <button onClick={onClose} className="text-white hover:text-gray-200 p-1 active:opacity-70" aria-label="Close chat">
+        <button onClick={onClose} className="text-white hover:text-white/80 p-1 active:opacity-70 rounded-lg hover:bg-white/10 min-h-[2.5rem] min-w-[2.5rem] flex items-center justify-center" aria-label="Close chat">
           <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -464,13 +462,13 @@ const ChatWindow = ({
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Conversations Sidebar */}
-        <div className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 border-r border-gray-200 flex-col`}>
+        {/* Conversations Sidebar - hidden when a conversation is selected on mobile/tablet so back button returns here */}
+        <div className={`${selectedConversation ? 'hidden lg:flex' : 'flex'} w-full lg:w-1/3 border-r border-gray-200 dark:border-neutral-700 flex-col bg-white dark:bg-neutral-900`}>
           {/* New Message Button */}
-          <div className="p-3 border-b border-gray-200">
+          <div className="p-3 border-b border-gray-200 dark:border-neutral-700">
             <button
               onClick={() => setShowUserList(!showUserList)}
-              className="w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+              className="w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm font-medium min-h-[2.75rem]"
             >
               + New Message
             </button>
@@ -478,23 +476,23 @@ const ChatWindow = ({
 
           {/* User List (when creating new message) */}
           {showUserList && (
-            <div className="border-b border-gray-200 p-2">
+            <div className="border-b border-gray-200 dark:border-neutral-700 p-2">
               <input
                 type="text"
                 placeholder="Search users..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
               />
               <div className="max-h-40 overflow-y-auto mt-2">
                 {filteredUsers.map((u) => (
                   <div
                     key={u.id}
                     onClick={() => handleStartConversation(u)}
-                    className="p-2 hover:bg-gray-100 rounded cursor-pointer text-sm"
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded cursor-pointer text-sm min-h-[2.75rem] flex flex-col justify-center"
                   >
-                    <div className="font-medium">{u.full_name}</div>
-                    <div className="text-xs text-gray-500">@{u.username}</div>
+                    <div className="font-medium text-gray-900 dark:text-neutral-100">{u.full_name}</div>
+                    <div className="text-xs text-gray-500 dark:text-neutral-400">@{u.username}</div>
                   </div>
                 ))}
               </div>
@@ -504,7 +502,7 @@ const ChatWindow = ({
           {/* Conversations List */}
           <div className="flex-1 overflow-y-auto">
             {allConversations.length === 0 ? (
-              <div className="p-4 text-center text-gray-500 text-sm">
+              <div className="p-4 text-center text-gray-500 dark:text-neutral-400 text-sm">
                 <p>No conversations yet</p>
                 <p className="text-xs mt-2">Start a conversation!</p>
               </div>
@@ -513,20 +511,20 @@ const ChatWindow = ({
                 <div
                   key={conv.id}
                   onClick={() => onSelectConversation(conv)}
-                  className={`p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 ${
-                    currentConv?.id === conv.id ? 'bg-blue-50' : ''
+                  className={`p-3 hover:bg-gray-100 dark:hover:bg-neutral-800 cursor-pointer border-b border-gray-100 dark:border-neutral-700 min-h-[3rem] flex flex-col justify-center ${
+                    currentConv?.id === conv.id ? 'bg-primary/10 dark:bg-primary/20' : ''
                   }`}
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{conv.name}</div>
+                      <div className="font-medium text-sm truncate text-gray-900 dark:text-neutral-100">{conv.name}</div>
                       {conv.lastMessage && (
-                        <p className="text-xs text-gray-600 truncate mt-1">
+                        <p className="text-xs text-gray-600 dark:text-neutral-400 truncate mt-1">
                           {conv.lastMessage.message}
                         </p>
                       )}
                       {conv.lastMessage && (
-                        <p className="text-xs text-gray-400 mt-1">
+                        <p className="text-xs text-gray-400 dark:text-neutral-500 mt-1">
                           {formatTime(conv.lastMessage.created_at)}
                         </p>
                       )}
@@ -544,26 +542,24 @@ const ChatWindow = ({
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-neutral-900">
           {currentConv ? (
             <>
-              {/* Conversation Header */}
-              <div className="p-3 md:p-4 border-b border-gray-200 flex-shrink-0 flex items-center justify-between">
+              {/* Conversation Header - Back button always visible on mobile/tablet (when sidebar is hidden) */}
+              <div className="p-3 md:p-4 border-b border-gray-200 dark:border-neutral-700 flex-shrink-0 flex items-center gap-2">
+                <button
+                  onClick={() => onSelectConversation(null)}
+                  className="lg:hidden flex items-center justify-center min-h-[2.5rem] min-w-[2.5rem] rounded-lg text-gray-700 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 -ml-1"
+                  aria-label="Back to conversations"
+                >
+                  <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onSelectConversation(null)}
-                      className="md:hidden text-gray-600 hover:text-gray-800 p-1"
-                      aria-label="Back to conversations"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <h4 className="font-semibold text-sm md:text-base truncate">{currentConv.name}</h4>
-                  </div>
+                  <h4 className="font-semibold text-sm md:text-base truncate text-gray-900 dark:text-neutral-100">{currentConv.name}</h4>
                   {currentConv.isTeam && (
-                    <p className="text-xs md:text-sm text-gray-500">Team conversation</p>
+                    <p className="text-xs md:text-sm text-gray-500 dark:text-neutral-400">Team conversation</p>
                   )}
                 </div>
               </div>
@@ -571,8 +567,8 @@ const ChatWindow = ({
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-2 md:p-4 space-y-2 md:space-y-3">
                 {messages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-gray-500">
-                    <div className="text-center">
+                  <div className="flex items-center justify-center h-full text-gray-500 dark:text-neutral-400">
+                    <div className="text-center px-4">
                       <p className="text-lg font-medium mb-2">No messages yet</p>
                       <p className="text-sm">Be the first to send a message!</p>
                     </div>
@@ -588,17 +584,17 @@ const ChatWindow = ({
                           className={`max-w-[85%] md:max-w-[70%] rounded-lg p-2 md:p-3 text-sm md:text-base ${
                             msg.sender_id === user.id
                               ? 'bg-primary text-white'
-                              : 'bg-gray-200 text-gray-800'
+                              : 'bg-gray-200 dark:bg-neutral-700 text-gray-800 dark:text-neutral-100'
                           }`}
                         >
                           {msg.sender_id !== user.id && (
-                            <p className="text-xs font-semibold mb-1">{msg.sender_name}</p>
+                            <p className="text-xs font-semibold mb-1 text-gray-900 dark:text-neutral-100">{msg.sender_name}</p>
                           )}
                           <p className="text-sm whitespace-pre-wrap break-words">
                             {renderMessageWithMentions(msg.message)}
                           </p>
                           <div className="flex items-center justify-between mt-1">
-                            <p className={`text-xs ${msg.sender_id === user.id ? 'text-blue-100' : 'text-gray-500'}`}>
+                            <p className={`text-xs ${msg.sender_id === user.id ? 'text-blue-100' : 'text-gray-500 dark:text-neutral-400'}`}>
                               {formatTime(msg.created_at)}
                             </p>
                             {/* Read Receipts */}
@@ -626,7 +622,7 @@ const ChatWindow = ({
                   ))
                 )}
                 {typingUsers.length > 0 && (
-                  <div className="text-sm text-gray-500 italic">
+                  <div className="text-sm text-gray-500 dark:text-neutral-400 italic">
                     {typingUsers.map(u => u.userName).join(', ')} typing...
                   </div>
                 )}
@@ -634,7 +630,7 @@ const ChatWindow = ({
               </div>
 
               {/* Input */}
-              <div className="border-t p-3 md:p-4 flex-shrink-0">
+              <div className="border-t border-gray-200 dark:border-neutral-700 p-3 md:p-4 flex-shrink-0 bg-white dark:bg-neutral-900 safe-area-pb">
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -642,11 +638,11 @@ const ChatWindow = ({
                     onChange={handleInputChange}
                     onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                     placeholder="Type a message..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm md:text-base"
+                    className="flex-1 min-h-[2.75rem] px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400 text-sm md:text-base"
                   />
                   <button
                     onClick={handleSend}
-                    className="px-4 md:px-6 py-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition text-sm md:text-base active:scale-95 min-w-[60px]"
+                    className="px-4 md:px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm md:text-base active:scale-95 min-w-[60px] min-h-[2.75rem]"
                   >
                     Send
                   </button>
@@ -654,8 +650,8 @@ const ChatWindow = ({
               </div>
             </>
           ) : (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              <p>Select a conversation to start messaging</p>
+            <div className="flex items-center justify-center h-full text-gray-500 dark:text-neutral-400 px-4">
+              <p className="text-center">Select a conversation to start messaging</p>
             </div>
           )}
         </div>

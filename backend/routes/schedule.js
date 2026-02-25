@@ -5,7 +5,9 @@ import { optimizeSchedule, isAIEnabled } from '../utils/aiService.js';
 import {
   pushEventToGoogle,
   deleteEventFromGoogle,
-  shouldSyncEntryToGoogle
+  shouldSyncEntryToGoogle,
+  listCalendars,
+  getGoogleCalendarConfig
 } from '../utils/googleCalendarService.js';
 
 const router = express.Router();
@@ -116,7 +118,27 @@ router.get('/', async (req, res) => {
     try {
       const entries = await db.allAsync(query, params);
       console.log(`Found ${entries.length} schedule entries`);
-      res.json({ entries });
+
+      let calendar_names = {};
+      try {
+        const cfg = await getGoogleCalendarConfig();
+        const syncIdsRaw = cfg?.sync_calendar_ids;
+        const syncIds = (() => {
+          if (!syncIdsRaw || typeof syncIdsRaw !== 'string') return [];
+          try {
+            const p = JSON.parse(syncIdsRaw);
+            return Array.isArray(p) ? p : [];
+          } catch (_) { return []; }
+        })();
+        if (syncIds.length > 0) {
+          const calendars = await listCalendars();
+          for (const c of calendars || []) {
+            if (c.id && syncIds.includes(c.id)) calendar_names[c.id] = c.summary || c.id;
+          }
+        }
+      } catch (_) {}
+
+      res.json({ entries, calendar_names });
     } catch (queryError) {
       console.error('Query execution error:', queryError);
       console.error('Query:', query);
@@ -133,12 +155,75 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/schedule/entry/:id - Fetch a single entry (for linking from dashboard; same visibility as GET /)
+router.get('/entry/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const isAdmin = req.user.role === 'admin';
+    let query = `
+      SELECT 
+        se.*,
+        CASE 
+          WHEN se.is_shop_wide = 1 THEN 'Shop Closed'
+          WHEN u.full_name IS NOT NULL THEN u.full_name
+          WHEN se.organizer_display_name IS NOT NULL AND TRIM(se.organizer_display_name) != '' THEN se.organizer_display_name
+          ELSE 'Unknown User'
+        END as user_name,
+        CASE 
+          WHEN se.is_shop_wide = 1 THEN 'shop'
+          WHEN u.username IS NOT NULL THEN u.username
+          WHEN se.organizer_display_name IS NOT NULL AND TRIM(se.organizer_display_name) != '' THEN LOWER(REPLACE(TRIM(se.organizer_display_name), ' ', '_'))
+          ELSE 'unknown'
+        END as username,
+        creator.full_name as created_by_name,
+        approver.full_name as approved_by_name
+      FROM schedule_entries se
+      LEFT JOIN users u ON se.user_id = u.id AND (se.is_shop_wide IS NULL OR se.is_shop_wide = 0)
+      LEFT JOIN users creator ON se.created_by = creator.id
+      LEFT JOIN users approver ON se.approved_by = approver.id
+      WHERE se.id = ?
+    `;
+    const params = [id];
+    if (!isAdmin) {
+      let employeesSeeAll = false;
+      try {
+        const row = await db.getAsync("SELECT value FROM app_settings WHERE key = 'schedule_employees_see_all'");
+        employeesSeeAll = row?.value === '1' || row?.value === 'true';
+      } catch (_) {}
+      if (!employeesSeeAll) {
+        query += ' AND (se.user_id = ? OR se.is_shop_wide = 1)';
+        params.push(req.user.id);
+      }
+    }
+    const entry = await db.getAsync(query, params);
+    if (!entry) return res.status(404).json({ error: 'Schedule entry not found' });
+    res.json({ entry });
+  } catch (err) {
+    console.error('Get schedule entry error:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
+  }
+});
+
 // POST /api/schedule - Create schedule entry
 // Admins can create for anyone or shop-wide closed days, employees can only create requests for themselves
 router.post('/', async (req, res) => {
   try {
-    const { user_id, start_date, end_date, type, reason, notes, is_shop_wide } = req.body;
+    const { user_id, start_date, end_date, type, reason, notes, location, is_shop_wide, is_event, google_calendar_id } = req.body;
     const isAdmin = req.user.role === 'admin';
+
+    // Ensure push_calendar_id and location columns exist (idempotent)
+    try {
+      const cols = await db.allAsync('PRAGMA table_info(schedule_entries)');
+      if (!cols.some((c) => c.name === 'push_calendar_id')) {
+        await db.runAsync('ALTER TABLE schedule_entries ADD COLUMN push_calendar_id TEXT');
+      }
+      if (!cols.some((c) => c.name === 'location')) {
+        await db.runAsync('ALTER TABLE schedule_entries ADD COLUMN location TEXT');
+      }
+      if (!cols.some((c) => c.name === 'source_calendar_id')) {
+        await db.runAsync('ALTER TABLE schedule_entries ADD COLUMN source_calendar_id TEXT');
+      }
+    } catch (_) {}
 
     // Determine which user this is for
     let targetUserId;
@@ -218,13 +303,26 @@ router.post('/', async (req, res) => {
     }
 
     // Determine type and status based on who's creating it
-    const entryType = type || (isAdmin ? 'day_off' : 'time_off_request');
-    const entryStatus = isAdmin ? 'scheduled' : 'pending'; // Employee requests need approval
+    const isEvent = is_event === true || is_event === 'true' || is_event === 1;
+    const eventTypes = ['meeting', 'training', 'other', 'appointment', 'workshop', 'conference'];
+    let entryType = type || (isAdmin ? 'day_off' : 'time_off_request');
+    let entryStatus = isAdmin ? 'scheduled' : 'pending'; // Employee requests need approval
 
+    // Employees can add "events" (meeting/training/other) that go on the calendar immediately
+    if (!isAdmin && isEvent) {
+      entryType = eventTypes.includes(entryType) ? entryType : 'meeting';
+      entryStatus = 'scheduled';
+    }
+
+    const pushCalendarId = isAdmin && google_calendar_id && typeof google_calendar_id === 'string' && google_calendar_id.trim()
+      ? google_calendar_id.trim()
+      : null;
+
+    const locationStr = typeof location === 'string' ? location.trim() || null : null;
     const result = await db.runAsync(`
       INSERT INTO schedule_entries 
-      (user_id, start_date, end_date, type, status, reason, notes, created_by, is_shop_wide)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, start_date, end_date, type, status, reason, notes, location, created_by, is_shop_wide, push_calendar_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       targetUserId,
       start_date,
@@ -233,8 +331,10 @@ router.post('/', async (req, res) => {
       entryStatus,
       reason || null,
       notes || null,
+      locationStr,
       req.user.id,
-      shopWide ? 1 : 0
+      shopWide ? 1 : 0,
+      pushCalendarId
     ]);
 
     const entry = await db.getAsync(`
@@ -264,13 +364,13 @@ router.post('/', async (req, res) => {
       try {
         const sync = await pushEventToGoogle(entry);
         if (sync?.google_event_id) {
+          const sourceCalId = entry.push_calendar_id || null;
           await db.runAsync(
-            `UPDATE schedule_entries SET google_event_id = ?, last_synced_at = ? WHERE id = ?`,
-            [sync.google_event_id, new Date().toISOString(), entry.id]
-          ).catch(() => {
-            // Columns may not exist if migration hasn't been run yet
-          });
+            `UPDATE schedule_entries SET google_event_id = ?, source_calendar_id = ?, last_synced_at = ? WHERE id = ?`,
+            [sync.google_event_id, sourceCalId, new Date().toISOString(), entry.id]
+          ).catch(() => {});
           entry.google_event_id = sync.google_event_id;
+          entry.source_calendar_id = sourceCalId;
           entry.last_synced_at = new Date().toISOString();
         }
       } catch (syncErr) {
@@ -354,7 +454,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { start_date, end_date, type, reason, notes, status, is_shop_wide } = req.body;
+    const { start_date, end_date, type, reason, notes, location, status, is_shop_wide } = req.body;
 
     const currentEntry = await db.getAsync('SELECT * FROM schedule_entries WHERE id = ?', [id]);
     if (!currentEntry) {
@@ -416,6 +516,10 @@ router.put('/:id', requireAdmin, async (req, res) => {
     if (notes !== undefined) {
       updates.push('notes = ?');
       updateParams.push(notes);
+    }
+    if (location !== undefined) {
+      updates.push('location = ?');
+      updateParams.push(typeof location === 'string' ? location.trim() || null : null);
     }
     if (status !== undefined) {
       updates.push('status = ?');

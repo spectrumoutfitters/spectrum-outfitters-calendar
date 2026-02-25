@@ -1,0 +1,15 @@
+{
+  "name": "spectrum-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Spectrum Outfitters Calendar — health, sessions, login events, docs",
+  "type": "module",
+  "main": "index.js",
+  "bin": { "spectrum-mcp": "index.js" },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0"
+  }
+}

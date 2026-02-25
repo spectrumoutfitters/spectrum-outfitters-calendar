@@ -48,27 +48,27 @@ const EmployeeStatus = () => {
   const getStatusBadge = (employee) => {
     if (employee.clockedIn) {
       return (
-        <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold flex items-center gap-2">
+        <span className="px-3 py-1 bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200 rounded-full text-sm font-semibold flex items-center gap-2">
           <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
           Clocked In
         </span>
       );
     } else if (employee.onLunch) {
       return (
-        <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-semibold flex items-center gap-2">
+        <span className="px-3 py-1 bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200 rounded-full text-sm font-semibold flex items-center gap-2">
           <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
           On Lunch
         </span>
       );
     } else if (employee.lastActivity || employee.hoursWorkedToday) {
       return (
-        <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
+        <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 rounded-full text-sm font-semibold">
           Clocked Out
         </span>
       );
     } else {
       return (
-        <span className="px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-sm font-semibold">
+        <span className="px-3 py-1 bg-gray-100 dark:bg-neutral-700 text-gray-500 dark:text-neutral-300 rounded-full text-sm font-semibold">
           Off Today
         </span>
       );
@@ -106,10 +106,10 @@ const EmployeeStatus = () => {
       const elapsedTime = employee.elapsedHours || calculateElapsedTime(employee.clockInTime);
       const lastLoginInfo = formatLastLogin(employee.lastLogin, employee.daysSinceLogin);
       return (
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-gray-600 dark:text-neutral-300">
           <div>Clocked in: <span className="font-medium">{formatTime(employee.clockInTime)}</span></div>
           <div className="text-primary font-semibold">Elapsed: {elapsedTime}</div>
-          <div className={`mt-1 ${lastLoginInfo.isWarning ? 'text-orange-600' : 'text-gray-500'}`}>
+          <div className={`mt-1 ${lastLoginInfo.isWarning ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500 dark:text-neutral-400'}`}>
             Last login: <span className="font-medium">{lastLoginInfo.text}</span>
           </div>
         </div>
@@ -117,10 +117,10 @@ const EmployeeStatus = () => {
     } else if (employee.onLunch) {
       const lastLoginInfo = formatLastLogin(employee.lastLogin, employee.daysSinceLogin);
       return (
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-gray-600 dark:text-neutral-300">
           <div>Lunch started: <span className="font-medium">{formatTime(employee.lunchOutTime)}</span></div>
-          <div className="text-orange-600">On lunch break</div>
-          <div className={`mt-1 ${lastLoginInfo.isWarning ? 'text-orange-600' : 'text-gray-500'}`}>
+          <div className="text-orange-600 dark:text-orange-400">On lunch break</div>
+          <div className={`mt-1 ${lastLoginInfo.isWarning ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500 dark:text-neutral-400'}`}>
             Last login: <span className="font-medium">{lastLoginInfo.text}</span>
           </div>
         </div>
@@ -128,9 +128,9 @@ const EmployeeStatus = () => {
     } else if (employee.lastActivity || employee.hoursWorkedToday) {
       const lastLoginInfo = formatLastLogin(employee.lastLogin, employee.daysSinceLogin);
       return (
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-gray-600 dark:text-neutral-300">
           {employee.hoursWorkedToday && (
-            <div className="text-green-700 font-semibold mb-1">
+            <div className="text-green-700 dark:text-green-300 font-semibold mb-1">
               Worked: {parseFloat(employee.hoursWorkedToday).toFixed(2)} hrs today
             </div>
           )}
@@ -138,16 +138,16 @@ const EmployeeStatus = () => {
             <div>Clocked out: <span className="font-medium">{formatTime(employee.lastActivity)}</span></div>
           )}
           {employee.cleanupAcknowledged && (
-            <div className="text-blue-600 mt-1">
+            <div className="text-blue-600 dark:text-blue-400 mt-1">
               ✓ Cleanup acknowledged
             </div>
           )}
           {employee.hoursWorkedToday && !employee.cleanupAcknowledged && (
-            <div className="text-orange-600 mt-1">
+            <div className="text-orange-600 dark:text-orange-400 mt-1">
               ⚠️ No cleanup acknowledgment
             </div>
           )}
-          <div className={`mt-1 ${lastLoginInfo.isWarning ? 'text-orange-600' : 'text-gray-500'}`}>
+          <div className={`mt-1 ${lastLoginInfo.isWarning ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500 dark:text-neutral-400'}`}>
             Last login: <span className="font-medium">{lastLoginInfo.text}</span>
           </div>
         </div>
@@ -155,9 +155,9 @@ const EmployeeStatus = () => {
     } else {
       const lastLoginInfo = formatLastLogin(employee.lastLogin, employee.daysSinceLogin);
       return (
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-gray-500 dark:text-neutral-400">
           <div className="italic">No activity today</div>
-          <div className={`mt-1 ${lastLoginInfo.isWarning ? 'text-orange-600 font-semibold' : 'text-gray-500'}`}>
+          <div className={`mt-1 ${lastLoginInfo.isWarning ? 'text-orange-600 dark:text-orange-400 font-semibold' : 'text-gray-500 dark:text-neutral-400'}`}>
             Last login: <span className="font-medium">{lastLoginInfo.text}</span>
           </div>
         </div>
@@ -196,13 +196,13 @@ const EmployeeStatus = () => {
   const offToday = employees.filter(e => !e.clockedIn && !e.onLunch && !e.lastActivity && !e.hoursWorkedToday);
 
   if (loading) {
-    return <div className="text-center py-8">Loading employee status...</div>;
+    return <div className="text-center py-8 text-gray-600 dark:text-neutral-300">Loading employee status...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold">Employee Status</h2>
+        <h2 className="text-2xl font-semibold text-gray-800 dark:text-neutral-100">Employee Status</h2>
         <button
           onClick={loadEmployeeStatus}
           className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition text-sm"
@@ -213,40 +213,40 @@ const EmployeeStatus = () => {
 
       {/* Status Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-green-700">{clockedIn.length}</div>
-          <div className="text-sm text-green-600">Clocked In</div>
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+          <div className="text-2xl font-bold text-green-700 dark:text-green-300">{clockedIn.length}</div>
+          <div className="text-sm text-green-600 dark:text-green-400">Clocked In</div>
         </div>
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-orange-700">{onLunch.length}</div>
-          <div className="text-sm text-orange-600">On Lunch</div>
+        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+          <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">{onLunch.length}</div>
+          <div className="text-sm text-orange-600 dark:text-orange-400">On Lunch</div>
         </div>
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-gray-700">{clockedOut.length}</div>
-          <div className="text-sm text-gray-600">Clocked Out</div>
+        <div className="bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg p-4">
+          <div className="text-2xl font-bold text-gray-700 dark:text-neutral-200">{clockedOut.length}</div>
+          <div className="text-sm text-gray-600 dark:text-neutral-300">Clocked Out</div>
         </div>
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-gray-500">{offToday.length}</div>
-          <div className="text-sm text-gray-500">Off Today</div>
+        <div className="bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg p-4">
+          <div className="text-2xl font-bold text-gray-500 dark:text-neutral-300">{offToday.length}</div>
+          <div className="text-sm text-gray-500 dark:text-neutral-400">Off Today</div>
         </div>
       </div>
 
       {/* Employee List */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 overflow-hidden border border-transparent dark:border-neutral-700">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[400px]">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 dark:bg-neutral-800">
               <tr>
-                <th className="text-left py-3 px-4 text-sm font-medium">Employee</th>
-                <th className="text-left py-3 px-4 text-sm font-medium">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium">Details</th>
-                <th className="text-left py-3 px-4 text-sm font-medium">Actions</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Employee</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Status</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Details</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Actions</th>
               </tr>
             </thead>
             <tbody>
               {employees.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="text-center py-8 text-gray-500">
+                  <td colSpan="4" className="text-center py-8 text-gray-500 dark:text-neutral-400">
                     No employees found
                   </td>
                 </tr>
@@ -258,25 +258,25 @@ const EmployeeStatus = () => {
                   return (
                     <tr 
                       key={employee.id} 
-                      className={`border-b hover:bg-gray-50 ${
-                        hasLongInactivity ? 'bg-orange-50' : ''
+                      className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 ${
+                        hasLongInactivity ? 'bg-orange-50 dark:bg-orange-900/20' : ''
                       }`}
                     >
                       <td className="py-3 px-3 md:px-4">
                         <div className="flex items-center gap-2">
-                          <div className="font-semibold">{employee.full_name}</div>
+                          <div className="font-semibold text-gray-900 dark:text-neutral-100">{employee.full_name}</div>
                           {employee.role === 'admin' && (
-                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                            <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-200 rounded text-xs font-medium">
                               Admin
                             </span>
                           )}
                           {hasLongInactivity && (
-                            <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium" title="Hasn't logged in for 7+ days">
+                            <span className="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-200 rounded text-xs font-medium" title="Hasn't logged in for 7+ days">
                               ⚠️ Inactive
                             </span>
                           )}
                         </div>
-                        <div className="text-sm text-gray-500">{employee.username}</div>
+                        <div className="text-sm text-gray-500 dark:text-neutral-400">{employee.username}</div>
                       </td>
                       <td className="py-3 px-4">
                         {getStatusBadge(employee)}
@@ -286,7 +286,7 @@ const EmployeeStatus = () => {
                       </td>
                       <td className="py-3 px-4">
                         {currentUser && employee.id === currentUser.id ? (
-                          <span className="text-sm text-gray-400 italic">Cannot delete yourself</span>
+                          <span className="text-sm text-gray-400 dark:text-neutral-500 italic">Cannot delete yourself</span>
                         ) : (
                           <button
                             onClick={() => handleDeleteEmployee(employee)}

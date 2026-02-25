@@ -17,6 +17,7 @@ import ComplianceCenter from '../components/Admin/ComplianceCenter';
 import FinanceDashboard from '../components/Admin/FinanceDashboard';
 import SystemUpdates from '../components/Admin/SystemUpdates';
 import SecuritySessions from '../components/Admin/SecuritySessions';
+import AdminHistory from '../components/Admin/AdminHistory';
 const Admin = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -105,7 +106,7 @@ const Admin = () => {
 
   const categoryOrder = ['people', 'shop', 'finance', 'insights', 'system'];
   const categoryLabels = {
-    people: { label: 'People & Team', icon: '👥', description: 'Staff, schedules, and time off' },
+    people: { label: 'People & Team', icon: '👥', description: 'Staff, team schedule, and time off (sidebar Schedule is for viewing your own schedule)' },
     shop: { label: 'Shop & Orders', icon: '🛒', description: 'Inventory, products, and customer orders' },
     finance: { label: 'Finance & Compliance', icon: '💰', description: 'Payroll, tax, and filings' },
     insights: { label: 'Insights & Reports', icon: '📊', description: 'Analytics and business reports' },
@@ -154,19 +155,18 @@ const Admin = () => {
     {
       id: 'schedule',
       category: 'people',
-      label: 'Schedule',
+      label: 'Team schedule',
       icon: '📅',
       color: 'bg-primary',
-      description: 'View and manage schedules'
+      description: 'View and manage team schedules'
     },
     {
-      id: 'inventory',
-      category: 'shop',
-      label: 'Inventory',
-      icon: '📦',
-      color: 'bg-sky-500',
-      description: 'Shop supplies (barcodes, quantities, prices)',
-      getBadge: () => dashboardData.pendingReorderRequests > 0 ? { count: dashboardData.pendingReorderRequests, color: 'bg-amber-500', label: 'Reorder' } : null
+      id: 'history',
+      category: 'people',
+      label: 'Login & punch history',
+      icon: '📜',
+      color: 'bg-slate-500',
+      description: 'Login/logout and lunch clock-in/out history'
     },
     {
       id: 'products',
@@ -261,7 +261,7 @@ const Admin = () => {
       return (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <span className="ml-3 text-gray-600">Loading dashboard...</span>
+          <span className="ml-3 text-gray-600 dark:text-neutral-200">Loading dashboard...</span>
         </div>
       );
     }
@@ -336,9 +336,9 @@ const Admin = () => {
                 </div>
                 <button
                   onClick={() => navigateToTab('worklist')}
-                  className="flex items-center gap-3 bg-white/20 hover:bg-white/30 rounded-lg px-4 py-2 text-left text-sm font-medium transition shrink-0"
+                  className="flex items-center gap-3 bg-white/20 hover:bg-white/30 dark:bg-white/10 dark:hover:bg-white/20 rounded-lg px-4 py-2 text-left text-sm font-medium transition shrink-0"
                 >
-                  <span className="text-gray-200">Today: {dashboardData.worklistCompleted}/{dashboardData.worklistTotal} tasks</span>
+                  <span className="text-gray-200 dark:text-white/90">Today: {dashboardData.worklistCompleted}/{dashboardData.worklistTotal} tasks</span>
                   <span>View list →</span>
                 </button>
               </div>
@@ -357,7 +357,7 @@ const Admin = () => {
                   <button
                     key={idx}
                     onClick={item.action}
-                    className="w-full text-left bg-white/20 hover:bg-white/30 rounded-lg p-3 flex items-center gap-3 transition text-sm"
+                    className="w-full text-left bg-white/20 hover:bg-white/30 dark:bg-white/10 dark:hover:bg-white/20 rounded-lg p-3 flex items-center gap-3 transition text-sm"
                   >
                     <span className="text-lg">{item.icon}</span>
                     <span>{item.message}</span>
@@ -374,9 +374,9 @@ const Admin = () => {
         </div>
 
         {/* Today's daily tasks — always visible so admins are reminded */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5 shadow-sm dark:shadow-neutral-950/50">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-base font-semibold text-gray-800">📋 Today&apos;s tasks</h3>
+            <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">📋 Today&apos;s tasks</h3>
             <button
               onClick={() => navigateToTab('worklist')}
               className="text-primary hover:text-primary/80 text-sm font-medium"
@@ -385,18 +385,18 @@ const Admin = () => {
             </button>
           </div>
           {loading ? (
-            <p className="text-gray-500 text-sm py-2">Loading…</p>
+            <p className="text-gray-500 dark:text-neutral-200 text-sm py-2">Loading…</p>
           ) : !dashboardData.worklistItems?.length ? (
-            <p className="text-gray-500 text-sm py-2">No tasks for today. Add some on the work list.</p>
+            <p className="text-gray-500 dark:text-neutral-200 text-sm py-2">No tasks for today. Add some on the work list.</p>
           ) : (
             <ul className="space-y-2 max-h-64 overflow-y-auto">
               {dashboardData.worklistItems
                 .filter((i) => !i.is_completed)
                 .slice(0, 10)
                 .map((item) => (
-                  <li key={item.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50">
-                    <span className="flex-shrink-0 w-5 h-5 rounded border-2 border-gray-300" aria-hidden />
-                    <span className="text-sm text-gray-800 flex-1 min-w-0 truncate">{item.title}</span>
+                  <li key={item.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800">
+                    <span className="flex-shrink-0 w-5 h-5 rounded border-2 border-gray-300 dark:border-neutral-600" aria-hidden />
+                    <span className="text-sm text-gray-800 dark:text-neutral-100 flex-1 min-w-0 truncate">{item.title}</span>
                     {item.link_target && (
                       <button
                         type="button"
@@ -409,7 +409,7 @@ const Admin = () => {
                   </li>
                 ))}
               {dashboardData.worklistItems.filter((i) => i.is_completed).length > 0 && (
-                <li className="pt-2 mt-2 border-t border-gray-100 text-xs text-gray-500">
+                <li className="pt-2 mt-2 border-t border-gray-100 dark:border-neutral-700 text-xs text-gray-500 dark:text-neutral-300">
                   ✓ {dashboardData.worklistItems.filter((i) => i.is_completed).length} completed
                 </li>
               )}
@@ -419,9 +419,9 @@ const Admin = () => {
 
         {/* Upcoming Compliance — only when there's data */}
         {dashboardData.upcomingCompliance?.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5 shadow-sm dark:shadow-neutral-950/50">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-semibold text-gray-800">🏛️ Upcoming Tax Deadlines</h3>
+              <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">🏛️ Upcoming Tax Deadlines</h3>
               <button
                 onClick={() => navigateToTab('compliance')}
                 className="text-primary hover:text-primary-dark text-sm font-medium"
@@ -431,13 +431,13 @@ const Admin = () => {
             </div>
             <div className="space-y-2">
               {dashboardData.upcomingCompliance.slice(0, 3).map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg">
                   <div>
-                    <p className="font-medium text-gray-800 text-sm">{item.obligation_name}</p>
-                    <p className="text-xs text-gray-500">Due: {new Date(item.due_date).toLocaleDateString()}</p>
+                    <p className="font-medium text-gray-800 dark:text-neutral-100 text-sm">{item.obligation_name}</p>
+                    <p className="text-xs text-gray-500 dark:text-neutral-200">Due: {new Date(item.due_date).toLocaleDateString()}</p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    item.days_until_due <= 7 ? 'bg-orange-100 text-orange-700' : 'bg-primary-subtle text-primary'
+                    item.days_until_due <= 7 ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : 'bg-primary-subtle dark:bg-primary/20 text-primary'
                   }`}>
                     {item.days_until_due} days
                   </span>
@@ -456,11 +456,11 @@ const Admin = () => {
             return (
               <div key={catId}>
                 <div className="mb-3">
-                  <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100 flex items-center gap-2">
                     <span>{cat.icon}</span>
                     {cat.label}
                   </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{cat.description}</p>
+                  <p className="text-xs text-gray-500 dark:text-neutral-300 mt-0.5">{cat.description}</p>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {catModules.map((module) => {
@@ -469,7 +469,7 @@ const Admin = () => {
                       <button
                         key={module.id}
                         onClick={() => navigateToTab(module.id)}
-                        className="relative bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-gray-300 transition-all text-left group"
+                        className="relative bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 hover:shadow-md hover:border-gray-300 dark:hover:border-neutral-600 dark:shadow-neutral-950/50 transition-all text-left group"
                       >
                         {badge && (
                           <span className={`absolute -top-1.5 -right-1.5 ${badge.color} text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[22px] text-center`}>
@@ -479,8 +479,8 @@ const Admin = () => {
                         <div className={`w-10 h-10 ${module.color} rounded-lg flex items-center justify-center text-xl mb-2 group-hover:scale-105 transition-transform`}>
                           {module.icon}
                         </div>
-                        <h4 className="font-semibold text-gray-800 text-sm">{module.label}</h4>
-                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{module.description}</p>
+                        <h4 className="font-semibold text-gray-800 dark:text-neutral-100 text-sm">{module.label}</h4>
+                        <p className="text-xs text-gray-500 dark:text-neutral-200 mt-0.5 line-clamp-2">{module.description}</p>
                       </button>
                     );
                   })}
@@ -503,13 +503,13 @@ const Admin = () => {
         <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => navigateToTab('dashboard')}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-700"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700 rounded-lg transition text-gray-700 dark:text-neutral-200"
           >
             <span>←</span>
             <span>Dashboard</span>
           </button>
-          <span className="text-gray-400">/</span>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+          <span className="text-gray-400 dark:text-neutral-500">/</span>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-neutral-100 flex items-center gap-2">
             <span>{currentModule?.icon}</span>
             {currentModule?.label || 'Admin'}
           </h1>
@@ -533,6 +533,7 @@ const Admin = () => {
           {activeTab === 'settings' && <Settings />}
           {activeTab === 'updates' && <SystemUpdates />}
           {activeTab === 'security' && <SecuritySessions />}
+          {activeTab === 'history' && <AdminHistory />}
         </div>
       </div>
     );
@@ -542,8 +543,8 @@ const Admin = () => {
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Admin Dashboard</h1>
-        <p className="text-gray-500">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">Admin Dashboard</h1>
+        <p className="text-gray-500 dark:text-neutral-200">
           {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </div>

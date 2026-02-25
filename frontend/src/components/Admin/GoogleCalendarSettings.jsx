@@ -219,14 +219,14 @@ const GoogleCalendarSettings = () => {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-4">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-4">
         <div className="text-gray-600">Loading Google Calendar settings...</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 space-y-3">
+    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-lg font-semibold text-gray-800">Google Calendar Sync</div>
@@ -244,7 +244,7 @@ const GoogleCalendarSettings = () => {
             type="button"
             onClick={loadStatus}
             disabled={working}
-            className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
+            className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm"
           >
             Refresh
           </button>
@@ -325,7 +325,7 @@ const GoogleCalendarSettings = () => {
                 type="button"
                 onClick={saveCalendarId}
                 disabled={working}
-                className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
+                className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm"
               >
                 Save
               </button>
@@ -335,7 +335,7 @@ const GoogleCalendarSettings = () => {
               <div className="text-sm font-semibold text-gray-700">Sync events from these calendars</div>
               <p className="text-xs text-gray-500">Events from all selected calendars are pulled into the schedule. To <strong>unsync</strong> a calendar (e.g. Thomas Ho), uncheck it and click &quot;Save sync calendars&quot;.</p>
               {selectedSyncIds.length > 0 && (
-                <p className="text-xs text-gray-600 bg-gray-50 rounded px-2 py-1">
+                <p className="text-xs text-gray-600 dark:text-neutral-300 bg-gray-50 dark:bg-neutral-800 rounded px-2 py-1">
                   Currently syncing: {selectedSyncIds.map((id) => calendars.find((c) => c.id === id)?.summary || id).join(', ')}
                 </p>
               )}
@@ -378,7 +378,7 @@ const GoogleCalendarSettings = () => {
                     type="button"
                     onClick={saveSyncCalendars}
                     disabled={working}
-                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
+                    className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm"
                   >
                     Save sync calendars
                   </button>

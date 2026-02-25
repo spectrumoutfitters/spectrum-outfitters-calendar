@@ -10,7 +10,7 @@ const TaskCard = ({ task, onClick, dragHandleProps }) => {
           onClick();
         }
       }}
-      className="bg-white rounded-lg shadow-md cursor-pointer hover:shadow-lg transition border-l-4 relative"
+      className="bg-white dark:bg-neutral-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-neutral-700 cursor-pointer hover:shadow-lg dark:hover:border-neutral-600 transition border-l-4 relative"
       style={{ 
         borderLeftColor: task.priority === 'urgent' ? '#EF4444' :
                         task.priority === 'high' ? '#F59E0B' :
@@ -18,19 +18,20 @@ const TaskCard = ({ task, onClick, dragHandleProps }) => {
                         task.priority === 'low' ? '#10B981' : '#6B7280'
       }}
     >
-      {/* Drag Handle */}
+      {/* Drag Handle - high contrast so it's visible in light and dark */}
       {dragHandleProps && (
         <div
           {...dragHandleProps}
-          className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 transition-colors"
+          className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-md text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200 bg-gray-100 dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 transition-colors border border-transparent dark:border-neutral-600"
           onClick={(e) => e.stopPropagation()}
+          aria-label="Drag to reorder"
         >
           <svg
             width="16"
             height="16"
             viewBox="0 0 16 16"
             fill="currentColor"
-            className="opacity-50"
+            className="flex-shrink-0"
           >
             <circle cx="4" cy="4" r="1.5" />
             <circle cx="12" cy="4" r="1.5" />
@@ -42,18 +43,18 @@ const TaskCard = ({ task, onClick, dragHandleProps }) => {
         </div>
       )}
       <div className="p-4">
-      <div className="flex justify-between items-start mb-2 pr-6">
-        <h3 className="font-semibold text-gray-800 flex-1">{task.title}</h3>
+      <div className="flex justify-between items-start mb-2 pr-10">
+        <h3 className="font-semibold text-gray-800 dark:text-neutral-100 flex-1">{task.title}</h3>
         <span className={`px-2 py-1 rounded text-xs font-medium ${getCategoryColor(task.category)}`}>
           {task.category}
         </span>
       </div>
       
       {task.description && (
-        <p className="text-sm text-gray-600 mb-2 line-clamp-2">{task.description}</p>
+        <p className="text-sm text-gray-600 dark:text-neutral-300 mb-2 line-clamp-2">{task.description}</p>
       )}
 
-      <div className="flex items-center justify-between text-xs text-gray-500">
+      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-neutral-400">
         <span>{task.assigned_to_name || 'Unassigned'}</span>
         {task.due_date && (
           <span className={getDueDateColor(task.due_date)}>
@@ -62,7 +63,7 @@ const TaskCard = ({ task, onClick, dragHandleProps }) => {
         )}
       </div>
 
-      <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
+      <div className="mt-2 flex items-center gap-3 text-xs text-gray-400 dark:text-neutral-400">
         {task.subtasks && task.subtasks.length > 0 && (
           <span>
             ✓ {task.subtasks.filter(st => st.is_completed === 1).length}/{task.subtasks.length} items

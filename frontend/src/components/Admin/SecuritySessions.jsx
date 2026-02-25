@@ -40,18 +40,29 @@ const SecuritySessions = () => {
     }
   }, []);
 
+  const [filterEventType, setFilterEventType] = useState(''); // '' | 'login' | 'logout' for auth-history
+
   const loadLoginEvents = useCallback(async (page = 0) => {
     try {
       const params = { limit: PAGE_SIZE, offset: page * PAGE_SIZE };
       if (filterUser) params.user_id = filterUser;
       if (filterSuccess !== '') params.success = filterSuccess;
-      const res = await api.get('/admin/security/login-events', { params });
+      if (filterEventType) params.event_type = filterEventType;
+      const res = await api.get('/admin/security/auth-history', { params });
       setLoginEvents(res.data.events || []);
       setLoginTotal(res.data.total || 0);
     } catch (err) {
-      console.error('Failed to load login events:', err);
+      console.error('Failed to load auth history:', err);
+      try {
+        const fallback = await api.get('/admin/security/login-events', { params: { limit: PAGE_SIZE, offset: page * PAGE_SIZE, ...(filterUser && { user_id: filterUser }), ...(filterSuccess !== '' && { success: filterSuccess }) } });
+        setLoginEvents(fallback.data.events || []);
+        setLoginTotal(fallback.data.total || 0);
+      } catch (e2) {
+        setLoginEvents([]);
+        setLoginTotal(0);
+      }
     }
-  }, [filterUser, filterSuccess]);
+  }, [filterUser, filterSuccess, filterEventType]);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -166,7 +177,7 @@ const SecuritySessions = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard label="Active Sessions" value={stats.activeSessions} color="bg-green-50 text-green-700 border-green-200" />
           <StatCard label="Logins Today" value={stats.loginsToday} color="bg-blue-50 text-blue-700 border-blue-200" />
-          <StatCard label="Failed (24h)" value={stats.failedLast24h} color={stats.failedLast24h > 0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-700 border-gray-200'} />
+          <StatCard label="Failed (24h)" value={stats.failedLast24h} color={stats.failedLast24h > 0 ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800' : 'bg-gray-50 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border-gray-200 dark:border-neutral-700'} />
           <StatCard label="Unique IPs Today" value={stats.uniqueIPsToday} color="bg-purple-50 text-purple-700 border-purple-200" />
         </div>
       )}
@@ -182,7 +193,7 @@ const SecuritySessions = () => {
             key={tab.id}
             onClick={() => { setView(tab.id); if (tab.id === 'events') loadLoginEvents(0); }}
             className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${
-              view === tab.id ? 'bg-white border border-b-0 border-gray-200 text-primary' : 'text-gray-500 hover:text-gray-700'
+              view === tab.id ? 'bg-white dark:bg-neutral-900 border border-b-0 border-gray-200 dark:border-neutral-700 text-primary' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'
             }`}
           >
             {tab.label}
@@ -192,14 +203,14 @@ const SecuritySessions = () => {
 
       {/* Active Sessions */}
       {view === 'overview' && (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-semibold text-gray-800">Currently Active Sessions</h3>
             <button onClick={loadActiveSessions} className="text-xs text-primary hover:underline">Refresh</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-neutral-800">
                 <tr>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">User</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Role</th>
@@ -214,13 +225,13 @@ const SecuritySessions = () => {
                 {activeSessions.length === 0 ? (
                   <tr><td colSpan={7} className="text-center py-8 text-gray-500">No active sessions</td></tr>
                 ) : activeSessions.map(s => (
-                  <tr key={s.id} className="border-t border-gray-50 hover:bg-gray-50">
+                  <tr key={s.id} className="border-t border-gray-50 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
                     <td className="py-3 px-4">
                       <div className="font-medium text-gray-800">{s.full_name}</div>
                       <div className="text-xs text-gray-500">@{s.username}</div>
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.role === 'admin' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200'}`}>
                         {s.role}
                       </span>
                     </td>
@@ -244,17 +255,26 @@ const SecuritySessions = () => {
 
       {/* Login History */}
       {view === 'events' && (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center gap-3 justify-between">
             <h3 className="font-semibold text-gray-800">Login Event History</h3>
             <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={filterEventType}
+                onChange={e => { setFilterEventType(e.target.value); setEventsPage(0); }}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
+              >
+                <option value="">All (login & logout)</option>
+                <option value="login">Login only</option>
+                <option value="logout">Logout only</option>
+              </select>
               <select
                 value={filterSuccess}
                 onChange={e => { setFilterSuccess(e.target.value); setEventsPage(0); }}
                 className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
               >
-                <option value="">All</option>
-                <option value="1">Successful</option>
+                <option value="">All results</option>
+                <option value="1">Success</option>
                 <option value="0">Failed</option>
               </select>
               <button onClick={handlePurge} className="px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50">
@@ -264,11 +284,13 @@ const SecuritySessions = () => {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-neutral-800">
                 <tr>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Time</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Event</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">User</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Result</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">VPN</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">IP</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Device</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">IP Location</th>
@@ -278,40 +300,55 @@ const SecuritySessions = () => {
               </thead>
               <tbody>
                 {loginEvents.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center py-8 text-gray-500">No login events found</td></tr>
-                ) : loginEvents.map(ev => (
-                  <tr key={ev.id} className="border-t border-gray-50 hover:bg-gray-50">
+                  <tr><td colSpan={10} className="text-center py-8 text-gray-500">No events found</td></tr>
+                ) : loginEvents.map(ev => {
+                  const isLocalIp = !ev.ip || ev.ip === '127.0.0.1' || ev.ip === '::1' || String(ev.ip).includes('127.0.0.1');
+                  const ipLocation = ev.event_type === 'logout' ? '—' : (isLocalIp ? 'Local' : (ev.ip_geo_city ? `${ev.ip_geo_city}, ${ev.ip_geo_region || ''} ${ev.ip_geo_country || ''}`.trim() : '-'));
+                  return (
+                  <tr key={`${ev.event_type || 'login'}-${ev.id}`} className="border-t border-gray-50 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
                     <td className="py-3 px-4 text-gray-600 whitespace-nowrap">{formatTime(ev.occurred_at)}</td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${ev.event_type === 'logout' ? 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'}`}>
+                        {ev.event_type === 'logout' ? 'Logout' : 'Login'}
+                      </span>
+                    </td>
                     <td className="py-3 px-4">
                       <div className="font-medium text-gray-800">{ev.full_name || ev.username}</div>
                       {ev.reason && <div className="text-xs text-gray-400">{ev.reason}</div>}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${ev.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {ev.success ? 'Success' : 'Failed'}
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${ev.success ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : ev.event_type === 'logout' ? 'bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'}`}>
+                        {ev.event_type === 'logout' ? '—' : (ev.success ? 'Success' : 'Failed')}
                       </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      {ev.event_type === 'logout' ? '—' : (ev.is_vpn ? <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="VPN/proxy detected">VPN</span> : '—')}
                     </td>
                     <td className="py-3 px-4 font-mono text-xs text-gray-700">{ev.ip || '-'}</td>
                     <td className="py-3 px-4 text-gray-600">{parseUA(ev.user_agent)}</td>
                     <td className="py-3 px-4 text-xs text-gray-600">
-                      {ev.ip_geo_city ? `${ev.ip_geo_city}, ${ev.ip_geo_region || ''} ${ev.ip_geo_country || ''}`.trim() : '-'}
+                      {ipLocation}
                     </td>
                     <td className="py-3 px-4 text-xs text-gray-600">
-                      {ev.browser_geo_lat != null
+                      {ev.event_type === 'logout' ? '—' : (ev.browser_geo_lat != null
                         ? `${ev.browser_geo_lat.toFixed(4)}, ${ev.browser_geo_lng.toFixed(4)} (${Math.round(ev.browser_geo_accuracy_m || 0)}m)`
-                        : '-'}
+                        : '-')}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${scoreBadge(ev.on_prem_score)}`}>
-                        {ev.on_prem_score}%
-                      </span>
-                      <div className="flex gap-1 mt-1">
-                        {ev.on_prem_network_ok ? <span className="text-[10px] text-green-600">NET</span> : <span className="text-[10px] text-red-400">NET</span>}
-                        {ev.on_prem_geo_ok ? <span className="text-[10px] text-green-600">GEO</span> : <span className="text-[10px] text-red-400">GEO</span>}
-                      </div>
+                      {ev.event_type === 'logout' ? '—' : (
+                        <>
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${scoreBadge(ev.on_prem_score)}`}>
+                            {ev.on_prem_score}%
+                          </span>
+                          <div className="flex gap-1 mt-1">
+                            {ev.on_prem_network_ok ? <span className="text-[10px] text-green-600">NET</span> : <span className="text-[10px] text-red-400">NET</span>}
+                            {ev.on_prem_geo_ok ? <span className="text-[10px] text-green-600">GEO</span> : <span className="text-[10px] text-red-400">GEO</span>}
+                          </div>
+                        </>
+                      )}
                     </td>
                   </tr>
-                ))}
+                ); })}
               </tbody>
             </table>
           </div>
@@ -332,7 +369,7 @@ const SecuritySessions = () => {
 
       {/* On-Prem Configuration */}
       {view === 'config' && (
-        <div className="bg-white rounded-lg shadow-md p-6 max-w-2xl">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6 max-w-2xl">
           <h3 className="font-semibold text-gray-800 mb-4">On-Premises Verification Settings</h3>
           <p className="text-sm text-gray-500 mb-6">
             Configure which IP addresses and geographic zones count as "on-prem" for login scoring.

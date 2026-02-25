@@ -31,7 +31,7 @@ function PlaidLinkButton({ onSuccess }) {
       disabled={!ready}
       className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium"
     >
-      + Connect Bank Account
+      + Connect Bank or Credit Card
     </button>
   );
 }
@@ -39,8 +39,8 @@ function PlaidLinkButton({ onSuccess }) {
 function ConnectedAccounts({ items, onRefresh, syncing, onSync, onDisconnect }) {
   if (!items.length) {
     return (
-      <p className="text-sm text-gray-500 py-4 text-center">
-        No bank accounts connected. Click "Connect Bank Account" to get started.
+      <p className="text-sm text-gray-500 dark:text-neutral-400 py-4 text-center">
+        No bank or credit card connected. Click &quot;Connect Bank or Credit Card&quot; to link an account and pull expenses automatically.
       </p>
     );
   }
@@ -48,7 +48,7 @@ function ConnectedAccounts({ items, onRefresh, syncing, onSync, onDisconnect }) 
   return (
     <div className="space-y-2">
       {items.map(item => (
-        <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+        <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg">
           <div>
             <p className="font-medium text-gray-800 text-sm">{item.institution_name}</p>
             <p className="text-xs text-gray-500">
@@ -97,13 +97,13 @@ function TransactionList({ transactions, onCategorize }) {
         </thead>
         <tbody>
           {transactions.map(txn => (
-            <tr key={txn.id} className="border-b border-gray-100 hover:bg-gray-50">
+            <tr key={txn.id} className="border-b border-gray-100 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
               <td className="py-2 px-2 text-gray-600 whitespace-nowrap">{txn.date}</td>
               <td className="py-2 px-2 text-gray-800 max-w-[200px] truncate">
                 {txn.merchant_name || txn.name}
               </td>
               <td className="py-2 px-2">
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                <span className="text-xs bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300 px-2 py-0.5 rounded">
                   {txn.expense_category || txn.category || 'Uncategorized'}
                 </span>
               </td>
@@ -137,7 +137,7 @@ function RevenueTable({ daily }) {
   const totalVisible = filtered.reduce((s, d) => s + (parseFloat(d.revenue) || 0), 0);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5">
+    <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-sm font-semibold text-gray-800">
           Daily Revenue ({filtered.length} days{filterYear ? ` in ${filterYear}` : ''}) — Total: {fmt$(totalVisible)}
@@ -146,7 +146,7 @@ function RevenueTable({ daily }) {
           <select
             value={filterYear}
             onChange={e => { setFilterYear(e.target.value); setShowAll(false); }}
-            className="text-xs border border-gray-300 rounded px-2 py-1"
+            className="text-xs border border-gray-300 dark:border-neutral-600 rounded px-2 py-1 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
           >
             <option value="">All Years</option>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
@@ -155,7 +155,7 @@ function RevenueTable({ daily }) {
       </div>
       <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-white">
+          <thead className="sticky top-0 bg-white dark:bg-neutral-900">
             <tr className="text-left text-gray-500 border-b">
               <th className="py-2 px-2">Date</th>
               <th className="py-2 px-2 text-right">Revenue</th>
@@ -165,7 +165,7 @@ function RevenueTable({ daily }) {
           </thead>
           <tbody>
             {visible.map((d, i) => (
-              <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+              <tr key={i} className="border-b border-gray-50 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
                 <td className="py-1.5 px-2 text-gray-600">{d.date}</td>
                 <td className="py-1.5 px-2 text-right font-medium text-green-600">{fmt$(d.revenue)}</td>
                 <td className="py-1.5 px-2 text-right text-gray-600">{d.charge_count || 0}</td>
@@ -203,6 +203,9 @@ export default function FinanceDashboard() {
   const [plaidConfigured, setPlaidConfigured] = useState(true);
   const [smRevenue, setSmRevenue] = useState(null);
   const [smSyncing, setSmSyncing] = useState(false);
+  const [processorRevenue, setProcessorRevenue] = useState(null);
+  const [processorConfigured, setProcessorConfigured] = useState(null);
+  const [processorSyncing, setProcessorSyncing] = useState(false);
   const [forecast, setForecast] = useState(null);
   const [cashFlow, setCashFlow] = useState(null);
 
@@ -229,6 +232,20 @@ export default function FinanceDashboard() {
     } catch (_) {}
   };
 
+  const loadProcessorRevenue = async () => {
+    try {
+      const res = await api.get('/payment-processor/revenue/status');
+      setProcessorRevenue(res.data);
+    } catch (_) {}
+  };
+
+  const loadProcessorConfigured = async () => {
+    try {
+      const res = await api.get('/payment-processor/revenue/configured');
+      setProcessorConfigured(res.data?.processor || null);
+    } catch (_) {}
+  };
+
   const loadCashFlow = async () => {
     try {
       const res = await api.get('/finance/cash-flow');
@@ -247,12 +264,15 @@ export default function FinanceDashboard() {
     loadPlaidItems();
     loadTransactions();
     loadSmRevenue();
+    loadProcessorConfigured();
+    loadProcessorRevenue();
     loadCashFlow();
     loadForecast();
 
     // Auto-refresh revenue status every 60s to reflect background sync
     const interval = setInterval(() => {
       loadSmRevenue();
+      loadProcessorRevenue();
     }, 60000);
     return () => clearInterval(interval);
   }, []);
@@ -305,24 +325,39 @@ export default function FinanceDashboard() {
     }
   };
 
+  const handleProcessorSync = async () => {
+    setProcessorSyncing(true);
+    try {
+      const res = await api.post('/payment-processor/revenue/sync');
+      alert(`Synced ${res.data.days_synced} days of revenue`);
+      await loadProcessorRevenue();
+      await loadCashFlow();
+      await loadForecast();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Payment processor sync failed');
+    } finally {
+      setProcessorSyncing(false);
+    }
+  };
+
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'bank', label: 'Bank Accounts' },
     { id: 'transactions', label: 'Transactions' },
-    { id: 'revenue', label: 'Revenue (Shop Monkey)' },
+    { id: 'revenue', label: 'Revenue' },
     { id: 'forecast', label: 'Forecast' },
   ];
 
   return (
     <div className="space-y-4">
       {/* Sub-navigation */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+      <div className="flex gap-1 bg-gray-100 dark:bg-neutral-800 p-1 rounded-lg overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition whitespace-nowrap ${
-              activeTab === tab.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+              activeTab === tab.id ? 'bg-white dark:bg-neutral-700 text-gray-800 dark:text-neutral-100 shadow-sm' : 'text-gray-600 dark:text-neutral-300 hover:text-gray-800 dark:hover:text-neutral-100'
             }`}
           >
             {tab.label}
@@ -335,21 +370,21 @@ export default function FinanceDashboard() {
         <div className="space-y-4">
           {/* Quick stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">Connected Banks</p>
               <p className="text-2xl font-bold text-gray-800">{plaidItems.length}</p>
             </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">Bank Transactions</p>
               <p className="text-2xl font-bold text-gray-800">{transactions.length}</p>
             </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">Business Expenses (Bank)</p>
               <p className="text-2xl font-bold text-red-600">
                 {fmt$(transactions.filter(t => t.is_business_expense).reduce((s, t) => s + Math.abs(t.amount), 0))}
               </p>
             </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">SM Revenue Status</p>
               <p className="text-lg font-bold text-green-600">
                 {smRevenue?.last_sync ? 'Active' : 'Not synced'}
@@ -359,7 +394,7 @@ export default function FinanceDashboard() {
 
           {/* Cash flow summary */}
           {cashFlow && cashFlow.weeks && cashFlow.weeks.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
               <h3 className="text-base font-semibold text-gray-800 mb-3">Weekly Cash Flow</h3>
               <div className="space-y-2">
                 {cashFlow.weeks.slice(0, 6).map((w, i) => (
@@ -380,26 +415,26 @@ export default function FinanceDashboard() {
 
           {/* Forecast preview */}
           {forecast && forecast.projected && forecast.projected.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-gray-800">Forecast (Next {forecast.projected.length} Weeks)</h3>
                 <button onClick={() => setActiveTab('forecast')} className="text-primary text-sm hover:underline">View details</button>
               </div>
               <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="bg-green-50 rounded-lg p-3">
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
                   <p className="text-xs text-gray-500">Avg Projected Revenue</p>
                   <p className="text-lg font-bold text-green-600">
                     {fmt$(forecast.projected.reduce((s, w) => s + w.projected_revenue, 0) / forecast.projected.length)}
                   </p>
                 </div>
-                <div className="bg-red-50 rounded-lg p-3">
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
                   <p className="text-xs text-gray-500">Avg Projected Expenses</p>
                   <p className="text-lg font-bold text-red-600">
                     {fmt$(forecast.projected.reduce((s, w) => s + w.projected_expenses, 0) / forecast.projected.length)}
                   </p>
                 </div>
                 <div className={`rounded-lg p-3 ${
-                  forecast.projected.reduce((s, w) => s + w.projected_net, 0) >= 0 ? 'bg-green-50' : 'bg-red-50'
+                  forecast.projected.reduce((s, w) => s + w.projected_net, 0) >= 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'
                 }`}>
                   <p className="text-xs text-gray-500">Avg Projected Net</p>
                   <p className={`text-lg font-bold ${
@@ -416,17 +451,17 @@ export default function FinanceDashboard() {
 
       {/* Bank Accounts tab */}
       {activeTab === 'bank' && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-gray-800">Connected Bank Accounts</h3>
             {plaidConfigured && <PlaidLinkButton onSuccess={() => { loadPlaidItems(); }} />}
           </div>
           {!plaidConfigured ? (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
               <p className="text-sm text-yellow-800">
-                Plaid is not configured. Set <code className="bg-yellow-100 px-1 rounded">PLAID_CLIENT_ID</code>,{' '}
-                <code className="bg-yellow-100 px-1 rounded">PLAID_SECRET</code>, and{' '}
-                <code className="bg-yellow-100 px-1 rounded">PLAID_TOKEN_ENCRYPTION_KEY</code> in the backend .env file.
+                Plaid is not configured. Set                 <code className="bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded text-gray-900 dark:text-neutral-100">PLAID_CLIENT_ID</code>,{' '}
+                <code className="bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded text-gray-900 dark:text-neutral-100">PLAID_SECRET</code>, and{' '}
+                <code className="bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded text-gray-900 dark:text-neutral-100">PLAID_TOKEN_ENCRYPTION_KEY</code> in the backend .env file.
               </p>
             </div>
           ) : (
@@ -454,7 +489,7 @@ export default function FinanceDashboard() {
 
       {/* Transactions tab */}
       {activeTab === 'transactions' && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-gray-800">Bank Transactions</h3>
             <span className="text-xs text-gray-500">{transactions.length} transactions</span>
@@ -463,57 +498,101 @@ export default function FinanceDashboard() {
         </div>
       )}
 
-      {/* Revenue (Shop Monkey) tab */}
+      {/* Revenue tab: Shop Monkey + Payment Processor (Stripe) */}
       {activeTab === 'revenue' && (
         <div className="space-y-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-semibold text-gray-800">Shop Monkey Revenue Sync</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Auto-syncs every 5 minutes. Last 7 days are refreshed automatically.</p>
-              </div>
-              <div className="flex gap-2">
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Shop Monkey */}
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">Shop Monkey Revenue</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Auto-syncs every 5 min. Last 7 days refreshed automatically.</p>
+                </div>
                 <button
                   onClick={handleSmSync}
                   disabled={smSyncing}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 text-sm font-medium"
                 >
-                  {smSyncing ? 'Syncing...' : 'Sync Now (All History)'}
+                  {smSyncing ? 'Syncing...' : 'Sync Now'}
                 </button>
               </div>
-            </div>
-            {smRevenue ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div className="bg-green-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Days Synced</p>
-                    <p className="text-xl font-bold text-gray-800">{smRevenue.total_days || 0}</p>
+              {smRevenue ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Days</p>
+                    <p className="text-lg font-bold text-gray-800 dark:text-neutral-100">{smRevenue.total_days || 0}</p>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Total Revenue (All Time)</p>
-                    <p className="text-xl font-bold text-green-600">{fmt$(smRevenue.total_revenue || 0)}</p>
+                  <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Total</p>
+                    <p className="text-lg font-bold text-green-600">{fmt$(smRevenue.total_revenue || 0)}</p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Last Sync</p>
-                    <p className="text-sm font-medium text-gray-800">
-                      {smRevenue.last_sync ? new Date(smRevenue.last_sync).toLocaleString() : 'Never'}
-                    </p>
-                  </div>
-                  <div className="bg-blue-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Auto-Sync</p>
-                    <p className="text-sm font-medium text-blue-700">Every 5 min</p>
+                  <div className="col-span-2 text-xs text-gray-500">
+                    Last sync: {smRevenue.last_sync ? new Date(smRevenue.last_sync).toLocaleString() : 'Never'}
                   </div>
                 </div>
+              ) : (
+                <p className="text-sm text-gray-500 py-2">Sync to pull Shop Monkey payment data.</p>
+              )}
+            </div>
+
+            {/* Payment Processor (Valor Pay or Stripe) – label from configured endpoint */}
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">
+                    {processorConfigured === 'valorpay' ? 'Valor Pay' : processorConfigured === 'stripe' ? 'Payment Processor (Stripe)' : 'Payment Processor'}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {processorConfigured === 'valorpay'
+                      ? 'Charges sync into daily income. Valor Pay keys set in backend/.env.'
+                      : processorConfigured === 'stripe'
+                        ? 'Charges sync into daily income. Set STRIPE_SECRET_KEY in backend/.env.'
+                        : 'Set VALOR_APP_ID and VALOR_APP_KEY (Valor Pay) or STRIPE_SECRET_KEY in backend/.env.'}
+                  </p>
+                </div>
+                <button
+                  onClick={handleProcessorSync}
+                  disabled={processorSyncing}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition disabled:opacity-50 text-sm font-medium"
+                >
+                  {processorSyncing ? 'Syncing...' : 'Sync Now'}
+                </button>
               </div>
-            ) : (
-              <p className="text-sm text-gray-500 py-4 text-center">
-                Click "Sync Now" to pull all payment data from Shop Monkey.
-              </p>
-            )}
+              {processorRevenue ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Days</p>
+                    <p className="text-lg font-bold text-gray-800 dark:text-neutral-100">{processorRevenue.total_days || 0}</p>
+                  </div>
+                  <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Total</p>
+                    <p className="text-lg font-bold text-amber-600">{fmt$(processorRevenue.total_revenue || 0)}</p>
+                  </div>
+                  <div className="col-span-2 text-xs text-gray-500">
+                    Last sync: {processorRevenue.last_sync ? new Date(processorRevenue.last_sync).toLocaleString() : 'Never'}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 py-2">
+                  {processorConfigured === 'valorpay' ? 'Click Sync Now to pull Valor Pay charges into daily income.' : 'Add Valor Pay or Stripe keys in backend/.env and sync.'}
+                </p>
+              )}
+            </div>
           </div>
 
+          {/* Daily revenue: P&L uses one source per day (Shop Monkey > Processor > Manual). Tables show each source. */}
           {smRevenue && smRevenue.daily && smRevenue.daily.length > 0 && (
-            <RevenueTable daily={smRevenue.daily} />
+            <>
+              <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-300">Shop Monkey by day</h4>
+              <RevenueTable daily={smRevenue.daily} />
+            </>
+          )}
+          {processorRevenue && processorRevenue.daily && processorRevenue.daily.length > 0 && (
+            <>
+              <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-300 mt-4">Payment processor by day</h4>
+              <RevenueTable daily={processorRevenue.daily} />
+            </>
           )}
         </div>
       )}
@@ -523,7 +602,7 @@ export default function FinanceDashboard() {
         <div className="space-y-4">
           {forecast && forecast.projected && forecast.projected.length > 0 ? (
             <>
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
                 <h3 className="text-base font-semibold text-gray-800 mb-3">Historical (Actual)</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -550,7 +629,7 @@ export default function FinanceDashboard() {
                   </table>
                 </div>
               </div>
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
                 <h3 className="text-base font-semibold text-gray-800 mb-3">Projected</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -582,7 +661,7 @@ export default function FinanceDashboard() {
               </div>
             </>
           ) : (
-            <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-8 text-center">
               <p className="text-gray-500">Not enough historical data to generate a forecast.</p>
               <p className="text-sm text-gray-400 mt-1">At least 2 weeks of revenue/expense data is needed.</p>
             </div>

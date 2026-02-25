@@ -6,6 +6,7 @@ import db from './db.js';
 import { seedFeb2026Changelog } from './seed-changelog-feb2026.js';
 import { addPlaidTables } from './add_plaid_tables.js';
 import { addShopmonkeyRevenueTable } from './add_shopmonkey_revenue_table.js';
+import { addProcessorRevenueTable } from './add_processor_revenue_table.js';
 import { addSecurityTables } from './add_security_tables.js';
 
 export async function ensureUserColumns() {
@@ -93,6 +94,23 @@ export async function ensureNewItemRequestsTable() {
   } catch (_) {}
 }
 
+/** Alternate barcodes for inventory items (same product, different part number / barcode). */
+export async function ensureInventoryAlternateBarcodesTable() {
+  try {
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS inventory_item_barcodes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+        barcode TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(barcode)
+      )
+    `);
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_inventory_item_barcodes_item ON inventory_item_barcodes(item_id)').catch(() => {});
+    await db.runAsync('CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_item_barcodes_barcode ON inventory_item_barcodes(barcode)').catch(() => {});
+  } catch (_) {}
+}
+
 /** Ensure Neel (by username or name) has master admin and payroll access. */
 export async function ensureNeelMasterAdmin() {
   try {
@@ -103,14 +121,51 @@ export async function ensureNeelMasterAdmin() {
   } catch (_) {}
 }
 
+/** Add is_vpn column to login_events for VPN/proxy detection (idempotent). */
+export async function ensureLoginEventsIsVpn() {
+  try {
+    const info = await db.allAsync('PRAGMA table_info(login_events)');
+    const hasIsVpn = (info || []).some(c => c.name === 'is_vpn');
+    if (!hasIsVpn) {
+      await db.runAsync('ALTER TABLE login_events ADD COLUMN is_vpn INTEGER DEFAULT 0');
+    }
+  } catch (_) {}
+}
+
+/** Ad-hoc inventory scan-outs (use item not on a task) — admin list and notifications. */
+export async function ensureAdHocScanOutTable() {
+  try {
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS inventory_ad_hoc_scan_out (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+        quantity_used REAL NOT NULL,
+        used_by INTEGER NOT NULL REFERENCES users(id),
+        reason_text TEXT NOT NULL,
+        barcode_scanned TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        acknowledged_at DATETIME,
+        acknowledged_by INTEGER REFERENCES users(id)
+      )
+    `);
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_ad_hoc_scan_out_item ON inventory_ad_hoc_scan_out(item_id)').catch(() => {});
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_ad_hoc_scan_out_created ON inventory_ad_hoc_scan_out(created_at)').catch(() => {});
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_ad_hoc_scan_out_ack ON inventory_ad_hoc_scan_out(acknowledged_at)').catch(() => {});
+  } catch (_) {}
+}
+
 export async function runStartupMigrations() {
   await ensureUserColumns();
   await ensureNeelMasterAdmin();
   await ensureAppSettingsTable();
   await ensureSystemUpdatesTables();
   await ensureNewItemRequestsTable();
+  await ensureInventoryAlternateBarcodesTable();
+  await ensureAdHocScanOutTable();
   await seedFeb2026Changelog();
   await addPlaidTables();
   await addShopmonkeyRevenueTable();
+  await addProcessorRevenueTable();
   await addSecurityTables();
+  await ensureLoginEventsIsVpn();
 }

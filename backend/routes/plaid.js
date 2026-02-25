@@ -21,6 +21,104 @@ function guardPlaid(req, res, next) {
 
 router.use(guardPlaid);
 
+/**
+ * Run transaction sync for all (or one) Plaid items. Used by POST /transactions/sync and by background job.
+ * @param {string|null} itemId - Optional. If set, sync only this item_id; otherwise sync all.
+ * @returns {{ synced_count: number }}
+ */
+export async function runPlaidTransactionsSync(itemId = null) {
+  let items;
+  if (itemId) {
+    items = await db.allAsync('SELECT * FROM plaid_items WHERE item_id = ?', [itemId]);
+  } else {
+    items = await db.allAsync('SELECT * FROM plaid_items');
+  }
+
+  if (!items || items.length === 0) {
+    return { synced_count: 0 };
+  }
+
+  const client = getPlaidClient();
+  let totalSynced = 0;
+
+  for (const item of items) {
+    const accessToken = decryptToken(item.access_token_encrypted);
+    let cursor = item.next_cursor || '';
+    let hasMore = true;
+
+    while (hasMore) {
+      const syncResponse = await client.transactionsSync({
+        access_token: accessToken,
+        cursor: cursor || undefined,
+      });
+
+      const { added, modified, removed, next_cursor, has_more } = syncResponse.data;
+
+      for (const txn of added) {
+        await db.runAsync(
+          `INSERT INTO bank_transactions
+            (plaid_item_id, plaid_transaction_id, date, amount, name, merchant_name, category, pending, iso_currency_code)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(plaid_item_id, plaid_transaction_id) DO UPDATE SET
+            date = excluded.date, amount = excluded.amount, name = excluded.name,
+            merchant_name = excluded.merchant_name, category = excluded.category,
+            pending = excluded.pending`,
+          [
+            item.id,
+            txn.transaction_id,
+            txn.date,
+            txn.amount,
+            txn.name,
+            txn.merchant_name || null,
+            txn.personal_finance_category?.primary || (txn.category ? txn.category.join(' > ') : null),
+            txn.pending ? 1 : 0,
+            txn.iso_currency_code || 'USD',
+          ]
+        );
+      }
+
+      for (const txn of modified) {
+        await db.runAsync(
+          `UPDATE bank_transactions SET
+            date = ?, amount = ?, name = ?, merchant_name = ?, category = ?, pending = ?
+           WHERE plaid_item_id = ? AND plaid_transaction_id = ?`,
+          [
+            txn.date,
+            txn.amount,
+            txn.name,
+            txn.merchant_name || null,
+            txn.personal_finance_category?.primary || (txn.category ? txn.category.join(' > ') : null),
+            txn.pending ? 1 : 0,
+            item.id,
+            txn.transaction_id,
+          ]
+        );
+      }
+
+      for (const txn of removed) {
+        const txnId = txn.transaction_id;
+        if (txnId) {
+          await db.runAsync(
+            'DELETE FROM bank_transactions WHERE plaid_item_id = ? AND plaid_transaction_id = ?',
+            [item.id, txnId]
+          );
+        }
+      }
+
+      totalSynced += added.length + modified.length;
+      cursor = next_cursor;
+      hasMore = has_more;
+    }
+
+    await db.runAsync(
+      'UPDATE plaid_items SET next_cursor = ?, last_sync_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [cursor, item.id]
+    );
+  }
+
+  return { synced_count: totalSynced };
+}
+
 // POST /api/plaid/link-token
 router.post('/link-token', async (req, res) => {
   try {
@@ -86,97 +184,14 @@ router.post('/exchange', async (req, res) => {
 router.post('/transactions/sync', async (req, res) => {
   try {
     const { item_id } = req.body;
-
-    let items;
-    if (item_id) {
-      items = await db.allAsync('SELECT * FROM plaid_items WHERE item_id = ?', [item_id]);
-    } else {
-      items = await db.allAsync('SELECT * FROM plaid_items');
-    }
-
-    if (!items || items.length === 0) {
-      return res.status(404).json({ error: 'No connected bank accounts found' });
-    }
-
-    const client = getPlaidClient();
-    let totalSynced = 0;
-
-    for (const item of items) {
-      const accessToken = decryptToken(item.access_token_encrypted);
-      let cursor = item.next_cursor || '';
-      let hasMore = true;
-
-      while (hasMore) {
-        const syncResponse = await client.transactionsSync({
-          access_token: accessToken,
-          cursor: cursor || undefined,
-        });
-
-        const { added, modified, removed, next_cursor, has_more } = syncResponse.data;
-
-        for (const txn of added) {
-          await db.runAsync(
-            `INSERT INTO bank_transactions
-              (plaid_item_id, plaid_transaction_id, date, amount, name, merchant_name, category, pending, iso_currency_code)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(plaid_item_id, plaid_transaction_id) DO UPDATE SET
-              date = excluded.date, amount = excluded.amount, name = excluded.name,
-              merchant_name = excluded.merchant_name, category = excluded.category,
-              pending = excluded.pending`,
-            [
-              item.id,
-              txn.transaction_id,
-              txn.date,
-              txn.amount,
-              txn.name,
-              txn.merchant_name || null,
-              txn.personal_finance_category?.primary || (txn.category ? txn.category.join(' > ') : null),
-              txn.pending ? 1 : 0,
-              txn.iso_currency_code || 'USD',
-            ]
-          );
-        }
-
-        for (const txn of modified) {
-          await db.runAsync(
-            `UPDATE bank_transactions SET
-              date = ?, amount = ?, name = ?, merchant_name = ?, category = ?, pending = ?
-             WHERE plaid_item_id = ? AND plaid_transaction_id = ?`,
-            [
-              txn.date,
-              txn.amount,
-              txn.name,
-              txn.merchant_name || null,
-              txn.personal_finance_category?.primary || (txn.category ? txn.category.join(' > ') : null),
-              txn.pending ? 1 : 0,
-              item.id,
-              txn.transaction_id,
-            ]
-          );
-        }
-
-        for (const txn of removed) {
-          const txnId = txn.transaction_id;
-          if (txnId) {
-            await db.runAsync(
-              'DELETE FROM bank_transactions WHERE plaid_item_id = ? AND plaid_transaction_id = ?',
-              [item.id, txnId]
-            );
-          }
-        }
-
-        totalSynced += added.length + modified.length;
-        cursor = next_cursor;
-        hasMore = has_more;
+    const result = await runPlaidTransactionsSync(item_id || null);
+    if (result.synced_count === 0 && !item_id) {
+      const items = await db.allAsync('SELECT 1 FROM plaid_items LIMIT 1');
+      if (!items || items.length === 0) {
+        return res.status(404).json({ error: 'No connected bank accounts found' });
       }
-
-      await db.runAsync(
-        'UPDATE plaid_items SET next_cursor = ?, last_sync_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [cursor, item.id]
-      );
     }
-
-    res.json({ synced_count: totalSynced });
+    res.json({ synced_count: result.synced_count });
   } catch (error) {
     console.error('Plaid sync error:', error.response?.data || error.message);
     const msg = error.response?.data?.error_code === 'ITEM_LOGIN_REQUIRED'

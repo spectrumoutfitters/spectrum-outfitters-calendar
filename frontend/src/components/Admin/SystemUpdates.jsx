@@ -190,7 +190,7 @@ const SystemUpdates = () => {
       bugfix: 'bg-green-100 text-green-800',
       improvement: 'bg-purple-100 text-purple-800',
       announcement: 'bg-yellow-100 text-yellow-800',
-      maintenance: 'bg-gray-100 text-gray-800'
+      maintenance: 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-200'
     };
     return colors[type] || colors.feature;
   };
@@ -260,7 +260,7 @@ const SystemUpdates = () => {
             {pendingUpdates.map((update) => (
               <div
                 key={update.id}
-                className="bg-white border border-yellow-300 rounded-lg p-4"
+                className="bg-white dark:bg-neutral-900 border border-yellow-300 dark:border-yellow-700 rounded-lg p-4"
               >
                 <div className="flex items-start gap-3">
                   <input
@@ -312,7 +312,7 @@ const SystemUpdates = () => {
       {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-xl dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold">
@@ -456,7 +456,7 @@ const SystemUpdates = () => {
                       setShowForm(false);
                       resetForm();
                     }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200"
                   >
                     Cancel
                   </button>
@@ -474,10 +474,10 @@ const SystemUpdates = () => {
       )}
 
       {/* Updates List */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 dark:bg-neutral-800">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Title
@@ -499,7 +499,7 @@ const SystemUpdates = () => {
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-neutral-900 divide-y divide-gray-200 dark:divide-neutral-700">
               {updates.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="px-6 py-4 text-center text-gray-500">

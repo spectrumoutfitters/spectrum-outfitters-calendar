@@ -151,20 +151,20 @@ export async function computeOnPremScore(ip, browserGeo, ipGeo) {
 }
 
 /**
- * Insert a login_events row.
+ * Insert a login_events row. Returns the new row id or null.
  */
 export async function recordLoginEvent({
   userId, username, success, reason, ip, forwardedFor, userAgent,
   browserGeo, ipGeo, networkOk, geoOk, score
 }) {
   try {
-    await db.runAsync(`
+    const result = await db.runAsync(`
       INSERT INTO login_events (
         user_id, username, success, reason, ip, forwarded_for, user_agent,
         browser_geo_lat, browser_geo_lng, browser_geo_accuracy_m,
         ip_geo_country, ip_geo_region, ip_geo_city, ip_geo_lat, ip_geo_lng, ip_geo_source,
-        on_prem_network_ok, on_prem_geo_ok, on_prem_score
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        on_prem_network_ok, on_prem_geo_ok, on_prem_score, is_vpn
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 0)
     `, [
       userId ?? null,
       username,
@@ -186,8 +186,91 @@ export async function recordLoginEvent({
       geoOk ? 1 : 0,
       score ?? 0
     ]);
+    return result?.lastID ?? null;
   } catch (err) {
     console.error('Failed to record login event:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Check if an IP is likely a VPN/proxy using getipintel.net.
+ * Set GETIPINTEL_CONTACT in env to your email (required by getipintel.net). If unset, VPN check is skipped.
+ * Returns false if not configured or on error.
+ */
+export function checkVPN(ip) {
+  const contact = process.env.GETIPINTEL_CONTACT?.trim();
+  if (!contact || !ip || ip === '127.0.0.1' || ip === '::1' || ip === 'unknown') {
+    return Promise.resolve(false);
+  }
+  const cleaned = ip.replace(/^::ffff:/, '');
+  const url = `http://getipintel.net/check.php?ip=${encodeURIComponent(cleaned)}&contact=${encodeURIComponent(contact)}&format=json`;
+  return new Promise((resolve) => {
+    const lib = url.startsWith('https') ? require('https') : require('http');
+    const req = lib.get(url, { timeout: 5000 }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const body = Buffer.concat(chunks).toString('utf8');
+          const data = JSON.parse(body);
+          const score = parseFloat(data.result);
+          resolve(!Number.isNaN(score) && score >= 0.99);
+        } catch {
+          resolve(false);
+        }
+      });
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(5000, () => { req.destroy(); resolve(false); });
+  });
+}
+
+/**
+ * If the IP is detected as VPN, mark the login event and notify admins. Call in background (do not await in login flow).
+ */
+export async function checkVPNAndNotify(app, eventId, ip, username, fullName, userId) {
+  if (!eventId || !app) return;
+  try {
+    const isVpn = await checkVPN(ip);
+    if (!isVpn) return;
+    await db.runAsync('UPDATE login_events SET is_vpn = 1 WHERE id = ?', [eventId]);
+    const io = app.get('io');
+    const displayName = fullName || username || 'Unknown';
+    const message = `⚠️ VPN/proxy login: ${displayName} (@${username || '?'}) logged in from IP ${ip}. Review in Admin → Security → Login history.`;
+    const result = await db.runAsync(
+      `INSERT INTO messages (sender_id, message, is_team_message, board_type) VALUES (?, ?, 1, 'admin_board')`,
+      [userId ?? 1, message]
+    );
+    if (io && result?.lastID) {
+      const row = await db.getAsync(
+        `SELECT m.*, u.full_name as sender_name FROM messages m LEFT JOIN users u ON m.sender_id = u.id WHERE m.id = ?`,
+        [result.lastID]
+      );
+      if (row) {
+        io.to('admin').emit('new_message', {
+          ...row,
+          board_type: 'admin_board',
+          type: 'admin_board'
+        });
+      }
+    }
+  } catch (err) {
+    console.error('VPN check/notify error:', err.message);
+  }
+}
+
+/**
+ * Insert a logout_events row (table created in add_security_tables).
+ */
+export async function recordLogoutEvent({ userId, username, ip, userAgent }) {
+  try {
+    await db.runAsync(
+      `INSERT INTO logout_events (user_id, username, occurred_at, ip, user_agent) VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?)`,
+      [userId ?? null, username ?? '', ip ?? null, userAgent ?? null]
+    );
+  } catch (err) {
+    console.error('Failed to record logout event:', err.message);
   }
 }
 

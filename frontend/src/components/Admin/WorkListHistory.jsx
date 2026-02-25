@@ -71,7 +71,7 @@ const WorkListHistory = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
+      <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-4">
         <div className="flex flex-wrap gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
@@ -110,10 +110,10 @@ const WorkListHistory = () => {
       </div>
 
       {/* History Table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 dark:bg-neutral-800">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
@@ -132,7 +132,7 @@ const WorkListHistory = () => {
                 </tr>
               ) : (
                 history.map((entry) => (
-                  <tr key={entry.id} className="hover:bg-gray-50">
+                  <tr key={entry.id} className="hover:bg-gray-50 dark:hover:bg-neutral-800">
                     <td className="px-4 py-3 text-sm text-gray-900">{entry.title}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {entry.category ? getCategoryLabel(entry.category) : '-'}

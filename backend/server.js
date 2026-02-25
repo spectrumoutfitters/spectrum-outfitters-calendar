@@ -33,18 +33,24 @@ import updatesRoutes from './routes/updates.js';
 import dashboardConfigRoutes from './routes/dashboardConfig.js';
 import settingsRoutes from './routes/settings.js';
 import plaidRoutes from './routes/plaid.js';
+import { runPlaidTransactionsSync } from './routes/plaid.js';
+import { isPlaidConfigured } from './utils/plaidClient.js';
 import financeRoutes from './routes/finance.js';
 import securityRoutes from './routes/security.js';
+import geocodeRoutes from './routes/geocode.js';
+import paymentProcessorRoutes from './routes/paymentProcessor.js';
+import { handleStripeWebhook } from './routes/paymentProcessor.js';
 import { syncShopMonkeyRevenue } from './routes/shopmonkey.js';
+import { syncStripeRevenue, syncValorPayRevenue, syncPaymentProcessorRevenue } from './routes/paymentProcessor.js';
 import { authenticateToken, requireAdmin } from './middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { pullChangesFromGoogle } from './utils/googleCalendarService.js';
 import { getSocketClientIP, startSession, endSession, heartbeatSession } from './utils/security.js';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+// Load .env from backend directory so keys (e.g. GOOGLE_MAPS_API_KEY) are found when started from project root
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 // Get local IP address for network access
 function getLocalIP() {
@@ -597,9 +603,13 @@ app.use(cors({
   },
   credentials: true
 }));
+app.use(cookieParser());
+
+// Stripe webhook needs raw body for signature verification (must be before express.json)
+app.post('/api/payment-processor/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(cookieParser());
 
 // Serve static files from frontend dist in production
 if (process.env.NODE_ENV === 'production') {
@@ -610,6 +620,12 @@ if (process.env.NODE_ENV === 'production') {
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Maps API key for frontend (interactive Street View). Same key as backend; restrict by HTTP referrer for browser.
+app.get('/api/config/maps-key', authenticateToken, (req, res) => {
+  const key = (process.env.GOOGLE_MAPS_API_KEY || '').trim();
+  res.json({ googleMapsApiKey: key });
 });
 
 // Routes
@@ -637,7 +653,9 @@ app.use('/api/dashboard-config', dashboardConfigRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/plaid', plaidRoutes);
 app.use('/api/finance', financeRoutes);
+app.use('/api/payment-processor', paymentProcessorRoutes);
 app.use('/api/admin/security', securityRoutes);
+app.use('/api/geocode', geocodeRoutes);
 
 // Serve uploaded files
 const uploadsPath = process.env.UPLOADS_PATH || path.join(__dirname, 'uploads');
@@ -768,6 +786,56 @@ function startBackgroundJobs() {
     runSmSync();
     setInterval(runSmSync, SM_SYNC_INTERVAL);
     console.log('📊 ShopMonkey revenue auto-sync enabled (every 5 minutes)');
+  }
+
+  if (process.env.VALOR_APP_ID && process.env.VALOR_APP_KEY) {
+    let valorSyncRunning = false;
+    const VALOR_SYNC_INTERVAL = 5 * 60 * 1000;
+    const runValorSync = () => {
+      if (valorSyncRunning) return;
+      valorSyncRunning = true;
+      const sevenDays = new Date();
+      sevenDays.setDate(sevenDays.getDate() - 7);
+      syncValorPayRevenue(sevenDays.toISOString().split('T')[0])
+        .catch(err => console.warn('Valor Pay revenue auto-sync failed:', err?.message || err))
+        .finally(() => { valorSyncRunning = false; });
+    };
+    runValorSync();
+    setInterval(runValorSync, VALOR_SYNC_INTERVAL);
+    console.log('💳 Valor Pay revenue auto-sync enabled (every 5 minutes)');
+  } else if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_')) {
+    let stripeSyncRunning = false;
+    const STRIPE_SYNC_INTERVAL = 5 * 60 * 1000;
+    const runStripeSync = () => {
+      if (stripeSyncRunning) return;
+      stripeSyncRunning = true;
+      const sevenDays = new Date();
+      sevenDays.setDate(sevenDays.getDate() - 7);
+      syncStripeRevenue(sevenDays.toISOString().split('T')[0])
+        .catch(err => console.warn('Stripe revenue auto-sync failed:', err?.message || err))
+        .finally(() => { stripeSyncRunning = false; });
+    };
+    runStripeSync();
+    setInterval(runStripeSync, STRIPE_SYNC_INTERVAL);
+    console.log('💳 Stripe revenue auto-sync enabled (every 5 minutes)');
+  }
+
+  if (isPlaidConfigured()) {
+    let plaidSyncRunning = false;
+    const PLAID_SYNC_INTERVAL = 30 * 60 * 1000; // 30 minutes
+    const runPlaidSync = () => {
+      if (plaidSyncRunning) return;
+      plaidSyncRunning = true;
+      runPlaidTransactionsSync()
+        .then(({ synced_count }) => {
+          if (synced_count > 0) console.log('Plaid: synced', synced_count, 'transaction(s)');
+        })
+        .catch(err => console.warn('Plaid expenses auto-sync failed:', err?.message || err))
+        .finally(() => { plaidSyncRunning = false; });
+    };
+    runPlaidSync();
+    setInterval(runPlaidSync, PLAID_SYNC_INTERVAL);
+    console.log('🏦 Plaid bank/credit card expenses auto-sync enabled (every 30 minutes)');
   }
 
   const pollIntervalMs = parseInt(process.env.GOOGLE_CALENDAR_POLL_INTERVAL_MS || '300000', 10);

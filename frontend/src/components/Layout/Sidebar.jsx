@@ -61,28 +61,28 @@ const Sidebar = ({ isOpen, onClose }) => {
   };
 
   const navLinkClass = (isActive) =>
-    `flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-colors duration-150 ${
+    `flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-colors duration-150 min-h-[3rem] ${
       isActive
-        ? 'bg-primary-subtle text-primary'
-        : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+        ? 'bg-primary-subtle text-primary dark:bg-primary/20 dark:text-primary-light'
+        : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100'
     }`;
 
   return (
     <>
       {/* Mobile sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full w-72 bg-neutral-50 z-50 transform transition-transform duration-300 ease-out lg:hidden ${
+        className={`fixed top-0 left-0 h-full w-[min(18rem,100vw)] max-w-[288px] bg-neutral-50 dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 z-50 transform transition-transform duration-300 ease-out lg:hidden ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        style={{ boxShadow: isOpen ? '4px 0 24px rgba(0,0,0,0.08)' : 'none' }}
+        style={{ boxShadow: isOpen ? '4px 0 24px rgba(0,0,0,0.12)' : 'none' }}
       >
-        <div className="p-5 border-b border-neutral-100 flex justify-between items-center">
+        <div className="p-4 sm:p-5 border-b border-neutral-100 dark:border-neutral-800 flex justify-between items-center min-h-[3.25rem]">
           <Link to="/dashboard" onClick={handleLinkClick} className="flex items-center min-w-0">
             <Logo size="md" showText={false} />
           </Link>
           <button
             onClick={onClose}
-            className="p-2.5 rounded-xl text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 transition-colors"
+            className="flex items-center justify-center w-10 h-10 rounded-xl text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
             aria-label="Close menu"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -90,7 +90,7 @@ const Sidebar = ({ isOpen, onClose }) => {
             </svg>
           </button>
         </div>
-        <nav className="p-3 overflow-y-auto h-[calc(100vh-88px)]">
+        <nav className="p-3 overflow-y-auto h-[calc(100vh-4rem)] safe-area-pb">
           <ul className="space-y-0.5">
             {navItems.map((item) => {
               const to = item.tab ? `${item.path}?tab=${item.tab}` : item.path;
@@ -105,14 +105,14 @@ const Sidebar = ({ isOpen, onClose }) => {
               );
             })}
             {isAdmin && (
-              <li className="pt-3 mt-3 border-t border-neutral-100">
+              <li className="pt-3 mt-3 border-t border-neutral-100 dark:border-neutral-800">
                 <a
                   href={import.meta.env.VITE_DASHBOARD_ASSISTANT_DOWNLOAD_URL || '/downloads/dashboard-assistant'}
                   download="SpectrumOutfittersAssistant-Setup.exe"
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={handleLinkClick}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-neutral-600 hover:bg-neutral-50 transition-colors"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800 transition-colors min-h-[3rem]"
                 >
                   <img src="/spectrum-icon.png" alt="" className="w-7 h-7 object-contain flex-shrink-0" />
                   <span className="text-sm">Download Assistant</span>
@@ -124,13 +124,13 @@ const Sidebar = ({ isOpen, onClose }) => {
       </aside>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block w-64 min-h-[calc(100vh-65px)] bg-neutral-50 border-r border-neutral-200">
-        <div className="p-6 border-b border-neutral-100">
+      <aside className="hidden lg:block w-64 min-h-[calc(100vh-65px)] bg-neutral-50 dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 shrink-0">
+        <div className="p-6 border-b border-neutral-100 dark:border-neutral-800">
           <Link to="/dashboard" className="flex justify-center items-center w-full">
             <Logo size="lg" showText={false} />
           </Link>
         </div>
-        <nav className="p-3">
+        <nav className="p-3 overflow-y-auto max-h-[calc(100vh-8rem)]">
           <ul className="space-y-0.5">
             {navItems.map((item) => {
               const to = item.tab ? `${item.path}?tab=${item.tab}` : item.path;
@@ -145,13 +145,13 @@ const Sidebar = ({ isOpen, onClose }) => {
               );
             })}
             {isAdmin && (
-              <li className="pt-3 mt-3 border-t border-neutral-100">
+              <li className="pt-3 mt-3 border-t border-neutral-100 dark:border-neutral-800">
                 <a
                   href={import.meta.env.VITE_DASHBOARD_ASSISTANT_DOWNLOAD_URL || '/downloads/dashboard-assistant'}
                   download="SpectrumOutfittersAssistant-Setup.exe"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-neutral-600 hover:bg-neutral-50 transition-colors"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800 transition-colors"
                 >
                   <img src="/spectrum-icon.png" alt="" className="w-7 h-7 object-contain flex-shrink-0" />
                   <span className="text-sm">Download Assistant</span>

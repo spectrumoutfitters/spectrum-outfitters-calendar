@@ -73,7 +73,7 @@ const LEVEL_LABELS = {
   no_min: 'In stock'
 };
 
-const BARCODE_CACHE_TTL_MS = 2 * 60 * 1000; // 2 min
+const BARCODE_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min — repeat scans feel instant
 
 const Inventory = () => {
   const { isAdmin } = useAuth();
@@ -143,6 +143,12 @@ const Inventory = () => {
   const [showNewItemRequestModal, setShowNewItemRequestModal] = useState(false);
   const [newItemRequestForm, setNewItemRequestForm] = useState({ item_name: '', notes: '', barcode: '' });
   const [newItemRequestLoading, setNewItemRequestLoading] = useState(false);
+  const [barcodeMismatchConfirm, setBarcodeMismatchConfirm] = useState(null); // { code, itemId, itemName, purpose, payload }
+  const [barcodeMismatchAdding, setBarcodeMismatchAdding] = useState(false);
+  const [useItemQty, setUseItemQty] = useState('');
+  const [useItemReason, setUseItemReason] = useState('');
+  const [useItemLoading, setUseItemLoading] = useState(false);
+  const [pendingUseItem, setPendingUseItem] = useState(null); // { quantity_used, reason } when waiting for scan
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -310,17 +316,24 @@ const Inventory = () => {
     setQuantity('');
     setShowScanResultModal(false);
 
+    if (openQuickModal) {
+      setShowScanResultModal(true);
+      setLookupLoading(true);
+    }
+
     const cached = barcodeCacheRef.current.get(code);
     if (cached && Date.now() - cached.ts < BARCODE_CACHE_TTL_MS && cached.item) {
       setItem(cached.item);
       setQuantity(cached.item?.quantity ?? '');
       setViscosity(cached.item?.viscosity && String(cached.item.viscosity).trim() ? String(cached.item.viscosity) : '');
+      setUseItemQty('');
+      setUseItemReason('');
       if (openQuickModal) setShowScanResultModal(true);
       setLookupLoading(false);
       return;
     }
 
-    setLookupLoading(true);
+    if (!openQuickModal) setLookupLoading(true);
     try {
       const res = await api.get(`/inventory/items/by-barcode/${encodeURIComponent(code)}`);
       const found = res.data?.item;
@@ -328,6 +341,8 @@ const Inventory = () => {
       setItem(found);
       setQuantity(found?.quantity ?? '');
       setViscosity(found?.viscosity && String(found.viscosity).trim() ? String(found.viscosity) : '');
+      setUseItemQty('');
+      setUseItemReason('');
       if (openQuickModal) setShowScanResultModal(true);
     } catch (e) {
       if (e.response?.status === 404) {
@@ -479,6 +494,72 @@ const Inventory = () => {
     setSuccessMessage('');
     setScanPurpose('got_more_scan_first');
     setScannerOpen(true);
+  };
+
+  const openUseItemScan = (e) => {
+    e.preventDefault();
+    if (!item?.id) return;
+    const q = safeNumber(useItemQty);
+    if (q === null || q <= 0) {
+      setLookupError('Enter a positive amount to use.');
+      return;
+    }
+    const current = item?.quantity ?? 0;
+    if (q > current) {
+      setLookupError(`Only ${formatQuantityWithSize(item)} available. Enter ${current} or less.`);
+      return;
+    }
+    const reason = (useItemReason || '').trim();
+    if (!reason) {
+      setLookupError('Please give a reason for using this item (e.g. what it’s for).');
+      return;
+    }
+    if (!item.barcode || !String(item.barcode).trim()) {
+      setLookupError('This item has no barcode. Add a barcode in Edit so you can scan it out.');
+      return;
+    }
+    setLookupError(null);
+    setSuccessMessage('');
+    setPendingUseItem({ quantity_used: q, reason });
+    setScannerOpen(true);
+  };
+
+  const submitUseItemAfterScan = async (barcode) => {
+    if (!item?.id || !pendingUseItem) return;
+    setUseItemLoading(true);
+    setLookupError(null);
+    setSuccessMessage('');
+    try {
+      const res = await api.post(`/inventory/items/${item.id}/use`, {
+        quantity_used: pendingUseItem.quantity_used,
+        reason: pendingUseItem.reason,
+        barcode
+      });
+      setItem(res.data?.item);
+      setQuantity(String(res.data?.item?.quantity ?? ''));
+      setUseItemQty('');
+      setUseItemReason('');
+      setPendingUseItem(null);
+      setScannerOpen(false);
+      setSuccessMessage(`Used ${pendingUseItem.quantity_used} ${item?.unit || 'each'}. Quantity updated.`);
+      loadAllItems();
+    } catch (e2) {
+      const msg = e2.response?.data?.error || e2.message || '';
+      if (msg.includes('Barcode does not match')) {
+        setBarcodeMismatchConfirm({
+          code: barcode,
+          itemId: item.id,
+          itemName: item.name,
+          purpose: 'use_item',
+          payload: { quantity_used: pendingUseItem.quantity_used, reason: pendingUseItem.reason }
+        });
+        setScannerOpen(false);
+      } else {
+        setLookupError(msg || 'Failed to record use.');
+      }
+    } finally {
+      setUseItemLoading(false);
+    }
   };
 
   const openEditModal = () => {
@@ -644,7 +725,7 @@ const Inventory = () => {
       return;
     }
     setLookupError(null);
-    setPendingReceive({ requestId, itemId, qty: num });
+    setPendingReceive({ requestId, itemId, itemName: refill?.item_name, qty: num });
     setScanPurpose('refill_receive');
     setScannerOpen(true);
   };
@@ -661,6 +742,41 @@ const Inventory = () => {
       setLookupError(e.response?.data?.error || 'Failed to record receive');
     } finally {
       setReceiveLoadingId(null);
+    }
+  };
+
+  const confirmBarcodeMismatchAddAndContinue = async () => {
+    if (!barcodeMismatchConfirm) return;
+    const { code, itemId, itemName, purpose, payload } = barcodeMismatchConfirm;
+    setBarcodeMismatchAdding(true);
+    setLookupError(null);
+    try {
+      await api.post(`/inventory/items/${itemId}/alternate-barcodes`, { barcode: code });
+      const eventType = purpose === 'refill_receive' ? 'refill_receive' : 'quantity_increase';
+      const refillRequestId = purpose === 'refill_receive' && payload ? payload.requestId : null;
+      await api.post('/inventory/scan-log', {
+        item_id: itemId,
+        barcode: code,
+        event_type: eventType,
+        ...(refillRequestId != null ? { refill_request_id: refillRequestId } : {})
+      });
+      if (purpose === 'quantity_increase' && payload) {
+        await submitQuantityAfterScan(payload.qty, payload.viscosity);
+      } else if (purpose === 'got_more_scan_first') {
+        const currentItem = item?.id === itemId ? item : allItems.find((it) => it.id === itemId);
+        const defaultQty = (currentItem?.quantity ?? 0) + 1;
+        setGotMoreAwaitingQuantity({ defaultQty });
+        setGotMoreQuantityInput(String(defaultQty));
+        setLookupError(null);
+        if (currentItem && item?.id !== itemId) setItem(currentItem);
+      } else if (purpose === 'refill_receive' && payload) {
+        await submitReceiveAfterScan(payload.requestId, payload.qty);
+      }
+      setBarcodeMismatchConfirm(null);
+    } catch (e) {
+      setLookupError(e.response?.data?.error || 'Could not add barcode. Try again.');
+    } finally {
+      setBarcodeMismatchAdding(false);
     }
   };
 
@@ -696,44 +812,55 @@ const Inventory = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 md:pb-8" style={{ paddingBottom: 'max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem))' }}>
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-200 dark:border-neutral-800 p-4 sm:p-5 md:p-6">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Inventory</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-neutral-100">Inventory</h1>
+          <p className="text-sm text-gray-600 dark:text-neutral-200 mt-1">
             Scan a barcode to load an item, then record how much is left.
           </p>
         </div>
 
         <form
-          className="mt-4 sm:mt-5 flex flex-col sm:flex-row gap-3"
+          className="mt-4 sm:mt-5 flex flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             handleLookup(barcode, { openQuickModal: true });
           }}
         >
-          <div className="flex-1 min-w-0">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
-            <input
-              ref={barcodeRef}
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              placeholder="Scan or type barcode, press Enter"
-              className="w-full px-4 py-3.5 sm:py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary text-lg tracking-wider touch-manipulation"
-              inputMode="numeric"
-              autoComplete="off"
-            />
-          </div>
-          <div className="flex items-end flex-shrink-0">
-            <button
-              type="button"
-              onClick={openScanner}
-              disabled={!cameraSupported}
-              className="min-h-[48px] w-full sm:w-auto sm:min-w-[140px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-primary bg-primary text-white font-semibold disabled:opacity-50 active:opacity-90 touch-manipulation"
-              title={cameraSupported ? 'Scan barcode with camera' : 'Camera not available'}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13v7a2 2 0 01-2 2H7a2 2 0 01-2-2v-7" /></svg>
-              Scan barcode
-            </button>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Barcode</label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                ref={barcodeRef}
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
+                placeholder="Scan or type barcode (numbers and letters)"
+                className="flex-1 min-w-0 px-4 py-3.5 sm:py-3 rounded-xl border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary text-lg tracking-wider touch-manipulation bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400 font-mono"
+                inputMode="text"
+                autoComplete="off"
+                aria-label="Barcode or QR code value"
+              />
+              <div className="flex gap-2 flex-shrink-0">
+                <button
+                  type="submit"
+                  disabled={!(barcode || '').trim()}
+                  className="min-h-[48px] flex-1 sm:flex-initial sm:min-w-[100px] flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-800 dark:text-neutral-100 font-semibold hover:bg-gray-50 dark:hover:bg-neutral-700 active:opacity-90 touch-manipulation disabled:opacity-50 disabled:pointer-events-none"
+                  title="Look up this barcode or code"
+                >
+                  Look up
+                </button>
+                <button
+                  type="button"
+                  onClick={openScanner}
+                  className="min-h-[48px] flex-1 sm:flex-initial sm:min-w-[140px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-primary bg-primary text-white font-semibold active:opacity-90 touch-manipulation"
+                  title={cameraSupported ? 'Scan barcode or QR code with camera' : 'Open scanner (camera may show an error if not HTTPS)'}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13v7a2 2 0 01-2 2H7a2 2 0 01-2-2v-7" /></svg>
+                  Scan
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">Type barcode or SKU (letters and numbers), then tap Look up. Or use Scan for barcodes and QR codes.</p>
           </div>
         </form>
 
@@ -744,21 +871,21 @@ const Inventory = () => {
         )}
 
         {lookupError && (
-          <div className="mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+          <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
             {lookupError}
           </div>
         )}
 
         {successMessage && (
-          <div className="mt-4 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">
+          <div className="mt-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300 text-sm">
             {successMessage}
           </div>
         )}
 
         {expectedRefills.length > 0 && (
-          <div className="mt-5 p-4 rounded-xl border border-primary/30 bg-primary-subtle">
-            <div className="font-semibold text-neutral-800 mb-2">📅 Refills expected</div>
-            <ul className="space-y-1 text-sm text-neutral-700">
+          <div className="mt-5 p-4 rounded-xl border border-primary/30 dark:border-primary/50 bg-primary-subtle dark:bg-primary/20">
+            <div className="font-semibold text-neutral-800 dark:text-neutral-100 mb-2">📅 Refills expected</div>
+            <ul className="space-y-1 text-sm text-neutral-700 dark:text-neutral-200">
               {expectedRefills.map((r) => (
                 <li key={r.id}>
                   <span className="font-medium">{r.item_name}</span>
@@ -771,16 +898,16 @@ const Inventory = () => {
         )}
 
         {orderedRefills.length > 0 && (
-          <div className="mt-5 p-4 rounded-xl border border-gray-200 bg-gray-50">
-            <div className="font-semibold text-gray-900 mb-3">📦 Receive refill</div>
-            <p className="text-sm text-gray-600 mb-3">When a shipment arrives, enter the quantity received and click Receive.</p>
+          <div className="mt-5 p-4 rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800">
+            <div className="font-semibold text-gray-900 dark:text-neutral-100 mb-3">📦 Receive refill</div>
+            <p className="text-sm text-gray-600 dark:text-neutral-200 mb-3">When a shipment arrives, enter the quantity received and click Receive.</p>
             <ul className="space-y-3">
               {orderedRefills.map((r) => (
-                <li key={r.id} className="flex flex-wrap items-center gap-2 p-3 bg-white rounded-lg border border-gray-200">
-                  <span className="font-medium text-gray-900">{r.item_name}</span>
-                  <span className="text-gray-500 text-sm">({r.item_unit || 'each'})</span>
+                <li key={r.id} className="flex flex-wrap items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700">
+                  <span className="font-medium text-gray-900 dark:text-neutral-100">{r.item_name}</span>
+                  <span className="text-gray-500 dark:text-neutral-300 text-sm">({r.item_unit || 'each'})</span>
                   {r.expected_arrival_date && (
-                    <span className="text-xs text-gray-500">Expected {new Date(r.expected_arrival_date).toLocaleDateString()}</span>
+                    <span className="text-xs text-gray-500 dark:text-neutral-400">Expected {new Date(r.expected_arrival_date).toLocaleDateString()}</span>
                   )}
                   <input
                     type="number"
@@ -789,7 +916,7 @@ const Inventory = () => {
                     placeholder="Qty received"
                     value={receiveQty[r.id] ?? ''}
                     onChange={(e) => setReceiveQty((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                    className="w-24 px-2 py-1.5 rounded border border-gray-300 text-sm"
+                    className="w-24 px-2 py-1.5 rounded border border-gray-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                   />
                   <button
                     type="button"
@@ -807,18 +934,18 @@ const Inventory = () => {
 
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-200 dark:border-neutral-800 p-5 md:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">What&apos;s in inventory</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Tap an item to update quantity or request a refill.
+            <h2 className="text-lg font-bold text-gray-900 dark:text-neutral-100">What&apos;s in inventory</h2>
+            <p className="text-sm text-gray-600 dark:text-neutral-200 mt-1">
+              Tap an item to update quantity, use/scan out, or request a refill.
             </p>
           </div>
           <button
             type="button"
             onClick={() => { setShowNewItemRequestModal(true); setLookupError(null); setNewItemRequestForm({ item_name: '', notes: '', barcode: '' }); }}
-            className="shrink-0 px-4 py-2 rounded-lg border-2 border-primary text-primary bg-white hover:bg-primary hover:text-white transition font-medium text-sm"
+            className="shrink-0 px-4 py-2 rounded-lg border-2 border-primary text-primary bg-white dark:bg-neutral-800 hover:bg-primary hover:text-white transition font-medium text-sm dark:border-neutral-600 dark:text-neutral-200"
           >
             Request an item we don&apos;t have
           </button>
@@ -829,13 +956,13 @@ const Inventory = () => {
           const attentionCount = attentionItems.length;
           if (attentionCount === 0) return null;
           return (
-            <div className="mb-4 p-3 rounded-xl bg-amber-50 border-2 border-amber-200">
-              <p className="text-sm font-semibold text-amber-900">
+            <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-800">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
                 ⚠️ {attentionCount} item{attentionCount !== 1 ? 's' : ''} need attention
                 {attentionCount > 0 && ' — low stock, out of stock, or need return. Listed first by category below.'}
               </p>
               {pendingRefills.length > 0 && (
-                <p className="text-xs text-amber-800 mt-1">
+                <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
                   {pendingRefills.length} reorder request{pendingRefills.length !== 1 ? 's' : ''} pending in office.
                 </p>
               )}
@@ -843,21 +970,21 @@ const Inventory = () => {
           );
         })()}
         {allItemsLoading ? (
-          <p className="py-6 text-center text-gray-500">Loading…</p>
+          <p className="py-6 text-center text-gray-500 dark:text-neutral-200">Loading…</p>
         ) : allItems.length === 0 ? (
-          <p className="py-6 text-center text-gray-500">No items yet. Scan a barcode and add your first item above.</p>
+          <p className="py-6 text-center text-gray-500 dark:text-neutral-200">No items yet. Scan a barcode and add your first item above.</p>
         ) : (
           <div className="space-y-8">
             {inventoryByCategoryAndLevel.map(({ categoryName, levels }) => (
               <div key={categoryName}>
-                <h3 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <h3 className="text-base font-bold text-gray-900 dark:text-neutral-100 mb-3 flex items-center gap-2">
                   <span className="text-xl" aria-hidden>{categoryIcon(categoryName)}</span>
                   {categoryName}
                 </h3>
                 <div className="space-y-4">
                   {levels.map(({ level, label, items }) => (
                     <div key={level}>
-                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                      <h4 className="text-xs font-semibold text-gray-500 dark:text-neutral-300 uppercase tracking-wider mb-2">
                         {label}
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -871,12 +998,19 @@ const Inventory = () => {
                                 setLookupError(null);
                                 setSuccessMessage('');
                                 window.setTimeout(() => handleLookup(it.barcode, { openQuickModal: true }), 0);
+                              } else {
+                                setItem(it);
+                                setQuantity(String(it.quantity ?? ''));
+                                setUseItemQty('');
+                                setUseItemReason('');
+                                setLookupError(null);
+                                setSuccessMessage('');
+                                setShowScanResultModal(true);
                               }
                             }}
-                            className={`text-left flex gap-3 p-4 rounded-xl border-2 ${getTileColorClass(it)} hover:opacity-90 transition-colors w-full disabled:opacity-50 disabled:cursor-not-allowed`}
-                            disabled={!it.barcode}
+                            className={`text-left flex gap-3 p-4 rounded-xl border-2 ${getTileColorClass(it)} hover:opacity-90 transition-colors w-full dark:bg-neutral-800/50 dark:border-neutral-700`}
                           >
-                            <div className="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
+                            <div className="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-gray-100 dark:bg-neutral-700 border border-gray-200 dark:border-neutral-600 flex items-center justify-center">
                               {it.image_url ? (
                                 <img src={it.image_url} alt="" className="w-full h-full object-contain" />
                               ) : (
@@ -884,21 +1018,21 @@ const Inventory = () => {
                               )}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-gray-900 truncate" title={it.name}>{it.name}</div>
-                              <div className="text-sm text-gray-700 mt-1">
+                              <div className="font-semibold text-gray-900 dark:text-neutral-100 truncate" title={it.name}>{it.name}</div>
+                              <div className="text-sm text-gray-700 dark:text-neutral-200 mt-1">
                                 <span className="font-medium">{formatQuantityWithSize(it)}</span>
                                 {it.min_quantity != null && it.min_quantity !== '' && (
-                                  <span className="text-xs text-gray-500 ml-1">(min: {Number(it.min_quantity)})</span>
+                                  <span className="text-xs text-gray-500 dark:text-neutral-400 ml-1">(min: {Number(it.min_quantity)})</span>
                                 )}
                               </div>
                               {refillStatusByItemId.get(it.id) === 'pending' && (
-                                <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300">Reorder requested</span>
+                                <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">Reorder requested</span>
                               )}
                               {refillStatusByItemId.get(it.id) === 'ordered' && (
                                 <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium bg-primary-subtle text-primary border border-primary/30">On order</span>
                               )}
                               {it.last_counted_by_name && (
-                                <div className="text-xs text-gray-500 mt-0.5">Last counted by {it.last_counted_by_name}</div>
+                                <div className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">Last counted by {it.last_counted_by_name}</div>
                               )}
                             </div>
                           </button>
@@ -917,30 +1051,30 @@ const Inventory = () => {
         <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4" aria-modal="true" role="dialog" aria-labelledby="add-item-title">
           <div className="absolute inset-0 bg-black/40 sm:bg-black/50" onClick={resetFlow} />
           <div
-            className="relative w-full sm:max-w-md sm:rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh] sm:max-h-[85vh] rounded-t-2xl overflow-hidden"
+            className="relative w-full sm:max-w-md sm:rounded-2xl bg-white dark:bg-neutral-900 shadow-xl border border-transparent dark:border-neutral-800 flex flex-col max-h-[90vh] sm:max-h-[85vh] rounded-t-2xl overflow-hidden"
             style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
           >
-            <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 pt-4 pb-2 border-b border-gray-100">
+            <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 pt-4 pb-2 border-b border-gray-100 dark:border-neutral-700">
               <div className="min-w-0">
-                <h2 id="add-item-title" className="text-lg font-bold text-gray-900">Add to inventory</h2>
-                <p className="text-sm text-gray-500 mt-0.5 font-mono">Barcode: {barcode.trim()}</p>
+                <h2 id="add-item-title" className="text-lg font-bold text-gray-900 dark:text-neutral-100">Add to inventory</h2>
+                <p className="text-sm text-gray-500 dark:text-neutral-300 mt-0.5 font-mono">Barcode: {barcode.trim()}</p>
               </div>
               <button
                 type="button"
                 onClick={resetFlow}
-                className="flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200 touch-manipulation"
+                className="flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-neutral-800 active:bg-gray-200 dark:active:bg-neutral-700 touch-manipulation"
                 aria-label="Close"
               >
-                <svg className="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg className="w-6 h-6 text-gray-500 dark:text-neutral-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
               {lookupError && (
-                <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{lookupError}</div>
+                <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">{lookupError}</div>
               )}
               {isAdmin && (
-                <div className="flex flex-col sm:flex-row gap-4 mb-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
-                  <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-white border border-gray-200 flex items-center justify-center">
+                <div className="flex flex-col sm:flex-row gap-4 mb-4 p-4 rounded-xl bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700">
+                  <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 flex items-center justify-center">
                     {createForm.image_url ? (
                       <img src={createForm.image_url} alt="" className="w-full h-full object-contain" />
                     ) : (
@@ -948,11 +1082,11 @@ const Inventory = () => {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Product name</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-neutral-400 mb-1">Product name</label>
                     <input
                       value={createForm.name}
                       onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
-                      className="w-full px-3 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary font-medium touch-manipulation"
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary font-medium touch-manipulation bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                       placeholder="e.g. 5 qt Oil Jug, Fabuloso"
                       autoFocus
                     />
@@ -961,11 +1095,11 @@ const Inventory = () => {
               )}
               {!isAdmin && (
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Product name</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Product name</label>
                   <input
                     value={createForm.name}
                     onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary font-medium touch-manipulation"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary font-medium touch-manipulation bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                     placeholder="e.g. 5 qt Oil Jug, Fabuloso"
                     autoFocus
                   />
@@ -973,13 +1107,13 @@ const Inventory = () => {
               )}
               <form onSubmit={handleCreate} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category {suggestLoading && <span className="text-xs text-gray-500">(suggesting…)</span>}
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                    Category {suggestLoading && <span className="text-xs text-gray-500 dark:text-neutral-400">(suggesting…)</span>}
                   </label>
                   <select
                     value={createForm.category_id}
                     onChange={(e) => { setCategoryTouched(true); setCreateForm((p) => ({ ...p, category_id: e.target.value })); }}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation text-gray-900 dark:text-neutral-100"
                   >
                     <option value="">(Auto)</option>
                     {categories.map((c) => (
@@ -988,43 +1122,43 @@ const Inventory = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Unit</label>
                   <input
                     value={createForm.unit}
                     onChange={(e) => setCreateForm((p) => ({ ...p, unit: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                     placeholder="each, quarts, oz, cans…"
                   />
                 </div>
                 {isAdmin && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Price (optional)</label>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Price (optional)</label>
                       <input
                         value={createForm.price}
                         onChange={(e) => setCreateForm((p) => ({ ...p, price: e.target.value }))}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                         placeholder="e.g. 19.99"
                         inputMode="decimal"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Image URL (optional)</label>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Image URL (optional)</label>
                       <input
                         value={createForm.image_url}
                         onChange={(e) => setCreateForm((p) => ({ ...p, image_url: e.target.value }))}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                         placeholder="https://..."
                       />
                     </div>
                   </>
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Quantity</label>
                   <input
                     value={createForm.quantity}
                     onChange={(e) => setCreateForm((p) => ({ ...p, quantity: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                     placeholder="e.g. 5 (blank = 0)"
                     inputMode="decimal"
                   />
@@ -1033,7 +1167,7 @@ const Inventory = () => {
                   <button
                     type="button"
                     onClick={resetFlow}
-                    className="min-h-[48px] flex-1 px-4 py-3 rounded-xl border border-gray-200 font-medium hover:bg-gray-50 active:bg-gray-100 touch-manipulation"
+                    className="min-h-[48px] flex-1 px-4 py-3 rounded-xl border border-gray-200 dark:border-neutral-600 font-medium hover:bg-gray-50 dark:hover:bg-neutral-800 active:bg-gray-100 dark:active:bg-neutral-700 touch-manipulation text-gray-900 dark:text-neutral-100"
                   >
                     Cancel
                   </button>
@@ -1052,9 +1186,9 @@ const Inventory = () => {
       )}
 
       {item && (
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6 ${showScanResultModal ? 'hidden sm:block' : ''}`}>
+        <div className={`bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-200 dark:border-neutral-800 p-5 md:p-6 ${showScanResultModal ? 'hidden sm:block' : ''}`}>
           <div className="flex flex-col md:flex-row gap-6 md:items-start">
-            <div className="flex-shrink-0 w-28 h-28 md:w-32 md:h-32 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 flex flex-col items-center justify-center relative">
+            <div className="flex-shrink-0 w-28 h-28 md:w-32 md:h-32 rounded-xl overflow-hidden bg-gray-100 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 flex flex-col items-center justify-center relative">
               {item.image_url && !imageError ? (
                 <img
                   src={item.image_url}
@@ -1080,12 +1214,12 @@ const Inventory = () => {
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <h2 className="text-xl font-bold text-gray-900 leading-tight">{item.name}</h2>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-neutral-100 leading-tight">{item.name}</h2>
                 {isAdmin && (
                   <button
                     type="button"
                     onClick={openEditModal}
-                    className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium hover:bg-gray-50"
+                    className="px-4 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 font-medium hover:bg-gray-50 dark:hover:bg-neutral-700"
                   >
                     Edit
                   </button>
@@ -1093,40 +1227,40 @@ const Inventory = () => {
               </div>
               <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
                 <div>
-                  <dt className="text-gray-500">Barcode</dt>
-                  <dd className="font-mono text-gray-900">{item.barcode || '—'}</dd>
+                  <dt className="text-gray-500 dark:text-neutral-400">Barcode</dt>
+                  <dd className="font-mono text-gray-900 dark:text-neutral-100">{item.barcode || '—'}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-500">Category</dt>
-                  <dd className="text-gray-900">{categoryLabel || '—'}</dd>
+                  <dt className="text-gray-500 dark:text-neutral-400">Category</dt>
+                  <dd className="text-gray-900 dark:text-neutral-100">{categoryLabel || '—'}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-500">Unit</dt>
-                  <dd className="text-gray-900">{item.unit || 'each'}</dd>
+                  <dt className="text-gray-500 dark:text-neutral-400">Unit</dt>
+                  <dd className="text-gray-900 dark:text-neutral-100">{item.unit || 'each'}</dd>
                 </div>
                 {item.viscosity && (
                   <div>
-                    <dt className="text-gray-500">Viscosity</dt>
-                    <dd className="text-gray-900">{item.viscosity}</dd>
+                    <dt className="text-gray-500 dark:text-neutral-400">Viscosity</dt>
+                    <dd className="text-gray-900 dark:text-neutral-100">{item.viscosity}</dd>
                   </div>
                 )}
                 {isAdmin && (
                   <div>
-                    <dt className="text-gray-500">Price</dt>
-                    <dd className="text-green-600 font-medium">{item.price === null || item.price === undefined ? '—' : `$${Number(item.price).toFixed(2)}`}</dd>
+                    <dt className="text-gray-500 dark:text-neutral-400">Price</dt>
+                    <dd className="text-green-600 dark:text-green-400 font-medium">{item.price === null || item.price === undefined ? '—' : `$${Number(item.price).toFixed(2)}`}</dd>
                   </div>
                 )}
               </dl>
               {(item.returned_at || Boolean(item.needs_return) || (isAdmin && item.return_supplier)) && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {item.returned_at && (
-                    <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-gray-200 text-gray-700">Returned</span>
+                    <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200">Returned</span>
                   )}
                   {Boolean(item.needs_return) && !item.returned_at && (
-                    <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-800">Needs to be returned</span>
+                    <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">Needs to be returned</span>
                   )}
                   {isAdmin && item.return_supplier && (
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-gray-600 dark:text-neutral-200">
                       {item.return_quantity > 1 ? `Return ${item.return_quantity} to ` : 'From: '}{item.return_supplier}
                     </span>
                   )}
@@ -1135,12 +1269,12 @@ const Inventory = () => {
             </div>
 
             <div className="flex flex-col gap-3 md:flex-shrink-0">
-              <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 w-full md:w-[200px]">
-                <div className="text-sm font-semibold text-gray-800">Current quantity</div>
-                <div className="mt-1 text-3xl font-bold text-gray-900">
+              <div className="rounded-xl bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 p-4 w-full md:w-[200px]">
+                <div className="text-sm font-semibold text-gray-800 dark:text-neutral-100">Current quantity</div>
+                <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-neutral-100">
                   {formatQuantityWithSize(item)}
                 </div>
-                <div className="mt-2 text-xs text-gray-500">
+                <div className="mt-2 text-xs text-gray-500 dark:text-neutral-300">
                   Last counted: {item.last_counted_at ? new Date(item.last_counted_at).toLocaleString() : '—'}
                   {item.last_counted_by_name && (
                     <span className="block mt-0.5">by {item.last_counted_by_name}</span>
@@ -1195,27 +1329,27 @@ const Inventory = () => {
           <form className="mt-5 space-y-4" onSubmit={handleQuantityUpdate}>
             <div className="flex flex-col md:flex-row gap-3 items-end">
               <div className="flex-1 min-w-0">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
                   Record quantity ({item.unit || 'each'})
                 </label>
                 <input
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary text-lg touch-manipulation"
+                  className="w-full px-4 py-3.5 rounded-xl border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary text-lg touch-manipulation bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                   placeholder="e.g. 2.5 or 0.5 for half bottle"
                   inputMode="decimal"
                 />
                 {(item.category_name === 'Oils & Fluids' || item.size_per_unit) && (
-                  <p className="text-xs text-gray-500 mt-1">Use decimals for partial containers (e.g. 0.5 = half bottle). Edit item to set size per unit (e.g. 32 oz) to see equivalent.</p>
+                  <p className="text-xs text-gray-500 dark:text-neutral-300 mt-1">Use decimals for partial containers (e.g. 0.5 = half bottle). Edit item to set size per unit (e.g. 32 oz) to see equivalent.</p>
                 )}
               </div>
               {(item.category_name === 'Oils & Fluids' || categoryLabel === 'Oils & Fluids') && (
                 <div className="flex-1 md:max-w-[180px]">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Viscosity</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Viscosity</label>
                   <input
                     value={viscosity}
                     onChange={(e) => setViscosity(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                     placeholder="e.g. 5W-30, 10W-40, SAE 30"
                   />
                 </div>
@@ -1232,16 +1366,23 @@ const Inventory = () => {
         </div>
       )}
 
-      {showScanResultModal && item && (
+      {showScanResultModal && (item || lookupLoading) && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4" aria-modal="true" role="dialog" aria-labelledby="scan-result-title">
-          <div className="absolute inset-0 bg-black/40 sm:bg-black/50" onClick={() => setShowScanResultModal(false)} />
+          <div className="absolute inset-0 bg-black/40 sm:bg-black/50" onClick={() => !lookupLoading && setShowScanResultModal(false)} />
           <div
-            className="relative w-full sm:max-w-md sm:rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh] sm:max-h-[85vh] rounded-t-2xl overflow-hidden"
+            className="relative w-full sm:max-w-md sm:rounded-2xl bg-white dark:bg-neutral-900 shadow-xl border border-transparent dark:border-neutral-800 flex flex-col max-h-[90vh] sm:max-h-[85vh] rounded-t-2xl overflow-hidden"
             style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
           >
-            <div className="flex-shrink-0 flex items-start gap-3 px-4 pt-4 pb-3 border-b border-gray-100">
-              <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
-                {item.image_url && !scanResultImageError ? (
+            {lookupLoading && !item ? (
+              <div className="flex flex-col items-center justify-center py-16 px-6">
+                <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" aria-hidden />
+                <p className="text-gray-600 dark:text-neutral-200 font-medium">Looking up barcode…</p>
+              </div>
+            ) : (
+              <>
+            <div className="flex-shrink-0 flex items-start gap-3 px-4 pt-4 pb-3 border-b border-gray-100 dark:border-neutral-700">
+              <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-gray-100 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 flex items-center justify-center">
+                {item?.image_url && !scanResultImageError ? (
                   <img
                     src={item.image_url}
                     alt=""
@@ -1254,26 +1395,26 @@ const Inventory = () => {
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
                 <div className="flex items-start justify-between gap-2">
-                  <h2 id="scan-result-title" className="text-lg font-bold text-gray-900 leading-tight">{item.name}</h2>
+                  <h2 id="scan-result-title" className="text-lg font-bold text-gray-900 dark:text-neutral-100 leading-tight">{item.name}</h2>
                   <button
                     type="button"
                     onClick={() => setShowScanResultModal(false)}
-                    className="flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200 touch-manipulation -m-2"
+                    className="flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-neutral-800 active:bg-gray-200 dark:active:bg-neutral-700 touch-manipulation -m-2"
                     aria-label="Close"
                   >
-                    <svg className="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <svg className="w-6 h-6 text-gray-500 dark:text-neutral-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
                 {(item.returned_at || Boolean(item.needs_return) || (isAdmin && item.return_supplier)) && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {item.returned_at && (
-                      <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-gray-200 text-gray-700">Returned</span>
+                      <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200">Returned</span>
                     )}
                     {Boolean(item.needs_return) && !item.returned_at && (
-                      <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-800">Needs to be returned</span>
+                      <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">Needs to be returned</span>
                     )}
                     {isAdmin && item.return_supplier && (
-                      <span className="text-xs text-gray-600">
+                      <span className="text-xs text-gray-600 dark:text-neutral-200">
                         {item.return_quantity > 1 ? `Return ${item.return_quantity} to ` : 'From: '}{item.return_supplier}
                       </span>
                     )}
@@ -1283,23 +1424,64 @@ const Inventory = () => {
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-4">
               {lookupError && (
-                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{lookupError}</div>
+                <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">{lookupError}</div>
               )}
               {successMessage && (
-                <div className="p-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm">{successMessage}</div>
+                <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300 text-sm">{successMessage}</div>
               )}
-              <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 w-full">
-                <div className="text-sm font-semibold text-gray-800">Current quantity</div>
+              <div className="rounded-xl bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 p-4 w-full">
+                <div className="text-sm font-semibold text-gray-800 dark:text-neutral-100">Current quantity</div>
                 <div className="mt-1 text-2xl font-bold text-primary">
                   {formatQuantityWithSize(item)}
                 </div>
-                <div className="mt-2 text-xs text-gray-500">
+                <div className="mt-2 text-xs text-gray-500 dark:text-neutral-300">
                   Last counted: {item.last_counted_at ? new Date(item.last_counted_at).toLocaleString() : '—'}
                   {item.last_counted_by_name && (
                     <span className="block mt-0.5">by {item.last_counted_by_name}</span>
                   )}
                 </div>
               </div>
+              {(item?.quantity ?? 0) > 0 && (
+                <div className="rounded-xl bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 p-4 w-full">
+                  <div className="text-sm font-semibold text-gray-800 dark:text-neutral-100 mb-2">Use item / Scan out</div>
+                  <p className="text-xs text-gray-500 dark:text-neutral-300 mb-3">Using this for something not on your task list? Enter amount and reason, then scan the item to confirm.</p>
+                  <form onSubmit={openUseItemScan} className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor="use-item-qty" className="block text-xs font-medium text-gray-600 dark:text-neutral-400 mb-1">Amount to use ({item?.unit || 'each'})</label>
+                        <input
+                          id="use-item-qty"
+                          type="text"
+                          inputMode="decimal"
+                          value={useItemQty}
+                          onChange={(e) => setUseItemQty(e.target.value)}
+                          placeholder="e.g. 1"
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="use-item-reason" className="block text-xs font-medium text-gray-600 dark:text-neutral-400 mb-1">Reason (required)</label>
+                        <input
+                          id="use-item-reason"
+                          type="text"
+                          value={useItemReason}
+                          onChange={(e) => setUseItemReason(e.target.value)}
+                          placeholder="e.g. customer takeaway, shop use"
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={useItemLoading || !useItemQty.trim() || !useItemReason.trim() || (!item?.barcode || !String(item.barcode).trim())}
+                      className="w-full min-h-[44px] px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={(!item?.barcode || !String(item.barcode).trim()) ? 'This item has no barcode. Add one in Edit to scan out.' : ''}
+                    >
+                      {useItemLoading ? 'Saving…' : 'Scan to use item'}
+                    </button>
+                  </form>
+                </div>
+              )}
               <div className="space-y-2">
                 <button
                   type="button"
@@ -1345,6 +1527,8 @@ const Inventory = () => {
                 </button>
               </div>
             </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1352,9 +1536,9 @@ const Inventory = () => {
       {gotMoreAwaitingQuantity != null && item && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="got-more-quantity-title">
           <div className="absolute inset-0 bg-black/40" onClick={() => { setGotMoreAwaitingQuantity(null); setGotMoreQuantityInput(''); }} />
-          <div className="relative w-full max-w-sm bg-white rounded-xl shadow-xl border border-gray-200 p-5">
-            <h3 id="got-more-quantity-title" className="text-lg font-bold text-gray-900 mb-1">Scan confirmed</h3>
-            <p className="text-sm text-gray-600 mb-4">Enter the new total quantity for {item.name}.</p>
+          <div className="relative w-full max-w-sm bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-800 p-5">
+            <h3 id="got-more-quantity-title" className="text-lg font-bold text-gray-900 dark:text-neutral-100 mb-1">Scan confirmed</h3>
+            <p className="text-sm text-gray-600 dark:text-neutral-200 mb-4">Enter the new total quantity for {item.name}.</p>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -1370,23 +1554,23 @@ const Inventory = () => {
               className="space-y-4"
             >
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">New quantity ({item.unit || 'each'})</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">New quantity ({item.unit || 'each'})</label>
                 <input
                   type="text"
                   inputMode="decimal"
                   value={gotMoreQuantityInput}
                   onChange={(e) => setGotMoreQuantityInput(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary text-lg"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary text-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                   placeholder={String(gotMoreAwaitingQuantity.defaultQty)}
                   autoFocus
                 />
-                <p className="text-xs text-gray-500 mt-1">Current: {formatQuantityWithSize(item)}</p>
+                <p className="text-xs text-gray-500 dark:text-neutral-300 mt-1">Current: {formatQuantityWithSize(item)}</p>
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => { setGotMoreAwaitingQuantity(null); setGotMoreQuantityInput(''); }}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 font-medium hover:bg-gray-50"
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-neutral-600 font-medium hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                 >
                   Cancel
                 </button>
@@ -1406,41 +1590,41 @@ const Inventory = () => {
       {showEditModal && item && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowEditModal(false)} />
-          <div className="relative w-full max-w-lg bg-white rounded-xl shadow-xl border border-gray-200 p-5">
+          <div className="relative w-full max-w-lg bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-800 p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Edit item</h3>
-              <button type="button" onClick={() => setShowEditModal(false)} className="p-2 rounded-lg hover:bg-gray-100" aria-label="Close">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-neutral-100">Edit item</h3>
+              <button type="button" onClick={() => setShowEditModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200" aria-label="Close">
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <p className="text-sm text-gray-600 mb-4">Update name, price, return status, and other details. Price is optional.</p>
+            <p className="text-sm text-gray-600 dark:text-neutral-200 mb-4">Update name, price, return status, and other details. Price is optional.</p>
             {editError && (
-              <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{editError}</div>
+              <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">{editError}</div>
             )}
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Name</label>
                 <input
                   value={editForm.name}
                   onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Barcode</label>
                 <input
                   value={editForm.barcode}
                   onChange={(e) => setEditForm((p) => ({ ...p, barcode: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary font-mono"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary font-mono bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Category</label>
                 <select
                   value={editForm.category_id}
                   onChange={(e) => setEditForm((p) => ({ ...p, category_id: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 focus:ring-2 focus:ring-primary focus:border-primary text-gray-900 dark:text-neutral-100"
                 >
                   <option value="">—</option>
                   {categories.map((c) => (
@@ -1449,32 +1633,32 @@ const Inventory = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Unit</label>
                 <input
                   value={editForm.unit}
                   onChange={(e) => setEditForm((p) => ({ ...p, unit: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                   placeholder="e.g. each, bottles, oz, quarts"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Size per unit (optional, for fluids)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Size per unit (optional, for fluids)</label>
                 <input
                   value={editForm.size_per_unit}
                   onChange={(e) => setEditForm((p) => ({ ...p, size_per_unit: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                   placeholder="e.g. 32 oz, 1 gal"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Min quantity (target level for color coding)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Min quantity (target level for color coding)</label>
                 <input
                   type="number"
                   min="0"
                   step="any"
                   value={editForm.min_quantity}
                   onChange={(e) => setEditForm((p) => ({ ...p, min_quantity: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                   placeholder="e.g. 2 — leave blank for no color"
                 />
               </div>
@@ -1484,28 +1668,28 @@ const Inventory = () => {
                   id="edit_keep_in_stock"
                   checked={editForm.keep_in_stock}
                   onChange={(e) => setEditForm((p) => ({ ...p, keep_in_stock: e.target.checked }))}
-                  className="rounded border-gray-300 text-primary focus:ring-primary"
+                  className="rounded border-gray-300 dark:border-neutral-600 text-primary focus:ring-primary"
                 />
-                <label htmlFor="edit_keep_in_stock" className="text-sm font-medium text-gray-700">Always keep in inventory (uncheck for one-time parts)</label>
+                <label htmlFor="edit_keep_in_stock" className="text-sm font-medium text-gray-700 dark:text-neutral-200">Always keep in inventory (uncheck for one-time parts)</label>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Price (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Price (optional)</label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
                   value={editForm.price}
                   onChange={(e) => setEditForm((p) => ({ ...p, price: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                   placeholder="e.g. 19.99"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Image URL (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Image URL (optional)</label>
                 <input
                   value={editForm.image_url}
                   onChange={(e) => setEditForm((p) => ({ ...p, image_url: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                   placeholder="https://..."
                 />
               </div>
@@ -1515,23 +1699,23 @@ const Inventory = () => {
                   id="edit_needs_return"
                   checked={editForm.needs_return}
                   onChange={(e) => setEditForm((p) => ({ ...p, needs_return: e.target.checked }))}
-                  className="rounded border-gray-300 text-primary focus:ring-primary"
+                  className="rounded border-gray-300 dark:border-neutral-600 text-primary focus:ring-primary"
                 />
-                <label htmlFor="edit_needs_return" className="text-sm font-medium text-gray-700">Needs to be returned</label>
+                <label htmlFor="edit_needs_return" className="text-sm font-medium text-gray-700 dark:text-neutral-200">Needs to be returned</label>
               </div>
               {editForm.needs_return && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Bought from (supplier)</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Bought from (supplier)</label>
                   <input
                     value={editForm.return_supplier}
                     onChange={(e) => setEditForm((p) => ({ ...p, return_supplier: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                     placeholder="e.g. AutoZone, NAPA, Amazon"
                   />
                 </div>
               )}
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowEditModal(false)} className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50">
+                <button type="button" onClick={() => setShowEditModal(false)} className="px-4 py-2 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200">
                   Cancel
                 </button>
                 <button type="submit" disabled={editSaving} className="px-5 py-2 rounded-lg bg-primary text-white font-semibold disabled:opacity-50">
@@ -1546,47 +1730,47 @@ const Inventory = () => {
       {showReturnSupplierModal && item && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => { setShowReturnSupplierModal(false); setReturnSupplierInput(''); setReturnQuantityInput(''); setLookupError(null); }} />
-          <div className="relative w-full max-w-md bg-white rounded-xl shadow-xl border border-gray-200 p-5">
+          <div className="relative w-full max-w-md bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-800 p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Flag for return</h3>
-              <button type="button" onClick={() => { setShowReturnSupplierModal(false); setReturnSupplierInput(''); setReturnQuantityInput(''); setLookupError(null); }} className="p-2 rounded-lg hover:bg-gray-100" aria-label="Close">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-neutral-100">Flag for return</h3>
+              <button type="button" onClick={() => { setShowReturnSupplierModal(false); setReturnSupplierInput(''); setReturnQuantityInput(''); setLookupError(null); }} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200" aria-label="Close">
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <p className="text-sm text-gray-600 mb-3">Which supplier was this part bought from? This creates a task for the office to return it.</p>
+            <p className="text-sm text-gray-600 dark:text-neutral-200 mb-3">Which supplier was this part bought from? This creates a task for the office to return it.</p>
             {lookupError && (
-              <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{lookupError}</div>
+              <div className="mb-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">{lookupError}</div>
             )}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Supplier (required)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Supplier (required)</label>
                 <input
                   value={returnSupplierInput}
                   onChange={(e) => setReturnSupplierInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleRequestReturn(returnSupplierInput, returnQuantityInput))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                   placeholder="e.g. AutoZone, NAPA, Amazon"
                   autoFocus
                 />
               </div>
               {(Number(item?.quantity) ?? 0) > 1 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">How many to return?</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">How many to return?</label>
                   <input
                     type="number"
                     min={1}
                     max={Number(item?.quantity) ?? 1}
                     value={returnQuantityInput}
                     onChange={(e) => setReturnQuantityInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                     placeholder={`1–${item?.quantity ?? 0}`}
                     inputMode="numeric"
                   />
-                  <p className="text-xs text-gray-500 mt-0.5">You have {item?.quantity ?? 0} in inventory.</p>
+                  <p className="text-xs text-gray-500 dark:text-neutral-300 mt-0.5">You have {item?.quantity ?? 0} in inventory.</p>
                 </div>
               )}
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => { setShowReturnSupplierModal(false); setReturnSupplierInput(''); setReturnQuantityInput(''); setLookupError(null); }} className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50">
+                <button type="button" onClick={() => { setShowReturnSupplierModal(false); setReturnSupplierInput(''); setReturnQuantityInput(''); setLookupError(null); }} className="px-4 py-2 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100">
                   Cancel
                 </button>
                 <button type="button" onClick={() => handleRequestReturn(returnSupplierInput, returnQuantityInput)} disabled={requestReturnLoading || !returnSupplierInput.trim() || ((Number(item?.quantity) ?? 0) > 1 && !returnQuantityInput.trim())} className="px-5 py-2 rounded-lg bg-orange-600 text-white font-semibold hover:bg-orange-700 disabled:opacity-50 disabled:cursor-default">
@@ -1601,54 +1785,54 @@ const Inventory = () => {
       {showNewItemRequestModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="new-item-request-title">
           <div className="absolute inset-0 bg-black/40" onClick={() => { setShowNewItemRequestModal(false); setLookupError(null); setNewItemRequestForm({ item_name: '', notes: '', barcode: '' }); }} />
-          <div className="relative w-full max-w-md bg-white rounded-xl shadow-xl border border-gray-200 p-5">
+          <div className="relative w-full max-w-md bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-800 p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 id="new-item-request-title" className="text-lg font-bold text-gray-900">Request an item we don&apos;t have</h2>
-              <button type="button" onClick={() => { setShowNewItemRequestModal(false); setLookupError(null); setNewItemRequestForm({ item_name: '', notes: '', barcode: '' }); }} className="p-2 rounded-lg hover:bg-gray-100" aria-label="Close">
+              <h2 id="new-item-request-title" className="text-lg font-bold text-gray-900 dark:text-neutral-100">Request an item we don&apos;t have</h2>
+              <button type="button" onClick={() => { setShowNewItemRequestModal(false); setLookupError(null); setNewItemRequestForm({ item_name: '', notes: '', barcode: '' }); }} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200" aria-label="Close">
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
             <form onSubmit={handleSubmitNewItemRequest}>
-              {lookupError && <p className="text-sm text-red-600 mb-3">{lookupError}</p>}
+              {lookupError && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{lookupError}</p>}
               <div className="space-y-3">
                 <div>
-                  <label htmlFor="new-item-name" className="block text-sm font-medium text-gray-700 mb-1">Item name *</label>
+                  <label htmlFor="new-item-name" className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Item name *</label>
                   <input
                     id="new-item-name"
                     type="text"
                     value={newItemRequestForm.item_name}
                     onChange={(e) => setNewItemRequestForm((f) => ({ ...f, item_name: e.target.value }))}
                     placeholder="e.g. Pack of binders"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                     autoComplete="off"
                   />
                 </div>
                 <div>
-                  <label htmlFor="new-item-notes" className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                  <label htmlFor="new-item-notes" className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Notes (optional)</label>
                   <textarea
                     id="new-item-notes"
                     value={newItemRequestForm.notes}
                     onChange={(e) => setNewItemRequestForm((f) => ({ ...f, notes: e.target.value }))}
                     placeholder="Size, brand, or other details"
                     rows={2}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                   />
                 </div>
                 <div>
-                  <label htmlFor="new-item-barcode" className="block text-sm font-medium text-gray-700 mb-1">Barcode (optional)</label>
+                  <label htmlFor="new-item-barcode" className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Barcode (optional)</label>
                   <input
                     id="new-item-barcode"
                     type="text"
                     value={newItemRequestForm.barcode}
                     onChange={(e) => setNewItemRequestForm((f) => ({ ...f, barcode: e.target.value }))}
                     placeholder="If you have it"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                     autoComplete="off"
                   />
                 </div>
               </div>
               <div className="flex justify-end gap-2 mt-4">
-                <button type="button" onClick={() => { setShowNewItemRequestModal(false); setLookupError(null); setNewItemRequestForm({ item_name: '', notes: '', barcode: '' }); }} className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50">
+                <button type="button" onClick={() => { setShowNewItemRequestModal(false); setLookupError(null); setNewItemRequestForm({ item_name: '', notes: '', barcode: '' }); }} className="px-4 py-2 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100">
                   Cancel
                 </button>
                 <button type="submit" disabled={newItemRequestLoading || !(newItemRequestForm.item_name || '').trim()} className="px-5 py-2 rounded-lg bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-default">
@@ -1660,6 +1844,62 @@ const Inventory = () => {
         </div>
       )}
 
+      {barcodeMismatchConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="barcode-mismatch-title">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !barcodeMismatchAdding && (barcodeMismatchConfirm.purpose === 'use_item' ? setPendingUseItem(null) : null) && setBarcodeMismatchConfirm(null)} />
+          <div className="relative w-full max-w-md bg-white dark:bg-neutral-900 rounded-xl shadow-xl dark:shadow-neutral-950/50 border border-gray-200 dark:border-neutral-700 p-5">
+            <h2 id="barcode-mismatch-title" className="text-lg font-bold text-gray-900 dark:text-neutral-100 mb-2">Barcode doesn&apos;t match</h2>
+            <p className="text-gray-600 dark:text-neutral-200 mb-1">
+              The scanned barcode (<code className="text-sm bg-gray-100 dark:bg-neutral-700 px-1 rounded text-gray-900 dark:text-neutral-100">{barcodeMismatchConfirm.code}</code>) is not the one on file for <strong>{barcodeMismatchConfirm.itemName || 'this item'}</strong>.
+            </p>
+            {barcodeMismatchConfirm.purpose === 'use_item' ? (
+              <p className="text-gray-600 dark:text-neutral-200 mb-4">
+                Scan the correct item to use it, or cancel.
+              </p>
+            ) : (
+              <p className="text-gray-600 dark:text-neutral-200 mb-4">
+                Is it the same item? If yes, we&apos;ll add this barcode so future scans work.
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={barcodeMismatchAdding}
+                onClick={() => {
+                  if (barcodeMismatchConfirm.purpose === 'use_item') setPendingUseItem(null);
+                  setBarcodeMismatchConfirm(null);
+                }}
+                className="px-4 py-2 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              {barcodeMismatchConfirm.purpose === 'use_item' ? (
+                <button
+                  type="button"
+                  disabled={barcodeMismatchAdding}
+                  onClick={() => {
+                    setBarcodeMismatchConfirm(null);
+                    setScannerOpen(true);
+                  }}
+                  className="px-5 py-2 rounded-lg bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-default"
+                >
+                  Scan again
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={barcodeMismatchAdding}
+                  onClick={confirmBarcodeMismatchAddAndContinue}
+                  className="px-5 py-2 rounded-lg bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-default"
+                >
+                  {barcodeMismatchAdding ? 'Adding…' : 'Yes, add & continue'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <BarcodeScannerModal
         isOpen={scannerOpen}
         onClose={() => {
@@ -1667,10 +1907,27 @@ const Inventory = () => {
           setScanPurpose(null);
           setPendingQuantityUpdate(null);
           setPendingReceive(null);
+          setPendingUseItem(null);
         }}
+        pendingContext={
+          pendingUseItem && item
+            ? { type: 'use_item', item: { name: item.name }, quantity_used: pendingUseItem.quantity_used, reason: pendingUseItem.reason }
+            : scanPurpose === 'refill_receive' && pendingReceive
+              ? { type: 'refill_receive', itemName: pendingReceive.itemName }
+              : (scanPurpose === 'quantity_increase' && pendingQuantityUpdate && item)
+                ? { type: 'add_quantity', item: { name: item.name }, qty: pendingQuantityUpdate.qty }
+                : (scanPurpose === 'got_more_scan_first' && item)
+                  ? { type: 'add_quantity', item: { name: item.name }, qty: 1 }
+                  : null
+        }
         onDetected={(text) => {
           const code = String(text || '').trim();
           if (!code) return;
+
+          if (pendingUseItem && item?.id) {
+            submitUseItemAfterScan(code);
+            return;
+          }
 
           if (scanPurpose === 'quantity_increase' && pendingQuantityUpdate && item?.id) {
             setScannerOpen(false);
@@ -1680,7 +1937,12 @@ const Inventory = () => {
             api.post('/inventory/scan-log', { item_id: item.id, barcode: code, event_type: 'quantity_increase' })
               .then(() => submitQuantityAfterScan(payload.qty, payload.viscosity))
               .catch((e) => {
-                setLookupError(e.response?.data?.error || 'Scan did not match this item. Try again.');
+                const msg = e.response?.data?.error || '';
+                if (msg.includes('Barcode does not match')) {
+                  setBarcodeMismatchConfirm({ code, itemId: item.id, itemName: item.name, purpose: 'quantity_increase', payload });
+                } else {
+                  setLookupError(msg || 'Scan did not match this item. Try again.');
+                }
               });
             return;
           }
@@ -1690,7 +1952,7 @@ const Inventory = () => {
             setScanPurpose(null);
             const expectedBarcode = String(item.barcode || '').trim();
             if (code !== expectedBarcode) {
-              setLookupError(`Scanned item doesn't match. Expected: ${item.name || 'this item'}.`);
+              setBarcodeMismatchConfirm({ code, itemId: item.id, itemName: item.name, purpose: 'got_more_scan_first', payload: null });
               return;
             }
             api.post('/inventory/scan-log', { item_id: item.id, barcode: code, event_type: 'quantity_increase' }).catch(() => {});
@@ -1702,21 +1964,26 @@ const Inventory = () => {
           }
 
           if (scanPurpose === 'refill_receive' && pendingReceive) {
-            const { requestId, itemId, qty } = pendingReceive;
+            const { requestId, itemId, itemName: recvItemName, qty } = pendingReceive;
             setScannerOpen(false);
             setPendingReceive(null);
             setScanPurpose(null);
             api.post('/inventory/scan-log', { item_id: itemId, barcode: code, event_type: 'refill_receive', refill_request_id: requestId })
               .then(() => submitReceiveAfterScan(requestId, qty))
               .catch((e) => {
-                setLookupError(e.response?.data?.error || 'Scan did not match this item. Try again.');
+                const msg = e.response?.data?.error || '';
+                if (msg.includes('Barcode does not match')) {
+                  setBarcodeMismatchConfirm({ code, itemId, itemName: recvItemName, purpose: 'refill_receive', payload: { requestId, qty } });
+                } else {
+                  setLookupError(msg || 'Scan did not match this item. Try again.');
+                }
               });
             return;
           }
 
           resetFlow();
           setBarcode(code);
-          window.setTimeout(() => handleLookup(code, { openQuickModal: true }), 0);
+          handleLookup(code, { openQuickModal: true });
         }}
       />
     </div>

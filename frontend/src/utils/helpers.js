@@ -31,22 +31,41 @@ export const getCurrentCentralTime = () => {
   return new Date(Date.UTC(year, month, day, hour, minute, second));
 };
 
-// Helper to get today's date in Central Time (Houston, Texas)
-export const getTodayCentralTime = () => {
-  const now = new Date();
+/** Format any Date as YYYY-MM-DD in Houston (America/Chicago). */
+export const formatDateInHouston = (date) => {
+  const d = date instanceof Date ? date : new Date(date);
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: CENTRAL_TIMEZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
   });
-  
-  const parts = formatter.formatToParts(now);
+  const parts = formatter.formatToParts(d);
   const year = parts.find(p => p.type === 'year').value;
   const month = parts.find(p => p.type === 'month').value;
   const day = parts.find(p => p.type === 'day').value;
-  
   return `${year}-${month}-${day}`;
+};
+
+/** Today's date in Houston (America/Chicago) as YYYY-MM-DD. */
+export const getTodayCentralTime = () => {
+  return formatDateInHouston(new Date());
+};
+
+const HOUSTON_WEEKDAY_MAP = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+/** Last completed business week's Friday in Houston (for dashboard Weekly Revenue). */
+export const getLastCompletedWeekFridayHouston = () => {
+  const todayStr = formatDateInHouston(new Date());
+  const d = new Date(todayStr + 'T12:00:00.000Z');
+  const houstonWeekday = new Intl.DateTimeFormat('en-US', { timeZone: CENTRAL_TIMEZONE, weekday: 'short' }).format(d);
+  const dayNum = HOUSTON_WEEKDAY_MAP[houstonWeekday] ?? 0;
+  const daysToThisFriday = dayNum <= 5 ? (5 - dayNum) : (5 - dayNum + 7);
+  const thisWeekFriday = new Date(d);
+  thisWeekFriday.setUTCDate(d.getUTCDate() + daysToThisFriday);
+  const lastWeekFriday = new Date(thisWeekFriday);
+  lastWeekFriday.setUTCDate(thisWeekFriday.getUTCDate() - 7);
+  return formatDateInHouston(lastWeekFriday);
 };
 
 // Helper to format current time in Central Time

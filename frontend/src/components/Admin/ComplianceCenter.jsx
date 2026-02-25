@@ -317,7 +317,7 @@ const ComplianceCenter = () => {
 
       {/* Alert Summary */}
       {(overdue.length > 0 || dueSoon.length > 0) && (
-        <div className={`p-4 rounded-lg ${overdue.length > 0 ? 'bg-red-50 border border-red-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+        <div className={`p-4 rounded-lg ${overdue.length > 0 ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'}`}>
           <div className="flex items-center gap-3">
             <span className="text-2xl">{overdue.length > 0 ? '🚨' : '⚠️'}</span>
             <div>
@@ -334,19 +334,19 @@ const ComplianceCenter = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
           <div className="text-3xl font-bold text-red-700">{summary?.overdue || 0}</div>
           <div className="text-sm text-red-600">Overdue</div>
         </div>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
           <div className="text-3xl font-bold text-yellow-700">{summary?.dueSoon || 0}</div>
           <div className="text-sm text-yellow-600">Due Soon</div>
         </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
           <div className="text-3xl font-bold text-blue-700">{summary?.upcoming || 0}</div>
           <div className="text-sm text-blue-600">Upcoming</div>
         </div>
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
           <div className="text-3xl font-bold text-green-700">{summary?.completed || 0}</div>
           <div className="text-sm text-green-600">Completed</div>
         </div>
@@ -354,7 +354,7 @@ const ComplianceCenter = () => {
 
       {/* AI Review Result */}
       {aiReview && (
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+        <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6">
           <div className="flex justify-between items-start mb-4">
             <h3 className="text-lg font-semibold text-purple-800 flex items-center gap-2">
               <span>🤖</span> {aiReview.isRuleBased ? 'Compliance Review' : 'AI Compliance Review'}
@@ -480,7 +480,7 @@ const ComplianceCenter = () => {
 
           {/* Sales Summary */}
           {salesSummary && (
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">💰 Recent Sales Summary (Last 30 Days)</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
@@ -520,9 +520,9 @@ const ComplianceCenter = () => {
           {salesEntries.length === 0 ? (
             <p className="text-gray-500 text-center py-8">No sales entries yet. Click "Add Entry" to start tracking.</p>
           ) : (
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden">
               <table className="w-full">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-50 dark:bg-neutral-800">
                   <tr>
                     <th className="text-left py-3 px-4 text-sm font-medium">Date</th>
                     <th className="text-center py-3 px-4 text-sm font-medium">Batch</th>
@@ -541,11 +541,11 @@ const ComplianceCenter = () => {
                   {salesEntries.map((entry) => {
                     const totalSales = (parseFloat(entry.gross_sales) || 0) + (parseFloat(entry.check_amount) || 0) + (parseFloat(entry.cash_amount) || 0) + (parseFloat(entry.zelle_ach_amount) || 0);
                     return (
-                      <tr key={entry.id} className={`border-t border-gray-200 hover:bg-gray-50 ${entry.no_sales ? 'bg-gray-50' : ''}`}>
+                      <tr key={entry.id} className={`border-t border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 ${entry.no_sales ? 'bg-gray-50 dark:bg-neutral-800/50' : ''}`}>
                         <td className="py-3 px-4">
                           {formatDate(entry.sale_date)}
                           {entry.no_sales ? (
-                            <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">No Sales</span>
+                            <span className="ml-2 text-xs bg-gray-200 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300 px-2 py-0.5 rounded">No Sales</span>
                           ) : null}
                         </td>
                         <td className="py-3 px-4 text-center text-gray-500 text-sm">
@@ -621,14 +621,14 @@ const ComplianceCenter = () => {
               </thead>
               <tbody>
                 {dashboard?.obligations?.map((ob) => (
-                  <tr key={ob.id} className="border-t border-gray-200 hover:bg-gray-50">
+                  <tr key={ob.id} className="border-t border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
                     <td className="py-3 px-4 font-medium">{ob.name}</td>
                     <td className="py-3 px-4">{ob.type}</td>
                     <td className="py-3 px-4">{ob.jurisdiction}</td>
                     <td className="py-3 px-4 capitalize">{ob.frequency}</td>
                     <td className="py-3 px-4">{ob.reminder_days_before} days</td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${ob.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${ob.enabled ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' : 'bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300'}`}>
                         {ob.enabled ? 'Active' : 'Disabled'}
                       </span>
                     </td>
@@ -646,7 +646,7 @@ const ComplianceCenter = () => {
       {/* Payment Modal */}
       {showPaymentModal && selectedInstance && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-xl dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 max-w-md w-full p-6">
             <h3 className="text-lg font-bold mb-4">Record Payment</h3>
             <p className="text-gray-600 mb-4">
               <strong>{selectedInstance.obligation_name}</strong><br />
@@ -662,7 +662,7 @@ const ComplianceCenter = () => {
                   step="0.01"
                   value={paymentForm.amount}
                   onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                   placeholder="0.00"
                 />
               </div>
@@ -672,7 +672,7 @@ const ComplianceCenter = () => {
                   type="text"
                   value={paymentForm.confirmation_number}
                   onChange={(e) => setPaymentForm({ ...paymentForm, confirmation_number: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                   placeholder="EFTPS confirmation, etc."
                 />
               </div>
@@ -681,7 +681,7 @@ const ComplianceCenter = () => {
                 <select
                   value={paymentForm.method}
                   onChange={(e) => setPaymentForm({ ...paymentForm, method: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                 >
                   <option value="">Select method...</option>
                   <option value="EFTPS">EFTPS</option>
@@ -698,7 +698,7 @@ const ComplianceCenter = () => {
                   type="date"
                   value={paymentForm.paid_at}
                   onChange={(e) => setPaymentForm({ ...paymentForm, paid_at: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                 />
               </div>
               <div>
@@ -706,7 +706,7 @@ const ComplianceCenter = () => {
                 <textarea
                   value={paymentForm.notes}
                   onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                   rows={2}
                   placeholder="Optional notes..."
                 />
@@ -734,7 +734,7 @@ const ComplianceCenter = () => {
       {/* Sales Entry Modal - Matches Batch Report Format */}
       {showSalesModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-2 sm:p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[95vh] flex flex-col">
+          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-xl dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 w-full max-w-2xl max-h-[95vh] flex flex-col">
             {/* Fixed Header */}
             <div className="flex justify-between items-start p-4 sm:p-6 pb-3 border-b border-gray-200 flex-shrink-0">
               <div>
@@ -759,7 +759,7 @@ const ComplianceCenter = () => {
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-4 space-y-4">
               {/* Date and Batch Info */}
-              <div className="bg-gray-50 rounded-lg p-4">
+              <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-800 mb-3">📅 Batch Information</h4>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
@@ -768,7 +768,7 @@ const ComplianceCenter = () => {
                       type="date"
                       value={salesForm.sale_date}
                       onChange={(e) => setSalesForm({ ...salesForm, sale_date: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                       required
                     />
                   </div>
@@ -778,7 +778,7 @@ const ComplianceCenter = () => {
                       type="text"
                       value={salesForm.batch_number}
                       onChange={(e) => setSalesForm({ ...salesForm, batch_number: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                       placeholder="e.g., 2"
                     />
                   </div>
@@ -788,7 +788,7 @@ const ComplianceCenter = () => {
                       type="number"
                       value={salesForm.transaction_count}
                       onChange={(e) => setSalesForm({ ...salesForm, transaction_count: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                       placeholder="0"
                     />
                   </div>
@@ -796,7 +796,7 @@ const ComplianceCenter = () => {
               </div>
 
               {/* Batch Total */}
-              <div className="bg-blue-50 rounded-lg p-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-800 mb-3">💳 Batch Total (Net Amount)</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -808,7 +808,7 @@ const ComplianceCenter = () => {
                         step="0.01"
                         value={salesForm.gross_sales}
                         onChange={(e) => setSalesForm({ ...salesForm, gross_sales: e.target.value })}
-                        className="w-full pl-7 pr-3 py-2 border rounded-lg text-lg font-semibold"
+                        className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-lg font-semibold"
                         placeholder="0.00"
                       />
                     </div>
@@ -823,7 +823,7 @@ const ComplianceCenter = () => {
                         step="0.01"
                         value={salesForm.refunds}
                         onChange={(e) => setSalesForm({ ...salesForm, refunds: e.target.value })}
-                        className="w-full pl-7 pr-3 py-2 border rounded-lg"
+                        className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                         placeholder="0.00"
                       />
                     </div>
@@ -832,7 +832,7 @@ const ComplianceCenter = () => {
               </div>
 
               {/* Card Type Breakdown */}
-              <div className="bg-gray-50 rounded-lg p-4">
+              <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-800 mb-3">💳 Card Breakdown (Optional)</h4>
                 <p className="text-xs text-gray-500 mb-3">Enter amounts by card type from your batch report</p>
                 <div className="grid grid-cols-5 gap-3">
@@ -843,7 +843,7 @@ const ComplianceCenter = () => {
                       step="0.01"
                       value={salesForm.visa_amount}
                       onChange={(e) => setSalesForm({ ...salesForm, visa_amount: e.target.value })}
-                      className="w-full px-2 py-1.5 border rounded text-sm"
+                      className="w-full px-2 py-1.5 border border-gray-300 dark:border-neutral-600 rounded text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                       placeholder="0.00"
                     />
                   </div>
@@ -854,7 +854,7 @@ const ComplianceCenter = () => {
                       step="0.01"
                       value={salesForm.mastercard_amount}
                       onChange={(e) => setSalesForm({ ...salesForm, mastercard_amount: e.target.value })}
-                      className="w-full px-2 py-1.5 border rounded text-sm"
+                      className="w-full px-2 py-1.5 border border-gray-300 dark:border-neutral-600 rounded text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                       placeholder="0.00"
                     />
                   </div>
@@ -865,7 +865,7 @@ const ComplianceCenter = () => {
                       step="0.01"
                       value={salesForm.amex_amount}
                       onChange={(e) => setSalesForm({ ...salesForm, amex_amount: e.target.value })}
-                      className="w-full px-2 py-1.5 border rounded text-sm"
+                      className="w-full px-2 py-1.5 border border-gray-300 dark:border-neutral-600 rounded text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                       placeholder="0.00"
                     />
                   </div>
@@ -876,7 +876,7 @@ const ComplianceCenter = () => {
                       step="0.01"
                       value={salesForm.discover_amount}
                       onChange={(e) => setSalesForm({ ...salesForm, discover_amount: e.target.value })}
-                      className="w-full px-2 py-1.5 border rounded text-sm"
+                      className="w-full px-2 py-1.5 border border-gray-300 dark:border-neutral-600 rounded text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                       placeholder="0.00"
                     />
                   </div>
@@ -887,7 +887,7 @@ const ComplianceCenter = () => {
                       step="0.01"
                       value={salesForm.other_card_amount}
                       onChange={(e) => setSalesForm({ ...salesForm, other_card_amount: e.target.value })}
-                      className="w-full px-2 py-1.5 border rounded text-sm"
+                      className="w-full px-2 py-1.5 border border-gray-300 dark:border-neutral-600 rounded text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                       placeholder="0.00"
                     />
                   </div>
@@ -895,7 +895,7 @@ const ComplianceCenter = () => {
               </div>
 
               {/* Check, Cash & Zelle/ACH Payments */}
-              <div className="bg-yellow-50 rounded-lg p-4">
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-800 mb-3">📝 Other Payment Methods</h4>
                 <p className="text-xs text-gray-500 mb-3">All income must be reported - enter check, cash, and Zelle/ACH payments received today</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -908,7 +908,7 @@ const ComplianceCenter = () => {
                         step="0.01"
                         value={salesForm.check_amount}
                         onChange={(e) => setSalesForm({ ...salesForm, check_amount: e.target.value })}
-                        className="w-full pl-7 pr-3 py-2 border rounded-lg"
+                        className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                         placeholder="0.00"
                       />
                     </div>
@@ -919,7 +919,7 @@ const ComplianceCenter = () => {
                       type="number"
                       value={salesForm.check_count}
                       onChange={(e) => setSalesForm({ ...salesForm, check_count: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                       placeholder="0"
                     />
                   </div>
@@ -932,7 +932,7 @@ const ComplianceCenter = () => {
                         step="0.01"
                         value={salesForm.cash_amount}
                         onChange={(e) => setSalesForm({ ...salesForm, cash_amount: e.target.value })}
-                        className="w-full pl-7 pr-3 py-2 border rounded-lg"
+                        className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                         placeholder="0.00"
                       />
                     </div>
@@ -946,19 +946,19 @@ const ComplianceCenter = () => {
                         step="0.01"
                         value={salesForm.zelle_ach_amount}
                         onChange={(e) => setSalesForm({ ...salesForm, zelle_ach_amount: e.target.value })}
-                        className="w-full pl-7 pr-3 py-2 border rounded-lg"
+                        className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                         placeholder="0.00"
                       />
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 p-2 bg-yellow-100 rounded text-xs text-yellow-800">
+                <div className="mt-3 p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded text-xs text-yellow-800 dark:text-yellow-200">
                   ⚠️ <strong>Tax Compliance:</strong> All income (cards, checks, cash, Zelle/ACH) is taxable and must be reported to the IRS and TX Comptroller. Your total daily income = Card Batch + Checks + Cash + Zelle/ACH.
                 </div>
               </div>
 
               {/* Tax Information */}
-              <div className="bg-green-50 rounded-lg p-4">
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-800 mb-3">🏛️ Sales Tax (for TX Comptroller)</h4>
                 <p className="text-xs text-gray-500 mb-3">Calculate taxable amount from your invoices (labor + parts = taxable in TX)</p>
                 <div className="grid grid-cols-3 gap-4">
@@ -980,7 +980,7 @@ const ComplianceCenter = () => {
                             sales_tax_collected: estimatedTax
                           });
                         }}
-                        className="w-full pl-7 pr-3 py-2 border rounded-lg"
+                        className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                         placeholder="0.00"
                       />
                     </div>
@@ -994,7 +994,7 @@ const ComplianceCenter = () => {
                         step="0.01"
                         value={salesForm.non_taxable_sales}
                         onChange={(e) => setSalesForm({ ...salesForm, non_taxable_sales: e.target.value })}
-                        className="w-full pl-7 pr-3 py-2 border rounded-lg"
+                        className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                         placeholder="0.00"
                       />
                     </div>
@@ -1008,7 +1008,7 @@ const ComplianceCenter = () => {
                         step="0.01"
                         value={salesForm.sales_tax_collected}
                         onChange={(e) => setSalesForm({ ...salesForm, sales_tax_collected: e.target.value })}
-                        className="w-full pl-7 pr-3 py-2 border rounded-lg bg-green-100"
+                        className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-green-100 dark:bg-green-900/30 text-gray-900 dark:text-neutral-100"
                         placeholder="0.00"
                       />
                     </div>
@@ -1022,7 +1022,7 @@ const ComplianceCenter = () => {
                 <textarea
                   value={salesForm.notes}
                   onChange={(e) => setSalesForm({ ...salesForm, notes: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                   rows={2}
                   placeholder="Any notes about today's batch..."
                 />
@@ -1030,7 +1030,7 @@ const ComplianceCenter = () => {
             </div>
             
             {/* Fixed Footer */}
-            <div className="flex gap-3 p-4 sm:p-6 pt-4 border-t border-gray-200 bg-gray-50 flex-shrink-0 rounded-b-lg">
+            <div className="flex gap-3 p-4 sm:p-6 pt-4 border-t border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 flex-shrink-0 rounded-b-lg">
               <button
                 onClick={handleSaveSales}
                 className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
@@ -1068,14 +1068,14 @@ const InstanceCard = ({ instance, onMarkPaid, onMarkFiled, formatDate, formatCur
   
   return (
     <div className={`border rounded-lg p-4 ${
-      isOverdue ? 'bg-red-50 border-red-200' :
-      daysUntil <= 7 ? 'bg-yellow-50 border-yellow-200' :
-      'bg-white border-gray-200'
+      isOverdue ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' :
+      daysUntil <= 7 ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' :
+      'bg-white dark:bg-neutral-900 border-gray-200 dark:border-neutral-700'
     }`}>
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h4 className="font-semibold text-gray-800">{instance.obligation_name}</h4>
-          <p className="text-sm text-gray-600">
+          <h4 className="font-semibold text-gray-800 dark:text-neutral-100">{instance.obligation_name}</h4>
+          <p className="text-sm text-gray-600 dark:text-neutral-200">
             Period: {instance.period_label} • Due: {formatDate(instance.due_date)}
             {isOverdue ? (
               <span className="ml-2 text-red-600 font-semibold">({Math.abs(daysUntil)} days overdue)</span>

@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { BASE_PATH } from './utils/basePath';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { OpenScanProvider } from './contexts/OpenScanContext';
 import Login from './pages/Login';
@@ -13,6 +14,7 @@ import Profile from './pages/Profile';
 import Schedule from './pages/Schedule';
 import Products from './pages/Products';
 import Inventory from './pages/Inventory';
+import InventoryManagement from './components/Admin/InventoryManagement';
 import MyWorkList from './pages/MyWorkList';
 import Layout from './components/Layout/Layout';
 import FloatingActions from './components/Layout/FloatingActions';
@@ -23,10 +25,10 @@ const PrivateRoute = ({ children }) => {
   
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950">
         <div className="text-center">
           <Logo size="lg" className="mb-4" showText={true} />
-          <div className="text-lg text-gray-600 mt-4">Loading...</div>
+          <div className="text-lg text-gray-600 dark:text-neutral-400 mt-4">Loading...</div>
         </div>
       </div>
     );
@@ -40,10 +42,10 @@ const AdminRoute = ({ children }) => {
   
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950">
         <div className="text-center">
           <Logo size="lg" className="mb-4" />
-          <div className="text-lg text-gray-600">Loading...</div>
+          <div className="text-lg text-gray-600 dark:text-neutral-400">Loading...</div>
         </div>
       </div>
     );
@@ -53,6 +55,12 @@ const AdminRoute = ({ children }) => {
   if (!isAdmin) return <Navigate to="/dashboard" />;
   
   return children;
+};
+
+// At /inventory: admins see the full management view; others see the worker inventory page.
+const InventoryPage = () => {
+  const { isAdmin } = useAuth();
+  return isAdmin ? <InventoryManagement /> : <Inventory />;
 };
 
 function AppRoutes() {
@@ -134,7 +142,7 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <Layout>
-              <Inventory />
+              <InventoryPage />
             </Layout>
           </PrivateRoute>
         }
@@ -156,22 +164,24 @@ function AppRoutes() {
 
 function App() {
   return (
-    <Router
-      basename={BASE_PATH}
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
-      <AuthProvider>
-        <SocketProvider>
-          <OpenScanProvider>
-            <AppRoutes />
-            <FloatingActions />
-          </OpenScanProvider>
-        </SocketProvider>
-      </AuthProvider>
-    </Router>
+    <ThemeProvider>
+      <Router
+        basename={BASE_PATH}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <AuthProvider>
+          <SocketProvider>
+            <OpenScanProvider>
+              <AppRoutes />
+              <FloatingActions />
+            </OpenScanProvider>
+          </SocketProvider>
+        </AuthProvider>
+      </Router>
+    </ThemeProvider>
   );
 }
 

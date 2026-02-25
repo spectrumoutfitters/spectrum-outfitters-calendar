@@ -60,7 +60,21 @@ export async function addSecurityTables() {
       'CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id, started_at DESC)'
     ).catch(() => {});
 
-    console.log('Security tables (login_events, user_sessions) ready');
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS logout_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER REFERENCES users(id),
+        username TEXT NOT NULL,
+        occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        ip TEXT,
+        user_agent TEXT
+      )
+    `);
+    await db.runAsync(
+      'CREATE INDEX IF NOT EXISTS idx_logout_events_occurred ON logout_events(occurred_at DESC)'
+    ).catch(() => {});
+
+    console.log('Security tables (login_events, user_sessions, logout_events) ready');
   } catch (error) {
     console.error('Error creating security tables:', error);
   }

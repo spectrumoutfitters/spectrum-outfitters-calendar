@@ -85,6 +85,12 @@ async function ensureScheduleSyncColumns() {
     if (!names.has('organizer_display_name')) {
       await db.runAsync(`ALTER TABLE schedule_entries ADD COLUMN organizer_display_name TEXT`).catch(() => {});
     }
+    if (!names.has('location')) {
+      await db.runAsync(`ALTER TABLE schedule_entries ADD COLUMN location TEXT`).catch(() => {});
+    }
+    if (!names.has('source_calendar_id')) {
+      await db.runAsync(`ALTER TABLE schedule_entries ADD COLUMN source_calendar_id TEXT`).catch(() => {});
+    }
 
     await db.runAsync(
       `CREATE INDEX IF NOT EXISTS idx_schedule_google_event_id ON schedule_entries(google_event_id)`
@@ -239,7 +245,10 @@ function typeLabel(type) {
     personal_leave: 'Personal Leave',
     training: 'Training',
     meeting: 'Meeting',
-    other: 'Other'
+    other: 'Other',
+    appointment: 'Appointment',
+    workshop: 'Workshop',
+    conference: 'Conference'
   };
   return labels[type] || type || 'Other';
 }
@@ -290,7 +299,8 @@ export async function pushEventToGoogle(entry) {
   if (!(await isGoogleCalendarConnected())) return null;
 
   const { calendar, cfg } = await getAuthedCalendarClient();
-  const calendarId = cfg.calendar_id || 'primary';
+  // When entry was created with a specific target (e.g. Outfitters Projects), push there
+  const calendarId = entry.push_calendar_id || cfg.calendar_id || 'primary';
 
   const startDate = toDateOnly(entry.start_date);
   const endDate = toDateOnly(entry.end_date);
@@ -321,6 +331,9 @@ export async function pushEventToGoogle(entry) {
       }
     }
   };
+  if (entry.location && typeof entry.location === 'string' && entry.location.trim()) {
+    event.location = entry.location.trim();
+  }
 
   if (entry.google_event_id) {
     const updated = await calendar.events.update({
@@ -386,7 +399,7 @@ function isShopClosedEvent(summary, description) {
   return s.includes('shop closed') || d.includes('shop closed');
 }
 
-async function upsertEntryFromGoogleEvent(ev) {
+async function upsertEntryFromGoogleEvent(ev, sourceCalendarId = null) {
   if (!ev?.id) return;
 
   // Deleted/cancelled event -> delete local copy
@@ -422,6 +435,7 @@ async function upsertEntryFromGoogleEvent(ev) {
 
   const reason = summary || null;
   const notes = description || null;
+  const location = (ev.location && typeof ev.location === 'string') ? ev.location.trim() || null : null;
 
   const displayNameForEntry = userId ? null : (organizerDisplayName || (organizerEmail ? organizerEmail.replace(/@.*$/, '').replace(/\./g, ' ') : null));
 
@@ -440,6 +454,8 @@ async function upsertEntryFromGoogleEvent(ev) {
            status = 'scheduled',
            reason = ?,
            notes = ?,
+           location = ?,
+           source_calendar_id = ?,
            is_shop_wide = ?,
            organizer_display_name = ?,
            source = COALESCE(source, 'google'),
@@ -453,6 +469,8 @@ async function upsertEntryFromGoogleEvent(ev) {
         inferredType,
         reason,
         notes,
+        location,
+        sourceCalendarId,
         inferredShopWide ? 1 : 0,
         displayNameForEntry,
         nowIso(),
@@ -469,10 +487,11 @@ async function upsertEntryFromGoogleEvent(ev) {
       await db.runAsync(
         `UPDATE schedule_entries
          SET google_event_id = ?,
+             source_calendar_id = ?,
              last_synced_at = ?,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
-        [ev.id, nowIso(), appEntryId]
+        [ev.id, sourceCalendarId, nowIso(), appEntryId]
       );
       return;
     }
@@ -481,8 +500,8 @@ async function upsertEntryFromGoogleEvent(ev) {
   // Otherwise, create a new schedule entry sourced from Google
   await db.runAsync(
     `INSERT INTO schedule_entries
-     (user_id, start_date, end_date, type, status, reason, notes, created_by, is_shop_wide, google_event_id, source, last_synced_at, organizer_display_name)
-     VALUES (?, ?, ?, ?, 'scheduled', ?, ?, NULL, ?, ?, 'google', ?, ?)`,
+     (user_id, start_date, end_date, type, status, reason, notes, location, source_calendar_id, created_by, is_shop_wide, google_event_id, source, last_synced_at, organizer_display_name)
+     VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, NULL, ?, ?, 'google', ?, ?)`,
     [
       userId,
       start_date,
@@ -490,6 +509,8 @@ async function upsertEntryFromGoogleEvent(ev) {
       inferredType,
       reason,
       notes,
+      location,
+      sourceCalendarId,
       inferredShopWide ? 1 : 0,
       ev.id,
       nowIso(),
@@ -565,7 +586,7 @@ export async function pullChangesFromGoogle({ fullSync = false } = {}) {
 
         const items = resp.data.items || [];
         for (const ev of items) {
-          await upsertEntryFromGoogleEvent(ev);
+          await upsertEntryFromGoogleEvent(ev, calendarId);
           processed += 1;
         }
 

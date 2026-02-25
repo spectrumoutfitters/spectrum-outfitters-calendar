@@ -68,6 +68,74 @@ router.get('/active-sessions', authenticateToken, requireAdmin, async (req, res)
   }
 });
 
+// GET /api/admin/security/auth-history?from=&to=&user_id=&event_type=&limit=&offset=
+// Returns combined login and logout events sorted by time (for login/logout history view).
+router.get('/auth-history', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { from, to, user_id, event_type, success, limit = 100, offset = 0 } = req.query;
+    const limitNum = Math.min(parseInt(limit, 10) || 100, 500);
+    const offsetNum = parseInt(offset, 10) || 0;
+
+    const loginConds = [];
+    const loginParams = [];
+    if (from) { loginConds.push('le.occurred_at >= ?'); loginParams.push(from); }
+    if (to) { loginConds.push('le.occurred_at <= ?'); loginParams.push(to); }
+    if (user_id) { loginConds.push('le.user_id = ?'); loginParams.push(parseInt(user_id, 10)); }
+    if (success !== undefined && success !== '') { loginConds.push('le.success = ?'); loginParams.push(parseInt(success, 10)); }
+    const loginWhere = loginConds.length ? `WHERE ${loginConds.join(' AND ')}` : '';
+
+    let logins = [];
+    try {
+      logins = await db.allAsync(`
+        SELECT le.id, le.user_id, le.username, le.success, le.reason, le.occurred_at, le.ip, le.user_agent,
+               le.ip_geo_city, le.ip_geo_region, le.ip_geo_country, le.on_prem_score, le.is_vpn,
+               u.full_name
+        FROM login_events le
+        LEFT JOIN users u ON le.user_id = u.id
+        ${loginWhere}
+        ORDER BY le.occurred_at DESC
+        LIMIT ?
+      `, [...loginParams, limitNum + offsetNum]);
+    } catch (e) { /* login_events always exists */ }
+
+    let logouts = [];
+    try {
+      const outConds = [];
+      const outParams = [];
+      if (from) { outConds.push('lo.occurred_at >= ?'); outParams.push(from); }
+      if (to) { outConds.push('lo.occurred_at <= ?'); outParams.push(to); }
+      if (user_id) { outConds.push('lo.user_id = ?'); outParams.push(parseInt(user_id, 10)); }
+      const outWhere = outConds.length ? `WHERE ${outConds.join(' AND ')}` : '';
+      logouts = await db.allAsync(`
+        SELECT lo.id, lo.user_id, lo.username, lo.occurred_at, lo.ip, lo.user_agent, u.full_name
+        FROM logout_events lo
+        LEFT JOIN users u ON lo.user_id = u.id
+        ${outWhere}
+        ORDER BY lo.occurred_at DESC
+        LIMIT ?
+      `, [...outParams, limitNum + offsetNum]);
+    } catch (e) { /* logout_events may not exist yet */ }
+
+    const loginRows = logins.map(r => ({ ...r, event_type: 'login' }));
+    const logoutRows = logouts.map(r => ({ ...r, event_type: 'logout', success: 1 }));
+    let combined = [...loginRows, ...logoutRows].sort((a, b) => {
+      const tA = new Date(a.occurred_at).getTime();
+      const tB = new Date(b.occurred_at).getTime();
+      return tB - tA;
+    });
+
+    if (event_type === 'login') combined = combined.filter(e => e.event_type === 'login');
+    else if (event_type === 'logout') combined = combined.filter(e => e.event_type === 'logout');
+
+    const total = combined.length;
+    combined = combined.slice(offsetNum, offsetNum + limitNum);
+    res.json({ events: combined, total });
+  } catch (error) {
+    console.error('Error fetching auth history:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // GET /api/admin/security/login-events?from=&to=&user_id=&success=&limit=&offset=
 router.get('/login-events', authenticateToken, requireAdmin, async (req, res) => {
   try {

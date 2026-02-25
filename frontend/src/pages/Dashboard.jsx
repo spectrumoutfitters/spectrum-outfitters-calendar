@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ClockInOut from '../components/TimeClock/ClockInOut';
 import api from '../utils/api';
-import { formatDate, getUpcomingDayLabel } from '../utils/helpers';
+import { formatDate, getUpcomingDayLabel, getTodayCentralTime, getLastCompletedWeekFridayHouston } from '../utils/helpers';
 import TaskModal from '../components/Tasks/TaskModal';
 import EmployeeTaskModal from '../components/Tasks/EmployeeTaskModal';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -28,10 +28,10 @@ const getTaskUrgency = (task) => {
 };
 
 const urgencyStyles = {
-  critical: 'border-l-4 border-l-red-500 bg-red-50/90',
-  high: 'border-l-4 border-l-amber-500 bg-amber-50/80',
-  medium: 'border-l-4 border-l-primary bg-primary-subtle',
-  low: 'border-l-4 border-l-neutral-300 bg-neutral-50/80',
+  critical: 'border-l-4 border-l-red-500 bg-red-50/90 dark:bg-red-950/40 dark:border-l-red-400',
+  high: 'border-l-4 border-l-amber-500 bg-amber-50/80 dark:bg-amber-950/40 dark:border-l-amber-400',
+  medium: 'border-l-4 border-l-primary bg-primary-subtle dark:bg-primary/20 dark:border-l-primary',
+  low: 'border-l-4 border-l-neutral-300 bg-neutral-50/80 dark:bg-neutral-800/80 dark:border-l-neutral-500',
   none: 'border-l border-l-transparent'
 };
 
@@ -98,6 +98,8 @@ const Dashboard = () => {
   const [myListSummary, setMyListSummary] = useState(null);
   const [newMyItem, setNewMyItem] = useState('');
   const [addingMyItem, setAddingMyItem] = useState(false);
+  const [myListShowArchived, setMyListShowArchived] = useState(false);
+  const [myListArchivedItems, setMyListArchivedItems] = useState([]);
 
   // Employee-specific
   const [employeeStats, setEmployeeStats] = useState({ tasksTodo: 0, tasksInProgress: 0, tasksCompleted: 0, todayHours: 0, weekHours: 0 });
@@ -126,8 +128,9 @@ const Dashboard = () => {
 
   const loadDashboardData = async () => {
     try {
+      // All dates in Houston (America/Chicago) so dashboard matches your timezone
+      const todayStr = getTodayCentralTime();
       const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
       const endDate = new Date(today);
       endDate.setDate(endDate.getDate() + 14);
       const endDateStr = endDate.toISOString().split('T')[0];
@@ -136,12 +139,7 @@ const Dashboard = () => {
       const myListPromise = api.get('/my-worklist/today').catch(() => ({ data: { items: [], summary: null } }));
 
       if (isAdmin) {
-        // Calculate current week's Friday for P&L
-        const dayOfWeek = today.getDay();
-        const friday = new Date(today);
-        if (dayOfWeek <= 5) friday.setDate(today.getDate() + (5 - dayOfWeek));
-        else friday.setDate(today.getDate() - (dayOfWeek - 5));
-        const fridayStr = friday.toISOString().split('T')[0];
+        const fridayStr = getLastCompletedWeekFridayHouston();
 
         const [
           tasksRes, scheduleRes, statusRes, worklistRes,
@@ -254,12 +252,20 @@ const Dashboard = () => {
 
   // ─── My List inline handlers ──────────────────────────────
 
+  const loadMyListArchived = async () => {
+    try {
+      const res = await api.get('/my-worklist/today', { params: { archived: 1 } });
+      setMyListArchivedItems(res.data?.items || []);
+    } catch { setMyListArchivedItems([]); }
+  };
+
   const handleToggleMyItem = async (id) => {
     try {
       await api.post(`/my-worklist/items/${id}/toggle`);
       const res = await api.get('/my-worklist/today');
       setMyListItems(res.data?.items || []);
       setMyListSummary(res.data?.summary || null);
+      if (myListShowArchived) await loadMyListArchived();
     } catch { /* silent */ }
   };
 
@@ -284,7 +290,7 @@ const Dashboard = () => {
       <div className="flex items-center justify-center py-16">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm text-gray-500">Loading dashboard...</p>
+          <p className="text-sm text-gray-500 dark:text-neutral-400">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -322,16 +328,20 @@ const Dashboard = () => {
     ].filter(d => d.value > 0);
 
     return (
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-gray-800">Admin Dashboard</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-xl font-bold text-gray-800 dark:text-neutral-100 md:text-2xl">Admin Dashboard</h1>
+            <p className="text-sm font-medium text-gray-700 dark:text-neutral-200 mt-0.5">
+              {user?.full_name || user?.username || 'Signed in'}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-neutral-400">Admin account</p>
+            <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
               {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Chicago' })}
             </p>
           </div>
-          <button onClick={loadDashboardData} className="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg transition">Refresh</button>
+          <button onClick={loadDashboardData} className="min-h-[2.5rem] px-3 py-1.5 text-sm text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">Refresh</button>
         </div>
 
         {/* ── Key Metrics ────────────────────────────────────── */}
@@ -353,31 +363,39 @@ const Dashboard = () => {
           onAdd={handleAddMyItem}
           onToggle={handleToggleMyItem}
           onViewAll={() => navigate('/my-list')}
+          showArchived={myListShowArchived}
+          archivedItems={myListArchivedItems}
+          onToggleShowArchived={async () => {
+            const next = !myListShowArchived;
+            setMyListShowArchived(next);
+            if (next) await loadMyListArchived();
+            else setMyListArchivedItems([]);
+          }}
         />
 
         {/* ── Financial + Team (two columns) ─────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Financial Overview */}
-          <div className="bg-neutral-50 border border-gray-200 rounded-xl p-5">
+          <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Financial Overview</h2>
+              <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Financial Overview</h2>
               <button onClick={() => navigate('/admin?tab=compliance')} className="text-xs text-primary hover:underline">View P&amp;L</button>
             </div>
             {revenue > 0 ? (
               <>
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div>
-                    <p className="text-[10px] text-gray-500 uppercase">Revenue</p>
-                    <p className="text-lg font-bold text-green-600">{fmt$(revenue)}</p>
+                    <p className="text-[10px] text-gray-500 dark:text-neutral-200 uppercase">Revenue</p>
+                    <p className="text-lg font-bold text-green-600 dark:text-green-400">{fmt$(revenue)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-500 uppercase">Costs</p>
-                    <p className="text-lg font-bold text-red-600">{fmt$(payrollCost + otherExpenses)}</p>
+                    <p className="text-[10px] text-gray-500 dark:text-neutral-200 uppercase">Costs</p>
+                    <p className="text-lg font-bold text-red-600 dark:text-red-400">{fmt$(payrollCost + otherExpenses)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-500 uppercase">Net Profit</p>
-                    <p className={`text-lg font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt$(netProfit)}</p>
-                    <p className={`text-[10px] ${netProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{profitMargin.toFixed(0)}% margin</p>
+                    <p className="text-[10px] text-gray-500 dark:text-neutral-200 uppercase">Net Profit</p>
+                    <p className={`text-lg font-bold ${netProfit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{fmt$(netProfit)}</p>
+                    <p className={`text-[10px] ${netProfit >= 0 ? 'text-green-500 dark:text-green-400/90' : 'text-red-500 dark:text-red-400/90'}`}>{profitMargin.toFixed(0)}% margin</p>
                   </div>
                 </div>
                 {revenueChartData.length > 0 && (
@@ -394,54 +412,54 @@ const Dashboard = () => {
                 )}
                 {/* Cost breakdown bar */}
                 <div className="mt-3">
-                  <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-gray-200">
+                  <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-gray-200 dark:bg-neutral-700">
                     {payrollCost > 0 && <div className="transition-all" style={{ width: `${(payrollCost / revenue) * 100}%`, backgroundColor: FIN_RED }} title={`Payroll: ${fmt$(payrollCost)}`} />}
                     {otherExpenses > 0 && <div className="transition-all" style={{ width: `${(otherExpenses / revenue) * 100}%`, backgroundColor: FIN_AMBER }} title={`Expenses: ${fmt$(otherExpenses)}`} />}
                     {netProfit > 0 && <div className="transition-all" style={{ width: `${(netProfit / revenue) * 100}%`, backgroundColor: FIN_GREEN }} title={`Profit: ${fmt$(netProfit)}`} />}
                   </div>
                   <div className="flex justify-between mt-1 text-[9px]">
-                    <span className="text-red-600">Payroll {fmt$(payrollCost)}</span>
-                    <span className="text-amber-600">Expenses {fmt$(otherExpenses)}</span>
-                    <span className="text-green-600">Profit {fmt$(netProfit)}</span>
+                    <span className="text-red-600 dark:text-red-400">Payroll {fmt$(payrollCost)}</span>
+                    <span className="text-amber-600 dark:text-amber-400">Expenses {fmt$(otherExpenses)}</span>
+                    <span className="text-green-600 dark:text-green-400">Profit {fmt$(netProfit)}</span>
                   </div>
                 </div>
               </>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-4">No financial data for this week</p>
+              <p className="text-sm text-gray-400 dark:text-neutral-200 text-center py-4">No financial data for this week</p>
             )}
           </div>
 
           {/* Team Status */}
-          <div className="bg-neutral-50 border border-gray-200 rounded-xl p-5">
+          <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Team Status</h2>
+              <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Team Status</h2>
               <button onClick={() => navigate('/admin?tab=status')} className="text-xs text-primary hover:underline">View all</button>
             </div>
             {employeeStatuses.length > 0 ? (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {employeeStatuses.map(emp => (
-                  <div key={emp.id || emp.user_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
+                  <div key={emp.id || emp.user_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800">
                     <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
                       emp.status === 'clocked_in' ? 'bg-green-500' :
                       emp.status === 'on_lunch' ? 'bg-amber-500' :
-                      'bg-gray-300'
+                      'bg-gray-300 dark:bg-neutral-600'
                     }`} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{emp.full_name || emp.username}</p>
-                      <p className="text-[10px] text-gray-400">
+                      <p className="text-sm font-medium text-gray-800 dark:text-neutral-100 truncate">{emp.full_name || emp.username}</p>
+                      <p className="text-[10px] text-gray-400 dark:text-neutral-200">
                         {emp.status === 'clocked_in' ? `Working ${emp.hours_today ? emp.hours_today.toFixed(1) + 'h' : ''}` :
                          emp.status === 'on_lunch' ? 'On lunch' :
                          'Not clocked in'}
                       </p>
                     </div>
                     {emp.status === 'clocked_in' && emp.hours_today != null && (
-                      <span className="text-xs font-medium text-gray-600">{emp.hours_today.toFixed(1)}h</span>
+                      <span className="text-xs font-medium text-gray-600 dark:text-neutral-200">{emp.hours_today.toFixed(1)}h</span>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-4">No employee data</p>
+              <p className="text-sm text-gray-400 dark:text-neutral-200 text-center py-4">No employee data</p>
             )}
           </div>
         </div>
@@ -449,9 +467,9 @@ const Dashboard = () => {
         {/* ── Schedule + Compliance (two columns) ────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Upcoming Schedule */}
-          <div className="bg-neutral-50 border border-gray-200 rounded-xl p-5">
+          <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Upcoming Schedule</h2>
+              <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Upcoming Schedule</h2>
               <button onClick={() => navigate('/schedule')} className="text-xs text-primary hover:underline">View all</button>
             </div>
             {upcomingEvents.length > 0 ? (
@@ -461,25 +479,30 @@ const Dashboard = () => {
                   const label = event.is_shop_wide ? 'Shop Closed' : (event.reason || event.type || 'Event');
                   const who = event.is_shop_wide ? '' : (event.user_name || '');
                   return (
-                    <div key={event.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
-                      <span className="text-xs font-semibold text-gray-600 w-20 flex-shrink-0">{dayLabel}</span>
-                      <span className="text-sm text-gray-800 truncate flex-1">
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => navigate(`/schedule?view=${event.id}`)}
+                      className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-left transition cursor-pointer border-0"
+                    >
+                      <span className="text-xs font-semibold text-gray-600 dark:text-neutral-200 w-20 flex-shrink-0">{dayLabel}</span>
+                      <span className="text-sm text-gray-800 dark:text-neutral-100 truncate flex-1">
                         {label}{who ? ` · ${who}` : ''}
                       </span>
-                      {event.status === 'pending' && <span className="text-[10px] text-amber-600 font-medium flex-shrink-0">Pending</span>}
-                    </div>
+                      {event.status === 'pending' && <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex-shrink-0">Pending</span>}
+                    </button>
                   );
                 })}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-4">No upcoming events</p>
+              <p className="text-sm text-gray-400 dark:text-neutral-200 text-center py-4">No upcoming events</p>
             )}
           </div>
 
           {/* Compliance + Task Distribution */}
-          <div className="bg-neutral-50 border border-gray-200 rounded-xl p-5">
+          <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Compliance & Tasks</h2>
+              <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Compliance & Tasks</h2>
               <button onClick={() => navigate('/admin?tab=compliance')} className="text-xs text-primary hover:underline">View all</button>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -487,17 +510,17 @@ const Dashboard = () => {
               <div>
                 {adminData.complianceOverdue.length > 0 && (
                   <div className="mb-2">
-                    <span className="text-xs font-bold text-red-600">{adminData.complianceOverdue.length} Overdue</span>
+                    <span className="text-xs font-bold text-red-600 dark:text-red-400">{adminData.complianceOverdue.length} Overdue</span>
                     {adminData.complianceOverdue.slice(0, 2).map((c, i) => (
-                      <p key={i} className="text-[11px] text-gray-600 truncate">{c.obligation_name || c.name}</p>
+                      <p key={i} className="text-[11px] text-gray-600 dark:text-neutral-200 truncate">{c.obligation_name || c.name}</p>
                     ))}
                   </div>
                 )}
                 {adminData.complianceDueSoon.length > 0 && (
                   <div className="mb-2">
-                    <span className="text-xs font-bold text-amber-600">{adminData.complianceDueSoon.length} Due Soon</span>
+                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400">{adminData.complianceDueSoon.length} Due Soon</span>
                     {adminData.complianceDueSoon.slice(0, 2).map((c, i) => (
-                      <p key={i} className="text-[11px] text-gray-600 truncate">{c.obligation_name || c.name}</p>
+                      <p key={i} className="text-[11px] text-gray-600 dark:text-neutral-200 truncate">{c.obligation_name || c.name}</p>
                     ))}
                   </div>
                 )}
@@ -526,24 +549,24 @@ const Dashboard = () => {
 
         {/* ── Admin Worklist Quick View ───────────────────────── */}
         {worklistSummary && (
-          <div className="bg-neutral-50 border border-gray-200 rounded-xl p-5">
+          <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Admin Work List</h2>
+              <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Admin Work List</h2>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-500">{worklistSummary.completed}/{worklistSummary.total} done</span>
+                <span className="text-xs text-gray-500 dark:text-neutral-200">{worklistSummary.completed}/{worklistSummary.total} done</span>
                 <button onClick={() => navigate('/admin?tab=worklist')} className="text-xs text-primary hover:underline">Open</button>
               </div>
             </div>
             <div className="flex items-center gap-3 mb-3">
-              <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${worklistSummary.progress}%` }} />
               </div>
-              <span className="text-sm font-bold text-gray-700">{worklistSummary.progress}%</span>
+              <span className="text-sm font-bold text-gray-700 dark:text-neutral-100">{worklistSummary.progress}%</span>
             </div>
             {worklistItems.length > 0 && (
               <div className="space-y-1">
                 {worklistItems.map(item => (
-                  <div key={item.id} className="flex items-center gap-2 text-sm text-gray-600 py-1">
+                  <div key={item.id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-200 py-1">
                     <div className="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0" />
                     <span className="truncate">{item.title}</span>
                   </div>
@@ -577,10 +600,10 @@ const Dashboard = () => {
             <button
               key={item.label}
               onClick={() => navigate(item.path)}
-              className="flex flex-col items-center gap-1 p-3 bg-neutral-50 border border-gray-200 rounded-xl hover:border-primary/30 hover:bg-primary/5 transition text-center"
+              className="flex flex-col items-center gap-1 p-3 bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl hover:border-primary/30 hover:bg-primary/5 transition text-center"
             >
               <span className="text-xl">{item.icon}</span>
-              <span className="text-xs font-medium text-gray-600">{item.label}</span>
+              <span className="text-xs font-medium text-gray-600 dark:text-neutral-100">{item.label}</span>
             </button>
           ))}
         </div>
@@ -600,12 +623,12 @@ const Dashboard = () => {
   return (
     <div className="space-y-4 md:space-y-5">
       <div>
-        <h1 className="text-xl md:text-2xl font-bold text-gray-800">{getGreeting(user)}</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Your dashboard</p>
+        <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-neutral-100">{getGreeting(user)}</h1>
+        <p className="text-gray-500 dark:text-neutral-400 text-sm mt-0.5">Your dashboard</p>
       </div>
 
       {/* Clock In/Out */}
-      <div className="bg-neutral-50 border border-gray-200 rounded-xl p-4 md:p-5">
+      <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 md:p-5">
         <ClockInOut />
       </div>
 
@@ -632,9 +655,9 @@ const Dashboard = () => {
 
       {/* Upcoming Events */}
       {upcomingEvents.length > 0 && (
-        <div className="bg-neutral-50 border border-gray-200 rounded-xl p-4 md:p-5">
+        <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 md:p-5">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Upcoming Events</h2>
+            <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Upcoming Events</h2>
             <button onClick={() => navigate('/schedule')} className="text-xs text-primary hover:underline">View Schedule</button>
           </div>
           <div className="space-y-1.5">
@@ -643,10 +666,15 @@ const Dashboard = () => {
               const label = event.is_shop_wide ? 'Shop Closed' : (event.reason || event.type || 'Event');
               const who = event.is_shop_wide ? '' : (event.user_name || '');
               return (
-                <div key={event.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
-                  <span className="text-xs font-semibold text-gray-600 w-20 flex-shrink-0">{dayLabel}</span>
-                  <span className="text-sm text-gray-800 truncate flex-1">{label}{who ? ` · ${who}` : ''}</span>
-                </div>
+                <button
+                  key={event.id}
+                  type="button"
+                  onClick={() => navigate(`/schedule?view=${event.id}`)}
+                  className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-left transition cursor-pointer border-0"
+                >
+                  <span className="text-xs font-semibold text-gray-600 dark:text-neutral-400 w-20 flex-shrink-0">{dayLabel}</span>
+                  <span className="text-sm text-gray-800 dark:text-neutral-200 truncate flex-1">{label}{who ? ` · ${who}` : ''}</span>
+                </button>
               );
             })}
           </div>
@@ -679,78 +707,128 @@ const Dashboard = () => {
 const MetricCard = ({ label, value, valueColor, sub, subColor, onClick }) => (
   <button
     onClick={onClick}
-    className="bg-neutral-50 border border-gray-200 rounded-xl p-4 text-left hover:border-primary/30 hover:bg-primary/5 transition w-full"
+    className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 text-left hover:border-primary/30 hover:bg-primary/5 transition w-full"
   >
-    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">{label}</p>
-    <p className={`text-2xl font-bold mt-1 ${valueColor || 'text-gray-800'}`}>{value}</p>
-    {sub && <p className={`text-[11px] mt-0.5 ${subColor || 'text-gray-400'}`}>{sub}</p>}
+    <p className="text-[10px] text-gray-500 dark:text-neutral-300 uppercase tracking-wider font-medium">{label}</p>
+    <p className={`text-2xl font-bold mt-1 ${valueColor || 'text-gray-800 dark:text-neutral-100'}`}>{value}</p>
+    {sub && <p className={`text-[11px] mt-0.5 ${subColor || 'text-gray-400 dark:text-neutral-200'}`}>{sub}</p>}
   </button>
 );
 
-const MyListSection = ({ items, summary, newItem, setNewItem, adding, onAdd, onToggle, onViewAll }) => {
+const MyListSection = ({
+  items,
+  summary,
+  newItem,
+  setNewItem,
+  adding,
+  onAdd,
+  onToggle,
+  onViewAll,
+  showArchived = false,
+  archivedItems = [],
+  onToggleShowArchived,
+}) => {
   const pending = items.filter(i => !i.is_completed);
   const done = items.filter(i => i.is_completed);
 
   return (
-    <div className="bg-neutral-50 border border-gray-200 rounded-xl p-4 md:p-5">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 md:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">My List</h2>
-          {summary && summary.total > 0 && (
-            <span className="text-[10px] text-gray-400">{summary.completed}/{summary.total}</span>
+          <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">My List</h2>
+          {summary && summary.total > 0 && !showArchived && (
+            <span className="text-[10px] text-gray-400 dark:text-neutral-200">{summary.completed}/{summary.total}</span>
           )}
         </div>
-        <button onClick={onViewAll} className="text-xs text-primary hover:underline">View all</button>
+        <div className="flex items-center gap-2">
+          {onToggleShowArchived && (
+            <button
+              type="button"
+              onClick={onToggleShowArchived}
+              className="text-xs text-gray-500 dark:text-neutral-400 hover:text-primary dark:hover:text-primary"
+            >
+              {showArchived ? 'Hide archived' : 'Show archived'}
+            </button>
+          )}
+          <button onClick={onViewAll} className="text-xs text-primary hover:underline">View all</button>
+        </div>
       </div>
 
-      {/* Quick add */}
-      <form onSubmit={onAdd} className="flex gap-2 mb-3">
-        <input
-          type="text"
-          value={newItem}
-          onChange={(e) => setNewItem(e.target.value)}
-          placeholder="Add a task..."
-          className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 bg-white"
-        />
-        <button type="submit" disabled={!newItem.trim() || adding} className="px-3 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50 shrink-0">
-          {adding ? '...' : 'Add'}
-        </button>
-      </form>
+      {!showArchived && (
+        <>
+          {/* Quick add */}
+          <form onSubmit={onAdd} className="flex gap-2 mb-3">
+            <input
+              type="text"
+              value={newItem}
+              onChange={(e) => setNewItem(e.target.value)}
+              placeholder="Add a task..."
+              className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+            />
+            <button type="submit" disabled={!newItem.trim() || adding} className="px-3 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50 shrink-0">
+              {adding ? '...' : 'Add'}
+            </button>
+          </form>
 
-      {/* Items */}
-      {pending.length > 0 && (
-        <div className="space-y-1 mb-2">
-          {pending.slice(0, 5).map(item => (
-            <div key={item.id} className="flex items-center gap-2.5 py-1.5 group">
-              <button
-                onClick={() => onToggle(item.id)}
-                className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-gray-300 hover:border-primary flex items-center justify-center transition"
-              />
-              <span className="text-sm text-gray-700 truncate flex-1">{item.title}</span>
+          {/* Active items */}
+          {pending.length > 0 && (
+            <div className="space-y-1 mb-2">
+              {pending.slice(0, 5).map(item => (
+                <div key={item.id} className="flex items-center gap-2.5 py-1.5 group">
+                  <button
+                    onClick={() => onToggle(item.id)}
+                    className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-gray-300 dark:border-neutral-500 hover:border-primary flex items-center justify-center transition dark:bg-neutral-800"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-neutral-100 truncate flex-1">{item.title}</span>
+                </div>
+              ))}
+              {pending.length > 5 && (
+                <button onClick={onViewAll} className="text-xs text-gray-400 dark:text-neutral-200 hover:text-primary">+ {pending.length - 5} more</button>
+              )}
             </div>
-          ))}
-          {pending.length > 5 && (
-            <button onClick={onViewAll} className="text-xs text-gray-400 hover:text-primary">+ {pending.length - 5} more</button>
+          )}
+          {done.length > 0 && (
+            <div className="space-y-1 opacity-75">
+              {done.slice(0, 3).map(item => (
+                <div key={item.id} className="flex items-center gap-2.5 py-1">
+                  <button
+                    onClick={() => onToggle(item.id)}
+                    className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500 border-2 border-green-500 text-white flex items-center justify-center"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                  </button>
+                  <span className="text-sm text-gray-400 dark:text-neutral-300 line-through truncate flex-1">{item.title}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {items.length === 0 && (
+            <p className="text-xs text-gray-400 dark:text-neutral-200 text-center py-2">No items yet. Add one above. Completed items are archived after 24 hours.</p>
+          )}
+        </>
+      )}
+
+      {/* Archived list (when toggled) — uncheck to restore to My List */}
+      {showArchived && (
+        <div className="space-y-1">
+          <p className="text-xs text-gray-500 dark:text-neutral-400 mb-2">Uncheck an item to bring it back to your list.</p>
+          {archivedItems.length === 0 ? (
+            <p className="text-xs text-gray-400 dark:text-neutral-200 text-center py-2">No archived items.</p>
+          ) : (
+            archivedItems.map(item => (
+              <div key={item.id} className="flex items-center gap-2.5 py-1.5">
+                <button
+                  onClick={() => onToggle(item.id)}
+                  className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500 border-2 border-green-500 text-white flex items-center justify-center hover:opacity-90"
+                  title="Uncheck to restore to My List"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                </button>
+                <span className="text-sm text-gray-500 dark:text-neutral-300 line-through truncate flex-1">{item.title}</span>
+              </div>
+            ))
           )}
         </div>
-      )}
-      {done.length > 0 && (
-        <div className="space-y-1 opacity-50">
-          {done.slice(0, 3).map(item => (
-            <div key={item.id} className="flex items-center gap-2.5 py-1">
-              <button
-                onClick={() => onToggle(item.id)}
-                className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500 border-2 border-green-500 text-white flex items-center justify-center"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-              </button>
-              <span className="text-sm text-gray-400 line-through truncate flex-1">{item.title}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {items.length === 0 && (
-        <p className="text-xs text-gray-400 text-center py-2">No items yet. Add one above.</p>
       )}
     </div>
   );
@@ -762,16 +840,16 @@ const TasksSection = ({ tasks, taskFilter, setTaskFilter, taskLimit, setTaskLimi
   const hasMore = filtered.length > taskLimit;
 
   return (
-    <div className="bg-neutral-50 border border-gray-200 rounded-xl p-4 md:p-5">
+    <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 md:p-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
-        <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Tasks Overview</h2>
+        <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Tasks Overview</h2>
         <div className="flex items-center gap-2">
-          <div className="flex gap-0.5 bg-gray-100 rounded-lg p-0.5">
+          <div className="flex gap-0.5 bg-gray-100 dark:bg-neutral-800 rounded-lg p-0.5">
             {['all', 'in_progress', 'review', 'todo', 'completed'].map(key => (
               <button
                 key={key}
                 onClick={() => { setTaskFilter(key); setTaskLimit(8); }}
-                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition ${taskFilter === key ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition ${taskFilter === key ? 'bg-primary text-white shadow-sm' : 'text-gray-500 dark:text-neutral-200 hover:text-gray-700 dark:hover:text-neutral-100'}`}
               >
                 {key === 'all' ? 'All' : key === 'in_progress' ? 'Active' : key === 'review' ? 'Review' : key === 'todo' ? 'To Do' : 'Done'}
               </button>
@@ -782,7 +860,7 @@ const TasksSection = ({ tasks, taskFilter, setTaskFilter, taskLimit, setTaskLimi
       </div>
 
       {displayed.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-6">No tasks</p>
+        <p className="text-sm text-gray-400 dark:text-neutral-200 text-center py-6">No tasks</p>
       ) : (
         <div className="space-y-1.5">
           {displayed.map(task => {
@@ -793,33 +871,33 @@ const TasksSection = ({ tasks, taskFilter, setTaskFilter, taskLimit, setTaskLimi
               <div
                 key={task.id}
                 onClick={() => onTaskClick(task)}
-                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:opacity-90 transition border border-gray-100 ${uClass}`}
+                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:opacity-90 transition border border-gray-100 dark:border-neutral-700 ${uClass}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-800 truncate">{task.title}</span>
-                    {task.category && <span className="text-[10px] text-gray-400 flex-shrink-0">{task.category}</span>}
+                    <span className="text-sm font-medium text-gray-800 dark:text-neutral-100 truncate">{task.title}</span>
+                    {task.category && <span className="text-[10px] text-gray-400 dark:text-neutral-300 flex-shrink-0">{task.category}</span>}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[11px] text-gray-500">{task.assigned_to_name || 'Unassigned'}</span>
+                    <span className="text-[11px] text-gray-500 dark:text-neutral-200">{task.assigned_to_name || 'Unassigned'}</span>
                     {task.due_date && (
-                      <span className={`text-[11px] ${new Date(task.due_date) < new Date() && task.status !== 'completed' ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
+                      <span className={`text-[11px] ${new Date(task.due_date) < new Date() && task.status !== 'completed' ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-400 dark:text-neutral-200'}`}>
                         Due {formatDate(task.due_date)}
                       </span>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="w-16 h-1.5 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${progress === 100 ? 'bg-green-500' : 'bg-primary'}`} style={{ width: `${progress}%` }} />
                   </div>
-                  <span className="text-[10px] text-gray-500 w-7 text-right">{progress}%</span>
+                  <span className="text-[10px] text-gray-500 dark:text-neutral-200 w-7 text-right">{progress}%</span>
                 </div>
               </div>
             );
           })}
           {hasMore && (
-            <button onClick={() => setTaskLimit(taskLimit + 8)} className="w-full py-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition">
+            <button onClick={() => setTaskLimit(taskLimit + 8)} className="w-full py-2 text-xs text-gray-500 dark:text-neutral-200 hover:text-gray-700 dark:hover:text-neutral-100 hover:bg-gray-50 dark:hover:bg-neutral-800 rounded-lg transition">
               Show more ({filtered.length - taskLimit} remaining)
             </button>
           )}

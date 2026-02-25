@@ -5,6 +5,7 @@ import Logo from '../Logo';
 import HeaderClockInOut from '../TimeClock/HeaderClockInOut';
 import EmployeeStatusBar from '../EmployeeStatusBar/EmployeeStatusBar';
 import UpdatesBadge from '../Updates/UpdatesBadge';
+import ThemeToggle from '../ui/ThemeToggle';
 
 const Header = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
@@ -38,6 +39,7 @@ const Header = ({ onMenuClick }) => {
           </div>
         </div>
         <div className="flex items-center gap-2 md:gap-4 shrink-0">
+          <ThemeToggle showLabel />
           <UpdatesBadge />
           <EmployeeStatusBar />
           {showClockInOut && (

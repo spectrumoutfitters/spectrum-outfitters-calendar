@@ -185,7 +185,7 @@ const Reports = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Company Reports</h2>
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-neutral-100">Company Reports</h2>
         <div className="flex gap-2">
           {activeTab === 'time' && (
             <>
@@ -193,7 +193,7 @@ const Reports = () => {
                 type="date"
                 value={weekEnding}
                 onChange={(e) => setWeekEnding(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
               />
             </>
           )}
@@ -203,21 +203,21 @@ const Reports = () => {
                 type="date"
                 value={dateRange.start}
                 onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
               />
-              <span className="self-center text-gray-500">to</span>
+              <span className="self-center text-gray-500 dark:text-neutral-400">to</span>
               <input
                 type="date"
                 value={dateRange.end}
                 onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
               />
             </>
           )}
           <select
             value={selectedUserId}
             onChange={(e) => setSelectedUserId(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
           >
             <option value="">All Employees</option>
             {users.map((u) => (
@@ -228,7 +228,7 @@ const Reports = () => {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-200 dark:border-neutral-700">
         <nav className="-mb-px flex space-x-8">
           {tabs.map((tab) => (
             <button
@@ -237,7 +237,7 @@ const Reports = () => {
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-300 dark:hover:border-neutral-600'
               }`}
             >
               {tab.label}
@@ -249,7 +249,7 @@ const Reports = () => {
       {loading ? (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-2 text-gray-600">Loading report data...</p>
+          <p className="mt-2 text-gray-600 dark:text-neutral-300">Loading report data...</p>
         </div>
       ) : (
         <>
@@ -258,37 +258,37 @@ const Reports = () => {
             <div className="space-y-6">
               {/* Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white rounded-lg shadow p-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Total Hours</p>
+                      <p className="text-sm text-gray-600 dark:text-neutral-300">Total Hours</p>
                       <p className="text-3xl font-bold text-blue-600">{overviewStats.totalHours.toFixed(1)}</p>
                     </div>
                     <div className="text-4xl">⏰</div>
                   </div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Total Payroll</p>
+                      <p className="text-sm text-gray-600 dark:text-neutral-300">Total Payroll</p>
                       <p className="text-3xl font-bold text-red-600">${overviewStats.totalPay.toFixed(2)}</p>
                     </div>
                     <div className="text-4xl">💰</div>
                   </div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Active Employees</p>
+                      <p className="text-sm text-gray-600 dark:text-neutral-300">Active Employees</p>
                       <p className="text-3xl font-bold text-purple-600">{overviewStats.activeEmployees}</p>
                     </div>
                     <div className="text-4xl">👥</div>
                   </div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Tasks Completed</p>
+                      <p className="text-sm text-gray-600 dark:text-neutral-300">Tasks Completed</p>
                       <p className="text-3xl font-bold text-green-600">{overviewStats.tasksCompleted}</p>
                     </div>
                     <div className="text-4xl">✅</div>
@@ -298,40 +298,40 @@ const Reports = () => {
 
               {/* Quick Stats */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg shadow p-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
                   <h3 className="text-lg font-semibold mb-4">Task Status Breakdown</h3>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Completed</span>
+                      <span className="text-gray-600 dark:text-neutral-300">Completed</span>
                       <span className="font-semibold text-green-600">{overviewStats.tasksCompleted}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">In Progress</span>
+                      <span className="text-gray-600 dark:text-neutral-300">In Progress</span>
                       <span className="font-semibold text-blue-600">{overviewStats.tasksInProgress}</span>
                     </div>
                     {overviewStats.avgTaskCompletion > 0 && (
                       <div className="flex justify-between items-center pt-2 border-t">
-                        <span className="text-gray-600">Avg Completion Time</span>
+                        <span className="text-gray-600 dark:text-neutral-300">Avg Completion Time</span>
                         <span className="font-semibold">{overviewStats.avgTaskCompletion.toFixed(1)} hrs</span>
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow p-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
                   <h3 className="text-lg font-semibold mb-4">Payroll Summary</h3>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Total Hours</span>
+                      <span className="text-gray-600 dark:text-neutral-300">Total Hours</span>
                       <span className="font-semibold">{overviewStats.totalHours.toFixed(1)} hrs</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Total Pay</span>
+                      <span className="text-gray-600 dark:text-neutral-300">Total Pay</span>
                       <span className="font-semibold text-red-600">${overviewStats.totalPay.toFixed(2)}</span>
                     </div>
                     {overviewStats.totalHours > 0 && (
                       <div className="flex justify-between items-center pt-2 border-t">
-                        <span className="text-gray-600">Avg Hourly Cost</span>
+                        <span className="text-gray-600 dark:text-neutral-300">Avg Hourly Cost</span>
                         <span className="font-semibold text-amber-600">${(overviewStats.totalPay / overviewStats.totalHours).toFixed(2)}</span>
                       </div>
                     )}
@@ -386,7 +386,7 @@ const TimePayrollReport = ({ data, onExport }) => {
       <div className="flex justify-between items-center">
         <div>
           <h3 className="text-xl font-semibold">Time & Payroll Report</h3>
-          <p className="text-sm text-gray-600">Week Ending: {formatDate(data.week_ending_date)}</p>
+          <p className="text-sm text-gray-600 dark:text-neutral-300">Week Ending: {formatDate(data.week_ending_date)}</p>
         </div>
         <button
           onClick={onExport}
@@ -413,11 +413,11 @@ const TimePayrollReport = ({ data, onExport }) => {
       </div>
 
       {Object.values(groupedByUser).map((group) => (
-        <div key={group.user_name} className="bg-white rounded-lg shadow-md p-6">
+        <div key={group.user_name} className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-xl font-semibold">{group.user_name}</h3>
             <div className="text-right">
-              <p className="text-sm text-gray-600">Total: {group.totalHours.toFixed(2)} hrs</p>
+              <p className="text-sm text-gray-600 dark:text-neutral-300">Total: {group.totalHours.toFixed(2)} hrs</p>
               {group.totalPay > 0 && (
                 <p className="text-lg font-bold text-red-600">${group.totalPay.toFixed(2)}</p>
               )}
@@ -425,7 +425,7 @@ const TimePayrollReport = ({ data, onExport }) => {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-neutral-800">
                 <tr>
                   <th className="text-left py-2 px-4">Date</th>
                   <th className="text-left py-2 px-4">Clock In</th>
@@ -438,7 +438,7 @@ const TimePayrollReport = ({ data, onExport }) => {
               </thead>
               <tbody>
                 {group.entries.map((entry) => (
-                  <tr key={entry.id} className="border-b hover:bg-gray-50">
+                  <tr key={entry.id} className="border-b border-gray-100 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
                     <td className="py-2 px-4">{formatDate(entry.clock_in)}</td>
                     <td className="py-2 px-4">{formatTime(entry.clock_in)}</td>
                     <td className="py-2 px-4">{entry.clock_out ? formatTime(entry.clock_out) : '—'}</td>
@@ -483,20 +483,20 @@ const TaskReport = ({ data, onExport }) => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-600">Total Tasks</p>
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-4">
+          <p className="text-sm text-gray-600 dark:text-neutral-300">Total Tasks</p>
           <p className="text-2xl font-bold">{tasks.length}</p>
         </div>
         {Object.entries(byStatus).map(([status, count]) => (
-          <div key={status} className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-600 capitalize">{status.replace('_', ' ')}</p>
+          <div key={status} className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-4">
+            <p className="text-sm text-gray-600 dark:text-neutral-300 capitalize">{status.replace('_', ' ')}</p>
             <p className="text-2xl font-bold">{count}</p>
           </div>
         ))}
       </div>
 
       {/* Tasks Table */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
@@ -511,14 +511,14 @@ const TaskReport = ({ data, onExport }) => {
             </thead>
             <tbody>
               {tasks.map((task) => (
-                <tr key={task.id} className="border-b hover:bg-gray-50">
+                <tr key={task.id} className="border-b border-gray-100 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
                   <td className="py-3 px-4 font-medium">{task.title}</td>
                   <td className="py-3 px-4">{task.category}</td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 rounded text-xs ${
                       task.status === 'completed' ? 'bg-green-100 text-green-800' :
                       task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-100 text-gray-800'
+                      'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-200'
                     }`}>
                       {task.status.replace('_', ' ')}
                     </span>
@@ -553,33 +553,33 @@ const PerformanceReport = ({ data }) => {
           const tasksWithTiming = emp.tasks_with_timing || 0;
           
           return (
-            <div key={emp.id} className="bg-white rounded-lg shadow-md p-6">
+            <div key={emp.id} className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
               <h4 className="text-lg font-semibold mb-4">{emp.full_name}</h4>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Tasks Completed:</span>
+                  <span className="text-gray-600 dark:text-neutral-300">Tasks Completed:</span>
                   <span className="font-semibold">{tasksCompleted}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Avg Completion Time:</span>
+                  <span className="text-gray-600 dark:text-neutral-300">Avg Completion Time:</span>
                   <span className="font-semibold">
                     {avgCompletionHours ? avgCompletionHours.toFixed(1) + ' hrs' : 
                      tasksWithTiming > 0 ? 'Calculating...' : 'No timing data'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Total Hours Worked:</span>
+                  <span className="text-gray-600 dark:text-neutral-300">Total Hours Worked:</span>
                   <span className="font-semibold">{totalHours ? parseFloat(totalHours).toFixed(1) : '0'}</span>
                 </div>
                 {emp.tasks_per_hour && (
                   <div className="flex justify-between pt-2 border-t">
-                    <span className="text-gray-600">Tasks/Hour:</span>
+                    <span className="text-gray-600 dark:text-neutral-300">Tasks/Hour:</span>
                     <span className="font-semibold text-blue-600">{emp.tasks_per_hour}</span>
                   </div>
                 )}
                 {emp.completion_rate && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Completion Rate:</span>
+                    <span className="text-gray-600 dark:text-neutral-300">Completion Rate:</span>
                     <span className="font-semibold text-green-600">{emp.completion_rate}%</span>
                   </div>
                 )}

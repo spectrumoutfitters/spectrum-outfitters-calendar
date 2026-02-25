@@ -1,17 +1,14 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { getTodayInHouston } from '../utils/appTimezone.js';
 
 const router = express.Router();
 
 router.use(authenticateToken);
 
 function getTodayInCentral() {
-  const now = new Date();
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Chicago',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  }).format(now);
+  return getTodayInHouston();
 }
 
 async function ensureTable() {
@@ -24,14 +21,24 @@ async function ensureTable() {
       description TEXT,
       is_completed INTEGER DEFAULT 0,
       completed_at DATETIME,
+      archived_at DATETIME,
       sort_order INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  try {
+    await db.runAsync(`ALTER TABLE user_worklist_items ADD COLUMN archived_at DATETIME`);
+  } catch (e) {
+    if (!/duplicate column name/i.test(e.message)) throw e;
+  }
   await db.runAsync(`
     CREATE INDEX IF NOT EXISTS idx_user_worklist_user_date
     ON user_worklist_items(user_id, item_date)
   `);
+  await db.runAsync(`
+    CREATE INDEX IF NOT EXISTS idx_user_worklist_archived
+    ON user_worklist_items(user_id, archived_at)
+  `).catch(() => {});
 }
 
 async function ensureFocusTable() {
@@ -48,18 +55,45 @@ async function ensureFocusTable() {
   `);
 }
 
-// GET /api/my-worklist/today - Get my items for today
+// GET /api/my-worklist/today - Get my list (persistent; completed items archived after 24h)
+// Query ?archived=1 returns archived items only.
 router.get('/today', async (req, res) => {
   try {
     await ensureTable();
     const today = getTodayInCentral();
     const userId = req.user.id;
+    const showArchived = req.query.archived === '1' || req.query.archived === 'true';
+
+    if (!showArchived) {
+      // Archive items that have been completed for 24+ hours
+      await db.runAsync(
+        `UPDATE user_worklist_items SET archived_at = completed_at
+         WHERE user_id = ? AND is_completed = 1 AND completed_at IS NOT NULL
+         AND datetime(completed_at) <= datetime('now', '-24 hours') AND archived_at IS NULL`,
+        [userId]
+      );
+    }
+
+    if (showArchived) {
+      const items = await db.allAsync(
+        `SELECT * FROM user_worklist_items
+         WHERE user_id = ? AND archived_at IS NOT NULL
+         ORDER BY archived_at DESC, id DESC`,
+        [userId]
+      );
+      return res.json({
+        date: today,
+        items,
+        summary: { total: items.length, completed: items.length, remaining: 0, progress: 100 },
+        archived: true
+      });
+    }
 
     const items = await db.allAsync(
       `SELECT * FROM user_worklist_items
-       WHERE user_id = ? AND item_date = ?
+       WHERE user_id = ? AND (archived_at IS NULL OR archived_at = '')
        ORDER BY is_completed ASC, sort_order ASC, id ASC`,
-      [userId, today]
+      [userId]
     );
 
     const total = items.length;
@@ -81,7 +115,7 @@ router.get('/today', async (req, res) => {
   }
 });
 
-// POST /api/my-worklist/items - Add item for today
+// POST /api/my-worklist/items - Add item (persistent list; item_date = date added)
 router.post('/items', async (req, res) => {
   try {
     await ensureTable();
@@ -92,8 +126,8 @@ router.post('/items', async (req, res) => {
     const userId = req.user.id;
 
     const maxOrder = await db.getAsync(
-      'SELECT MAX(sort_order) as max FROM user_worklist_items WHERE user_id = ? AND item_date = ?',
-      [userId, today]
+      'SELECT MAX(sort_order) as max FROM user_worklist_items WHERE user_id = ? AND (archived_at IS NULL OR archived_at = \'\')',
+      [userId]
     );
     const sortOrder = (maxOrder?.max || 0) + 1;
 
@@ -111,7 +145,7 @@ router.post('/items', async (req, res) => {
   }
 });
 
-// POST /api/my-worklist/items/:id/toggle - Toggle item completion
+// POST /api/my-worklist/items/:id/toggle - Toggle item completion (unchecking restores from archive)
 router.post('/items/:id/toggle', async (req, res) => {
   try {
     await ensureTable();
@@ -126,10 +160,11 @@ router.post('/items/:id/toggle', async (req, res) => {
 
     const newCompleted = item.is_completed === 1 ? 0 : 1;
     const completedAt = newCompleted ? new Date().toISOString() : null;
+    const archivedAt = newCompleted ? item.archived_at : null;
 
     await db.runAsync(
-      'UPDATE user_worklist_items SET is_completed = ?, completed_at = ? WHERE id = ?',
-      [newCompleted, completedAt, id]
+      'UPDATE user_worklist_items SET is_completed = ?, completed_at = ?, archived_at = ? WHERE id = ?',
+      [newCompleted, completedAt, archivedAt, id]
     );
 
     const updated = await db.getAsync('SELECT * FROM user_worklist_items WHERE id = ?', [id]);

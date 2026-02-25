@@ -187,25 +187,25 @@ const KanbanBoard = () => {
   const categories = ['PPF', 'Tinting', 'Wraps', 'Maintenance', 'Upfitting', 'Signs', 'Body Work', 'Admin', 'Other'];
 
   if (loading) {
-    return <div className="text-center py-8">Loading tasks...</div>;
+    return <div className="text-center py-8 text-gray-600 dark:text-neutral-300">Loading tasks...</div>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 md:gap-4">
-        <h2 className="text-xl md:text-2xl font-bold">Task Board</h2>
+        <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-neutral-100">Task Board</h2>
         <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
           <input
             type="text"
             placeholder="Search tasks..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-sm md:text-base w-full sm:w-auto"
+            className="px-3 md:px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400 focus:ring-2 focus:ring-primary text-sm md:text-base w-full sm:w-auto"
           />
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="px-3 md:px-4 py-2 border border-gray-300 rounded-lg text-sm md:text-base w-full sm:w-auto"
+            className="px-3 md:px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm md:text-base w-full sm:w-auto"
           >
             <option value="all">All Categories</option>
             {categories.map((cat) => (
@@ -214,12 +214,12 @@ const KanbanBoard = () => {
           </select>
           {isAdmin && (
             <>
-              <label className="flex items-center gap-2 px-3 md:px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-sm md:text-base whitespace-nowrap">
+              <label className="flex items-center gap-2 px-3 md:px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-700 text-sm md:text-base whitespace-nowrap text-gray-900 dark:text-neutral-200">
                 <input
                   type="checkbox"
                   checked={showArchived}
                   onChange={(e) => setShowArchived(e.target.checked)}
-                  className="rounded"
+                  className="rounded border-gray-400 dark:border-neutral-500 dark:bg-neutral-700 dark:accent-primary w-4 h-4"
                 />
                 <span>Show Archived</span>
               </label>
@@ -235,45 +235,37 @@ const KanbanBoard = () => {
       </div>
 
       {/* Color reference: Priority and status columns */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 md:p-4 space-y-3">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-700 p-3 md:p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-          <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Priority:</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-neutral-200 whitespace-nowrap">Priority:</span>
           <div className="flex flex-wrap items-center gap-3 md:gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded border-l-4" style={{ borderLeftColor: '#EF4444' }} aria-hidden />
-              <span className="text-xs md:text-sm text-gray-600">Urgent</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded border-l-4" style={{ borderLeftColor: '#F59E0B' }} aria-hidden />
-              <span className="text-xs md:text-sm text-gray-600">High</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded border-l-4" style={{ borderLeftColor: '#FCD34D' }} aria-hidden />
-              <span className="text-xs md:text-sm text-gray-600">Medium</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded border-l-4" style={{ borderLeftColor: '#10B981' }} aria-hidden />
-              <span className="text-xs md:text-sm text-gray-600">Low</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded border-l-4" style={{ borderLeftColor: '#6B7280' }} aria-hidden />
-              <span className="text-xs md:text-sm text-gray-600">None</span>
-            </div>
+            {[
+              { color: '#EF4444', label: 'Urgent' },
+              { color: '#F59E0B', label: 'High' },
+              { color: '#FCD34D', label: 'Medium' },
+              { color: '#10B981', label: 'Low' },
+              { color: '#6B7280', label: 'None' },
+            ].map(({ color, label }) => (
+              <div key={label} className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded border-l-4 border-neutral-300 dark:border-neutral-600" style={{ borderLeftColor: color }} aria-hidden />
+                <span className="text-xs md:text-sm text-gray-600 dark:text-neutral-300">{label}</span>
+              </div>
+            ))}
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 pt-1 border-t border-gray-100">
-          <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Column colors:</span>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 pt-1 border-t border-gray-100 dark:border-neutral-700">
+          <span className="text-sm font-medium text-gray-700 dark:text-neutral-200 whitespace-nowrap">Column colors:</span>
           <div className="flex flex-wrap items-center gap-3 md:gap-4">
             {baseColumns.map((col) => (
               <div key={col.id} className="flex items-center gap-2">
                 <span className={`w-3 h-3 rounded ${col.color}`} aria-hidden />
-                <span className="text-xs md:text-sm text-gray-600">{col.title}</span>
+                <span className="text-xs md:text-sm text-gray-600 dark:text-neutral-300">{col.title}</span>
               </div>
             ))}
             {showArchived && (
               <div className="flex items-center gap-2">
                 <span className={`w-3 h-3 rounded ${archivedColumn.color}`} aria-hidden />
-                <span className="text-xs md:text-sm text-gray-600">{archivedColumn.title}</span>
+                <span className="text-xs md:text-sm text-gray-600 dark:text-neutral-300">{archivedColumn.title}</span>
               </div>
             )}
           </div>
@@ -293,9 +285,9 @@ const KanbanBoard = () => {
             
             return (
               <ColumnWrapper key={column.id} {...wrapperProps}>
-                <div className="bg-gray-50 rounded-lg p-3 md:p-4 min-h-[300px] md:min-h-[400px]" data-column-id={column.id}>
-                  <div className={`${column.color} p-2 rounded mb-4`}>
-                    <h3 className="font-semibold text-center">
+                <div className="bg-gray-50 dark:bg-neutral-800/50 rounded-lg p-3 md:p-4 min-h-[300px] md:min-h-[400px]" data-column-id={column.id}>
+                  <div className={`${column.color} dark:opacity-90 p-2 rounded mb-4`}>
+                    <h3 className="font-semibold text-center text-gray-800 dark:text-neutral-900">
                       {column.title} ({getTasksByStatus(column.id).length})
                     </h3>
                   </div>
@@ -332,9 +324,9 @@ const KanbanBoard = () => {
           })}
           {showArchived && (
             <div>
-              <div className="bg-gray-50 rounded-lg p-4 min-h-[400px]">
-                <div className={`${archivedColumn.color} p-2 rounded mb-4`}>
-                  <h3 className="font-semibold text-center">
+              <div className="bg-gray-50 dark:bg-neutral-800/50 rounded-lg p-4 min-h-[400px]">
+                <div className={`${archivedColumn.color} dark:opacity-90 p-2 rounded mb-4`}>
+                  <h3 className="font-semibold text-center text-gray-800 dark:text-neutral-900">
                     {archivedColumn.title} ({getTasksByStatus(archivedColumn.id).length})
                   </h3>
                 </div>

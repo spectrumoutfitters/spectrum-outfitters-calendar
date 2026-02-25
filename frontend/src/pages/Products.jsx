@@ -272,13 +272,13 @@ const Products = () => {
   };
 
   if (loading) {
-    return <div className="text-center py-8">Loading products...</div>;
+    return <div className="text-center py-8 text-gray-600 dark:text-neutral-200">Loading products...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 md:gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Products</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">Products</h1>
         {cart.length > 0 && (
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
             <div className="bg-primary text-white px-4 py-2 rounded-lg text-sm md:text-base text-center sm:text-left">
@@ -299,7 +299,7 @@ const Products = () => {
         {products.map(product => {
           const cartItem = cart.find(item => item.product_id === product.id);
           return (
-            <div key={product.id} className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
+            <div key={product.id} className="bg-white dark:bg-neutral-900 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-neutral-800">
               {product.image_url && (
                 <img
                   src={`${getBackendUrl()}${product.image_url}`}
@@ -308,17 +308,17 @@ const Products = () => {
                 />
               )}
               <div className="p-4">
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">{product.name}</h3>
+                <h3 className="text-xl font-semibold text-gray-800 dark:text-neutral-100 mb-2">{product.name}</h3>
                 {product.description && (
-                  <p className="text-gray-600 text-sm mb-3">{product.description}</p>
+                  <p className="text-gray-600 dark:text-neutral-200 text-sm mb-3">{product.description}</p>
                 )}
                 <div className="flex justify-between items-center">
-                  <span className="text-2xl font-bold text-green-600">${parseFloat(product.price).toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-green-600 dark:text-green-400">${parseFloat(product.price).toFixed(2)}</span>
                   {cartItem ? (
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => updateQuantity(product.id, cartItem.quantity - 1)}
-                        className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                        className="px-3 py-1 bg-gray-200 dark:bg-neutral-700 rounded hover:bg-gray-300 dark:hover:bg-neutral-600 text-gray-800 dark:text-neutral-100"
                       >
                         -
                       </button>
@@ -327,7 +327,7 @@ const Products = () => {
                       </span>
                       <button
                         onClick={() => updateQuantity(product.id, cartItem.quantity + 1)}
-                        className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                        className="px-3 py-1 bg-gray-200 dark:bg-neutral-700 rounded hover:bg-gray-300 dark:hover:bg-neutral-600 text-gray-800 dark:text-neutral-100"
                       >
                         +
                       </button>
@@ -349,14 +349,14 @@ const Products = () => {
 
       {/* Shopping Cart Sidebar */}
       {cart.length > 0 && !showCheckout && (
-        <div className="fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 p-6 overflow-y-auto">
-          <h2 className="text-2xl font-bold mb-4">Shopping Cart</h2>
+        <div className="fixed right-0 top-0 h-full w-80 bg-white dark:bg-neutral-900 shadow-2xl border-l border-gray-200 dark:border-neutral-800 z-50 p-6 overflow-y-auto">
+          <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-neutral-100">Shopping Cart</h2>
           <div className="space-y-4 mb-4">
             {cart.map(item => (
-              <div key={item.product_id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+              <div key={item.product_id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded">
                 <div className="flex-1">
-                  <p className="font-medium">{item.product_name}</p>
-                  <p className="text-sm text-gray-600">${item.price.toFixed(2)} x {item.quantity}</p>
+                  <p className="font-medium text-gray-900 dark:text-neutral-100">{item.product_name}</p>
+                  <p className="text-sm text-gray-600 dark:text-neutral-200">${item.price.toFixed(2)} x {item.quantity}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-green-600">${(item.price * item.quantity).toFixed(2)}</span>
@@ -370,10 +370,10 @@ const Products = () => {
               </div>
             ))}
           </div>
-          <div className="border-t pt-4">
-            <div className="flex justify-between text-xl font-bold mb-4">
+          <div className="border-t border-gray-200 dark:border-neutral-700 pt-4">
+            <div className="flex justify-between text-xl font-bold mb-4 text-gray-900 dark:text-neutral-100">
               <span>Total:</span>
-              <span className="text-green-600">${getCartTotal().toFixed(2)}</span>
+              <span className="text-green-600 dark:text-green-400">${getCartTotal().toFixed(2)}</span>
             </div>
             <button
               onClick={handleCheckout}
@@ -388,8 +388,8 @@ const Products = () => {
       {/* Camera Modal */}
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-2 md:p-4">
-          <div className="bg-white rounded-lg p-4 md:p-6 max-w-2xl w-full mx-2 md:mx-4">
-            <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4">Take Photo of Items</h2>
+          <div className="bg-white dark:bg-neutral-900 rounded-lg border border-transparent dark:border-neutral-800 p-4 md:p-6 max-w-2xl w-full mx-2 md:mx-4">
+            <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-gray-900 dark:text-neutral-100">Take Photo of Items</h2>
             {navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? (
               <>
                 <video
@@ -406,7 +406,7 @@ const Products = () => {
                   >
                     Capture Photo
                   </button>
-                  <label className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium cursor-pointer">
+                  <label className="px-6 py-3 bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-300 dark:hover:bg-neutral-600 transition font-medium cursor-pointer">
                     Upload Instead
                     <input
                       type="file"
@@ -443,7 +443,7 @@ const Products = () => {
                         video.srcObject = null;
                       }
                     }}
-                    className="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition"
+                    className="px-6 py-3 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition"
                   >
                     Cancel
                   </button>
@@ -451,10 +451,10 @@ const Products = () => {
               </>
             ) : (
               <div className="text-center py-8">
-                <p className="text-red-600 mb-4">
+                <p className="text-red-600 dark:text-red-400 mb-4">
                   Camera access is not available. Please ensure you're using HTTPS or localhost.
                 </p>
-                <p className="text-gray-600 mb-4">
+                <p className="text-gray-600 dark:text-neutral-200 mb-4">
                   You can still place an order by uploading a photo manually.
                 </p>
                 <div className="flex gap-4">
@@ -485,7 +485,7 @@ const Products = () => {
                       setShowCamera(false);
                       setShowCheckout(false);
                     }}
-                    className="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition"
+                    className="px-6 py-3 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition"
                   >
                     Cancel
                   </button>
@@ -499,16 +499,16 @@ const Products = () => {
       {/* Zelle QR Code Modal */}
       {showZelleQR && (
         <div className="fixed inset-0 bg-black bg-opacity-75 z-[60] flex items-center justify-center p-2 md:p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg p-4 md:p-6 max-w-lg w-full mx-2 md:mx-4 text-center my-auto">
-            <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4">Complete Payment</h2>
-            <p className="text-base md:text-lg font-semibold mb-2">Total: <span className="text-green-600">${orderTotal.toFixed(2)}</span></p>
-            <p className="text-sm md:text-base text-gray-600 mb-4">Scan the QR code below to send payment via Zelle</p>
+          <div className="bg-white dark:bg-neutral-900 rounded-lg border border-transparent dark:border-neutral-800 p-4 md:p-6 max-w-lg w-full mx-2 md:mx-4 text-center my-auto">
+            <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-gray-900 dark:text-neutral-100">Complete Payment</h2>
+            <p className="text-base md:text-lg font-semibold mb-2 text-gray-900 dark:text-neutral-100">Total: <span className="text-green-600 dark:text-green-400">${orderTotal.toFixed(2)}</span></p>
+            <p className="text-sm md:text-base text-gray-600 dark:text-neutral-200 mb-4">Scan the QR code below to send payment via Zelle</p>
             {zelleQRCode && !qrCodeError ? (
               <div className="flex justify-center mb-4">
                 <img
                   src={zelleQRCode}
                   alt="Zelle QR Code"
-                  className="w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto border-4 border-gray-300 rounded-lg object-contain bg-white shadow-lg"
+                  className="w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto border-4 border-gray-300 dark:border-neutral-600 rounded-lg object-contain bg-white dark:bg-neutral-800 shadow-lg"
                   style={{ minWidth: '288px', minHeight: '288px' }}
                   onError={() => {
                     setQrCodeError(true);
@@ -519,9 +519,9 @@ const Products = () => {
                 />
               </div>
             ) : (
-              <div className="w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto mb-4 border-4 border-gray-300 rounded-lg flex flex-col items-center justify-center bg-gray-100 p-4" style={{ minWidth: '288px', minHeight: '288px' }}>
-                <p className="text-gray-500 text-sm font-medium">Zelle QR Code</p>
-                <p className="text-xs text-gray-400 mt-2 text-center">
+              <div className="w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto mb-4 border-4 border-gray-300 dark:border-neutral-600 rounded-lg flex flex-col items-center justify-center bg-gray-100 dark:bg-neutral-800 p-4" style={{ minWidth: '288px', minHeight: '288px' }}>
+                <p className="text-gray-500 dark:text-neutral-300 text-sm font-medium">Zelle QR Code</p>
+                <p className="text-xs text-gray-400 dark:text-neutral-400 mt-2 text-center">
                   {qrCodeError 
                     ? `Image not found at ${zelleQRCode}. Please check the file exists.`
                     : 'Place your QR code image at /public/zelle-qr.png or /public/zelle-qr.jpg'
@@ -542,7 +542,7 @@ const Products = () => {
                   setShowCheckout(false);
                   setOrderPhoto(null);
                 }}
-                className="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition"
+                className="px-6 py-3 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition"
               >
                 Cancel
               </button>
@@ -554,31 +554,31 @@ const Products = () => {
       {/* Order History */}
       {orderHistory.length > 0 && (
         <div className="mt-6 md:mt-8">
-          <h2 className="text-xl md:text-2xl font-bold mb-4">Order History</h2>
-          <div className="bg-white rounded-lg shadow-md overflow-hidden overflow-x-auto">
+          <h2 className="text-xl md:text-2xl font-bold mb-4 text-gray-900 dark:text-neutral-100">Order History</h2>
+          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 overflow-hidden overflow-x-auto">
             <table className="w-full min-w-[500px]">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-neutral-800">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Order #</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Items</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Total</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-200">Order #</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-200">Date</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-200">Items</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-200">Total</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-200">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {orderHistory.map(order => (
-                  <tr key={order.id} className="border-b hover:bg-gray-50">
-                    <td className="px-4 py-3">#{order.id}</td>
-                    <td className="px-4 py-3">{new Date(order.created_at).toLocaleDateString()}</td>
-                    <td className="px-4 py-3">{order.item_count} item{order.item_count !== 1 ? 's' : ''}</td>
-                    <td className="px-4 py-3 font-semibold text-green-600">${parseFloat(order.total_amount).toFixed(2)}</td>
+                  <tr key={order.id} className="border-b border-gray-100 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
+                    <td className="px-4 py-3 text-gray-900 dark:text-neutral-100">#{order.id}</td>
+                    <td className="px-4 py-3 text-gray-900 dark:text-neutral-100">{new Date(order.created_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 text-gray-900 dark:text-neutral-100">{order.item_count} item{order.item_count !== 1 ? 's' : ''}</td>
+                    <td className="px-4 py-3 font-semibold text-green-600 dark:text-green-400">${parseFloat(order.total_amount).toFixed(2)}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded text-sm ${
-                        order.status === 'paid' ? 'bg-green-100 text-green-800' :
-                        order.status === 'fulfilled' ? 'bg-primary-subtle text-primary' :
-                        order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
+                        order.status === 'paid' ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' :
+                        order.status === 'fulfilled' ? 'bg-primary-subtle dark:bg-primary/20 text-primary' :
+                        order.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300' :
+                        'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300'
                       }`}>
                         {order.status}
                       </span>

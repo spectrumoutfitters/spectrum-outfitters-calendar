@@ -10,7 +10,9 @@ import InventoryScanFab from '../Inventory/InventoryScanFab';
  */
 export default function FloatingActions() {
   const location = useLocation();
-  const onInventory = location.pathname.toLowerCase().includes('inventory');
+  const tab = new URLSearchParams(location.search).get('tab');
+  const onAdminInventory = location.pathname.toLowerCase().includes('admin') && tab === 'inventory';
+  const onInventory = location.pathname.toLowerCase().includes('inventory') || onAdminInventory;
 
   return (
     <div

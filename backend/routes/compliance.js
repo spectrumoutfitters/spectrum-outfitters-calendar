@@ -2,6 +2,14 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { callClaude, isAIEnabled } from '../utils/aiService.js';
+import {
+  getTodayInHouston,
+  formatDateInHouston,
+  parseHoustonDate,
+  getWeekStartHouston,
+  getWeekEndingFridayHouston,
+  addDaysInHouston,
+} from '../utils/appTimezone.js';
 
 const router = express.Router();
 
@@ -9,14 +17,9 @@ const router = express.Router();
 router.use(authenticateToken);
 router.use(requireAdmin);
 
-// Helper to get today's date in Central Time
+// Use Houston (America/Chicago) for all "today" and date logic
 function getTodayInCentral() {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Chicago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(new Date());
+  return getTodayInHouston();
 }
 
 // Calculate due date based on obligation rules
@@ -1058,37 +1061,14 @@ router.delete('/expenses/:id', async (req, res) => {
 });
 
 // ============ PROFIT & LOSS ============
+// All week boundaries and dates use Houston (America/Chicago) via appTimezone.js
 
-// Helper function to calculate week start (Monday) from week ending (Friday)
 function getWeekStart(weekEndingDate) {
-  const weekEnd = new Date(weekEndingDate);
-  const dayOfWeek = weekEnd.getDay(); // 0 = Sunday, 5 = Friday
-  // If it's Friday, subtract 4 days to get Monday
-  // If it's not Friday, find the Friday of that week first, then subtract 4
-  let friday = new Date(weekEnd);
-  if (dayOfWeek !== 5) {
-    // Find Friday of the week containing this date
-    const daysToFriday = dayOfWeek <= 5 ? (5 - dayOfWeek) : (5 - dayOfWeek + 7);
-    friday.setDate(weekEnd.getDate() + daysToFriday);
-  }
-  // Subtract 4 days from Friday to get Monday
-  const weekStart = new Date(friday);
-  weekStart.setDate(friday.getDate() - 4);
-  weekStart.setHours(0, 0, 0, 0);
-  return weekStart.toISOString().split('T')[0];
+  return getWeekStartHouston(weekEndingDate);
 }
 
-// Helper function to get Friday of the week containing a date
 function getWeekEndingFriday(date) {
-  const d = new Date(date);
-  const dayOfWeek = d.getDay(); // 0 = Sunday, 5 = Friday
-  if (dayOfWeek === 5) {
-    return d.toISOString().split('T')[0];
-  }
-  // Find Friday of this week
-  const daysToFriday = dayOfWeek <= 5 ? (5 - dayOfWeek) : (5 - dayOfWeek + 7);
-  d.setDate(d.getDate() + daysToFriday);
-  return d.toISOString().split('T')[0];
+  return getWeekEndingFridayHouston(date);
 }
 
 // Helper function to calculate weekly payroll
@@ -1206,6 +1186,24 @@ async function calculateWeeklyExpenses(weekStart, weekEnd, weekEndingDate) {
   return { expenses: allExpenses, byCategory, totalExpenses };
 }
 
+// In-memory cache for weekly P&L so dashboard polling returns the same number (avoids glitchy flips)
+const pnlWeeklyCache = new Map();
+const PNL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function getCachedPnlWeekly(weekEndDate) {
+  const entry = pnlWeeklyCache.get(weekEndDate);
+  if (!entry) return null;
+  if (Date.now() - entry.at > PNL_CACHE_TTL_MS) {
+    pnlWeeklyCache.delete(weekEndDate);
+    return null;
+  }
+  return entry.payload;
+}
+
+function setCachedPnlWeekly(weekEndDate, payload) {
+  pnlWeeklyCache.set(weekEndDate, { payload, at: Date.now() });
+}
+
 // GET /api/compliance/pnl/weekly - Get weekly P&L report
 router.get('/pnl/weekly', async (req, res) => {
   try {
@@ -1219,7 +1217,12 @@ router.get('/pnl/weekly', async (req, res) => {
     const weekEndDate = getWeekEndingFriday(week_ending_date);
     const weekStart = getWeekStart(weekEndDate);
 
-    // Revenue: one source per day — Shop Monkey if present, else manual sales_daily_summary
+    const cached = getCachedPnlWeekly(weekEndDate);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    // Revenue: one source per day — Shop Monkey > processor_daily_revenue > manual (never sum two for same day)
     const salesData = await db.allAsync(`
       SELECT sale_date, gross_sales, check_amount, cash_amount, zelle_ach_amount, net_deposit
       FROM sales_daily_summary
@@ -1234,6 +1237,13 @@ router.get('/pnl/weekly', async (req, res) => {
     const smByDate = {};
     for (const r of (smRevenueRows || [])) { smByDate[r.date] = parseFloat(r.revenue) || 0; }
 
+    const procRows = await db.allAsync(
+      'SELECT date, SUM(revenue) as revenue FROM processor_daily_revenue WHERE date >= ? AND date <= ? GROUP BY date',
+      [weekStart, weekEndDate]
+    ).catch(() => []);
+    const procByDate = {};
+    for (const r of (procRows || [])) { procByDate[r.date] = parseFloat(r.revenue) || 0; }
+
     const manualByDate = {};
     for (const s of salesData) {
       const cc = parseFloat(s.gross_sales) || 0;
@@ -1243,17 +1253,19 @@ router.get('/pnl/weekly', async (req, res) => {
       manualByDate[s.sale_date] = { revenue: cc + ck + ca + za, credit_cards: cc, checks: ck, cash: ca, zelle_ach: za, net_deposit: parseFloat(s.net_deposit) || 0 };
     }
 
-    // Build daily list: all dates in both sources
-    const allDates = [...new Set([...Object.keys(smByDate), ...Object.keys(manualByDate)])].sort();
+    const allDates = [...new Set([...Object.keys(smByDate), ...Object.keys(procByDate), ...Object.keys(manualByDate)])].sort();
     const dailySales = allDates.map(date => {
       if (smByDate[date] !== undefined) {
         return { date, revenue: smByDate[date], source: 'shopmonkey' };
+      }
+      if (procByDate[date] !== undefined) {
+        return { date, revenue: procByDate[date], source: 'processor' };
       }
       const m = manualByDate[date];
       return { date, revenue: m.revenue, source: 'manual', credit_cards: m.credit_cards, checks: m.checks, cash: m.cash, zelle_ach: m.zelle_ach, net_deposit: m.net_deposit };
     });
 
-    const totalRevenue = dailySales.reduce((sum, d) => sum + d.revenue, 0);
+    const totalRevenue = dailySales.reduce((sum, d) => sum + (Number(d.revenue) || 0), 0);
 
     // Calculate Payroll
     const { payroll, totalPayroll } = await calculateWeeklyPayroll(weekStart, weekEndDate);
@@ -1265,13 +1277,11 @@ router.get('/pnl/weekly', async (req, res) => {
     const netProfitLoss = totalRevenue - totalPayroll - totalExpenses;
     const profitMargin = totalRevenue > 0 ? (netProfitLoss / totalRevenue) * 100 : 0;
 
-    // Get previous week for comparison (previous Friday)
-    const prevWeekEndDate = new Date(weekEndDate);
-    prevWeekEndDate.setDate(prevWeekEndDate.getDate() - 7);
-    const prevWeekEnd = prevWeekEndDate.toISOString().split('T')[0];
+    // Get previous week for comparison (previous Friday) in Houston
+    const prevWeekEnd = addDaysInHouston(weekEndDate, -7);
     const prevWeekStart = getWeekStart(prevWeekEnd);
-    
-    // Previous week revenue (same merged logic)
+
+    // Previous week revenue (same merged logic: SM > processor > manual)
     const prevManualSales = await db.allAsync(`
       SELECT sale_date,
         (COALESCE(gross_sales,0) + COALESCE(check_amount,0) + COALESCE(cash_amount,0) + COALESCE(zelle_ach_amount,0)) as total
@@ -1281,14 +1291,21 @@ router.get('/pnl/weekly', async (req, res) => {
       'SELECT date, revenue FROM shopmonkey_daily_revenue WHERE date >= ? AND date <= ?',
       [prevWeekStart, prevWeekEnd]
     ).catch(() => []);
+    const prevProcRevenue = await db.allAsync(
+      'SELECT date, SUM(revenue) as revenue FROM processor_daily_revenue WHERE date >= ? AND date <= ? GROUP BY date',
+      [prevWeekStart, prevWeekEnd]
+    ).catch(() => []);
     const prevSmByDate = {};
     for (const r of (prevSmRevenue || [])) { prevSmByDate[r.date] = parseFloat(r.revenue) || 0; }
+    const prevProcByDate = {};
+    for (const r of (prevProcRevenue || [])) { prevProcByDate[r.date] = parseFloat(r.revenue) || 0; }
     const prevManualByDate = {};
     for (const s of prevManualSales) { prevManualByDate[s.sale_date] = parseFloat(s.total) || 0; }
-    const prevAllDates = [...new Set([...Object.keys(prevSmByDate), ...Object.keys(prevManualByDate)])];
+    const prevAllDates = [...new Set([...Object.keys(prevSmByDate), ...Object.keys(prevProcByDate), ...Object.keys(prevManualByDate)])];
     let prevRevenue = 0;
     for (const date of prevAllDates) {
-      prevRevenue += prevSmByDate[date] !== undefined ? prevSmByDate[date] : (prevManualByDate[date] || 0);
+      const rev = prevSmByDate[date] !== undefined ? prevSmByDate[date] : (prevProcByDate[date] !== undefined ? prevProcByDate[date] : (prevManualByDate[date] || 0));
+      prevRevenue += rev;
     }
 
     // Bank-sourced business expenses for this week
@@ -1304,7 +1321,7 @@ router.get('/pnl/weekly', async (req, res) => {
     const prevNet = prevRevenue - prevPayroll.totalPayroll - prevExpenses.totalExpenses;
     const comparison = prevNet !== 0 ? ((netProfitLoss - prevNet) / Math.abs(prevNet)) * 100 : 0;
 
-    res.json({
+    const payload = {
       week_ending_date: weekEndDate,
       week_start: weekStart,
       revenue: {
@@ -1339,24 +1356,23 @@ router.get('/pnl/weekly', async (req, res) => {
         change_amount: netProfitLoss - prevNet,
         change_percentage: comparison
       }
-    });
+    };
+    setCachedPnlWeekly(weekEndDate, payload);
+    res.json(payload);
   } catch (error) {
     console.error('Get weekly P&L error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Helper to find missing days in sales data
+// Helper to find missing days in sales data (Houston date strings YYYY-MM-DD)
 function getMissingDays(weekStart, weekEnd, existingDates) {
   const missing = [];
-  const start = new Date(weekStart);
-  const end = new Date(weekEnd);
-  
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().split('T')[0];
-    if (!existingDates.includes(dateStr)) {
-      missing.push(dateStr);
-    }
+  const set = new Set(existingDates || []);
+  let current = weekStart;
+  while (current <= weekEnd) {
+    if (!set.has(current)) missing.push(current);
+    current = addDaysInHouston(current, 1);
   }
   return missing;
 }

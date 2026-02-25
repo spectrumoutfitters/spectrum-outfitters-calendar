@@ -1,8 +1,9 @@
 import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
+import { getTodayInHouston, getWeekEndingSundayHouston } from './appTimezone.js';
 
 export const calculateHours = (clockIn, clockOut, breakMinutes = 0) => {
   if (!clockOut) return null;
-  
+
   const start = new Date(clockIn);
   const end = new Date(clockOut);
   const diffMs = end - start;
@@ -10,10 +11,11 @@ export const calculateHours = (clockIn, clockOut, breakMinutes = 0) => {
   return Math.max(0, diffMinutes / 60);
 };
 
+/** Week ending Sunday (for time entries). Uses Houston timezone when no date given. */
 export const getWeekEndingDate = (date) => {
-  const d = date ? new Date(date) : new Date();
-  const weekEnd = endOfWeek(d, { weekStartsOn: 1 }); // Monday as start
-  return format(weekEnd, 'yyyy-MM-dd');
+  if (!date) return getWeekEndingSundayHouston();
+  const dateStr = typeof date === 'string' ? date.slice(0, 10) : format(new Date(date), 'yyyy-MM-dd');
+  return getWeekEndingSundayHouston(dateStr);
 };
 
 export const sanitizeInput = (str) => {

@@ -1,30 +1,52 @@
 # Spectrum Server Monitor
 
-Desktop app (Windows) that runs **only on your PC** and watches your Spectrum Outfitters server. It shows:
+Desktop app (Windows) that runs **only on your PC** and:
 
-- **Server health** (online/offline)
-- **Active sessions** — who is logged in, IP, device, last seen
-- **Recent login events** — time, user, success/fail, IP, location, on-prem score
+- **Watches the server** — health, active sessions, recent login events (refreshes every 20s)
+- **Open Cursor** — opens the project folder in Cursor so you can edit code
+- **Push to server** — runs `git push` from your PC, then SSHs to the server (e.g. `root@165.245.137.192`) to pull, build frontend, and restart the app
 
-No browser needed. Data refreshes every 20 seconds.
+No browser needed.
 
 ## How to run
 
-1. Install dependencies and start the app:
+```bash
+cd server-monitor
+npm install
+npm start
+```
+
+## Settings
+
+Click **Settings** and configure:
+
+**Connection**
+- **API Base URL**: `https://login.spectrumoutfitters.com/api`
+- **Admin token**: From the web app, DevTools → Application → Local Storage → copy `token`
+
+**Local project & deploy**
+- **Local project path**: Your Calendar project folder (e.g. `C:\Users\you\Documents\Spectrum Outfitters\Applications\Spectrum Outfitters Calendar`) — used for Open Cursor and `git push`
+- **Server host**: `165.245.137.192`
+- **Server user**: `root`
+- **Server app path**: Folder on the server where the app lives (e.g. `/opt/spectrum-calendar`)
+- **SSH key path**: Optional; leave blank to use your default SSH key (e.g. `C:\Users\you\.ssh\id_rsa`)
+
+Save, then use **Open Cursor** and **Push to server** from the Dev tools section.
+
+## First-time server setup
+
+Before **Push to server** works, the server must have the app and git:
+
+1. SSH in: `ssh root@165.245.137.192`
+2. Clone the repo (after you’ve pushed to GitHub from your PC):
    ```bash
-   cd server-monitor
-   npm install
-   npm start
+   git clone https://github.com/YOUR_USER/YOUR_REPO.git /opt/spectrum-calendar
+   cd /opt/spectrum-calendar
+   cd backend && npm install
+   cd ../frontend && npm install && npm run build
    ```
-   Or from the project root: `npm run monitor`
-
-2. First time: click **Settings** and set:
-   - **API Base URL**: `https://login.spectrumoutfitters.com/api` (or your backend URL)
-   - **Admin token**: After logging into the web app in a browser, open DevTools (F12) → Application → Local Storage → copy the value of `token` (your JWT). Paste it here.
-   Click **Save**.
-
-3. The dashboard will show health, stats, active sessions, and login events. Use **Refresh now** anytime.
+3. Start the backend (e.g. `pm2 start backend/server.js --name spectrum-calendar` or set up systemd). Then in the monitor, set **Server app path** to `/opt/spectrum-calendar` and use **Push to server** for future deploys.
 
 ## Build installer (optional)
 
-From `server-monitor` folder: `npm run build`. The installer will be in `dist/`.
+From `server-monitor`: `npm run build`. Installer is in `dist/`.

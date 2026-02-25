@@ -1096,6 +1096,133 @@ router.get('/entries/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/time/lunch-history - Admin: list lunch clock-out/clock-in with duration
+router.get('/lunch-history', requireAdmin, async (req, res) => {
+  try {
+    const { from, to, user_id } = req.query;
+    let query = `
+      SELECT te.id, te.user_id, te.clock_in, te.clock_out, u.full_name as user_name, u.username
+      FROM time_entries te
+      JOIN users u ON te.user_id = u.id
+      WHERE (te.notes LIKE '%Lunch break%' OR te.notes LIKE '%lunch break%')
+        AND te.clock_out IS NOT NULL
+    `;
+    const params = [];
+    if (from) {
+      query += ' AND DATE(te.clock_out) >= DATE(?)';
+      params.push(from);
+    }
+    if (to) {
+      query += ' AND DATE(te.clock_out) <= DATE(?)';
+      params.push(to);
+    }
+    if (user_id) {
+      query += ' AND te.user_id = ?';
+      params.push(parseInt(user_id, 10));
+    }
+    query += ' ORDER BY te.clock_out DESC';
+
+    const lunchEntries = await db.allAsync(query, params);
+    const lunches = [];
+
+    for (const row of lunchEntries) {
+      const returnRow = await db.getAsync(
+        `SELECT clock_in FROM time_entries
+         WHERE user_id = ? AND clock_in > ? AND (notes IS NULL OR (notes NOT LIKE '%Lunch break%' AND notes NOT LIKE '%lunch break%'))
+         ORDER BY clock_in ASC LIMIT 1`,
+        [row.user_id, row.clock_out]
+      );
+      const lunchIn = returnRow?.clock_in || null;
+      const dateStr = row.clock_out ? row.clock_out.split('T')[0] : null;
+      let durationMinutes = null;
+      if (lunchIn && row.clock_out) {
+        durationMinutes = Math.round((new Date(lunchIn) - new Date(row.clock_out)) / (1000 * 60));
+      }
+      lunches.push({
+        id: row.id,
+        userId: row.user_id,
+        userName: row.user_name || row.username,
+        date: dateStr,
+        lunchOut: row.clock_out,
+        lunchIn,
+        durationMinutes
+      });
+    }
+
+    res.json({ lunches });
+  } catch (error) {
+    console.error('Lunch history error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/time/punch-history - Admin: all clock in/out and lunch in/out events
+router.get('/punch-history', requireAdmin, async (req, res) => {
+  try {
+    const { from, to, user_id } = req.query;
+    let query = `
+      SELECT te.id, te.user_id, te.clock_in, te.clock_out, te.notes, u.full_name as user_name, u.username
+      FROM time_entries te
+      JOIN users u ON te.user_id = u.id
+      WHERE 1=1
+    `;
+    const params = [];
+    if (from) {
+      query += ' AND te.clock_in >= ?';
+      params.push(from.includes('T') ? from : from + 'T00:00:00.000Z');
+    }
+    if (to) {
+      query += ' AND te.clock_in <= ?';
+      params.push(to.includes('T') ? to : to + 'T23:59:59.999Z');
+    }
+    if (user_id) {
+      query += ' AND te.user_id = ?';
+      params.push(parseInt(user_id, 10));
+    }
+    query += ' ORDER BY te.clock_in ASC';
+
+    const entries = await db.allAsync(query, params);
+    const punches = [];
+    const isLunch = (notes) => notes && (notes.includes('Lunch break') || notes.includes('lunch break'));
+
+    // Build set of clock_in times that are "return from lunch" (next work clock_in after a lunch entry)
+    const lunchInTimes = new Set();
+    for (const e of entries) {
+      if (!e.clock_out || !isLunch(e.notes)) continue;
+      const nextWork = entries.find(
+        n => n.user_id === e.user_id && n.clock_in > e.clock_out && !isLunch(n.notes)
+      );
+      if (nextWork) lunchInTimes.add(nextWork.clock_in);
+    }
+
+    for (const e of entries) {
+      const inType = lunchInTimes.has(e.clock_in) ? 'lunch_in' : 'clock_in';
+      punches.push({
+        time: e.clock_in,
+        userId: e.user_id,
+        userName: e.user_name || e.username,
+        type: inType,
+        entryId: e.id
+      });
+      if (e.clock_out) {
+        punches.push({
+          time: e.clock_out,
+          userId: e.user_id,
+          userName: e.user_name || e.username,
+          type: isLunch(e.notes) ? 'lunch_out' : 'clock_out',
+          entryId: e.id
+        });
+      }
+    }
+
+    punches.sort((a, b) => new Date(a.time) - new Date(b.time));
+    res.json({ punches });
+  } catch (error) {
+    console.error('Punch history error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // POST /api/time/entries - Create time entry (admin only, for creating return entries)
 router.post('/entries', requireAdmin, async (req, res) => {
   try {

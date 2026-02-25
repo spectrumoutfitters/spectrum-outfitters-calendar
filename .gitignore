@@ -52,6 +52,7 @@ launcher/node_modules/
 
 # Deploy (contains server host/path)
 scripts/deploy.config.json
+scripts/.deploy-cache.json
 
 # Cursor IDE
 .cursor/

@@ -123,7 +123,7 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="text-gray-600">Loading settings...</div>
+        <div className="text-gray-600 dark:text-neutral-300">Loading settings...</div>
       </div>
     );
   }
@@ -131,9 +131,9 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
   return (
     <div className="space-y-6">
       {/* Navigation order */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-bold mb-2 text-gray-800">Navigation Order</h2>
-        <p className="text-gray-600 mb-4 text-sm">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+        <h2 className="text-xl font-bold mb-2 text-gray-800 dark:text-neutral-100">Navigation Order</h2>
+        <p className="text-gray-600 dark:text-neutral-300 mb-4 text-sm">
           Use the arrows to change the order of links in the sidebar. Changes apply for everyone.
         </p>
         {navOrderSaving && (
@@ -143,15 +143,15 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
           {navOrder.map((key, index) => (
             <div
               key={key}
-              className="flex items-center justify-between gap-3 px-4 py-3 bg-white border border-gray-200 rounded-lg shadow-sm"
+              className="flex items-center justify-between gap-3 px-4 py-3 bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg shadow-sm"
             >
-              <span className="text-gray-800 font-medium">{NAV_LABELS[key] || key}</span>
+              <span className="text-gray-800 dark:text-neutral-100 font-medium">{NAV_LABELS[key] || key}</span>
               <div className="flex gap-1">
                 <button
                   type="button"
                   onClick={() => moveNavItem(index, -1)}
                   disabled={index === 0 || navOrderSaving}
-                  className="p-2 rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2 rounded text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:text-gray-700 dark:hover:text-neutral-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   aria-label="Move up"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,7 +162,7 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
                   type="button"
                   onClick={() => moveNavItem(index, 1)}
                   disabled={index === navOrder.length - 1 || navOrderSaving}
-                  className="p-2 rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2 rounded text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:text-gray-700 dark:hover:text-neutral-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   aria-label="Move down"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -175,9 +175,9 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-bold mb-4 text-gray-800">Shop Cleanup Reminder Settings</h2>
-        <p className="text-gray-600 mb-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+        <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-neutral-100">Shop Cleanup Reminder Settings</h2>
+        <p className="text-gray-600 dark:text-neutral-300 mb-6">
           Configure the motivational end-of-day reminder message that encourages employees to help keep the entire shop clean and organized.
         </p>
 
@@ -190,16 +190,16 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
                 onChange={(e) => setCleanupEnabled(e.target.checked)}
                 className="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary"
               />
-              <span className="ml-2 text-gray-700 font-medium">
+              <span className="ml-2 text-gray-700 dark:text-neutral-200 font-medium">
                 Enable cleanup reminder popup
               </span>
             </label>
-            <p className="text-sm text-gray-500 ml-7">
+            <p className="text-sm text-gray-500 dark:text-neutral-400 ml-7">
               When enabled, employees will see a reminder popup when they clock out at the end of the day.
             </p>
           </div>
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
             <div className="flex items-start gap-2">
               <span className="text-yellow-600 text-xl">💡</span>
               <div>
@@ -214,8 +214,8 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
           {message.text && (
             <div className={`p-4 rounded-lg ${
               message.type === 'success' 
-                ? 'bg-green-50 text-green-800 border border-green-200' 
-                : 'bg-red-50 text-red-800 border border-red-200'
+                ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800' 
+                : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800'
             }`}>
               {message.text}
             </div>
@@ -227,7 +227,7 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
               disabled={saving}
               className={`px-6 py-2 rounded-lg font-semibold transition ${
                 saving
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  ? 'bg-gray-300 dark:bg-neutral-600 text-gray-500 dark:text-neutral-400 cursor-not-allowed'
                   : 'bg-primary text-white hover:bg-primary-dark active:scale-95'
               }`}
             >
@@ -236,7 +236,7 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
             <button
               onClick={loadSettings}
               disabled={saving}
-              className="px-6 py-2 rounded-lg font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 transition active:scale-95"
+              className="px-6 py-2 rounded-lg font-semibold bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 hover:bg-gray-300 dark:hover:bg-neutral-600 transition active:scale-95"
             >
               Refresh
             </button>
@@ -245,11 +245,11 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
       </div>
 
       {/* Message Pool Management */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h2 className="text-xl font-bold text-gray-800">Message Pool</h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Message Pool</h2>
+            <p className="text-sm text-gray-600 dark:text-neutral-300 mt-1">
               Manage the rotating messages that employees see. The system automatically selects a different message each day.
             </p>
           </div>
@@ -265,15 +265,15 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
         </div>
 
         {showAddMessage && (
-          <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="mb-4 p-4 bg-gray-50 dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
               New Message
             </label>
             <textarea
               value={newMessageText}
               onChange={(e) => setNewMessageText(e.target.value)}
               rows={6}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary mb-3"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary mb-3 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
               placeholder={recommendedText.substring(0, 100) + '...'}
             />
             <button
@@ -310,7 +310,7 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
                   setShowAddMessage(false);
                   setNewMessageText('');
                 }}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition text-sm font-semibold"
+                className="px-4 py-2 bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 rounded hover:bg-gray-300 dark:hover:bg-neutral-600 transition text-sm font-semibold"
               >
                 Cancel
               </button>
@@ -320,19 +320,19 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
 
         <div className="space-y-3">
           {messagePool.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-neutral-400">
               No messages in pool. Add your first message above!
             </div>
           ) : (
             messagePool.map((msg) => (
-              <div key={msg.id} className="border border-gray-200 rounded-lg p-4">
+              <div key={msg.id} className="border border-gray-200 dark:border-neutral-700 rounded-lg p-4">
                 {editingMessage === msg.id ? (
                   <div>
                     <textarea
                       value={newMessageText}
                       onChange={(e) => setNewMessageText(e.target.value)}
                       rows={6}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary mb-3"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary mb-3 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
                     />
                     <div className="flex items-center gap-3">
                       <button
@@ -364,7 +364,7 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
                           setEditingMessage(null);
                           setNewMessageText('');
                         }}
-                        className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition text-sm font-semibold"
+                        className="px-3 py-1.5 bg-gray-200 dark:bg-neutral-600 text-gray-700 dark:text-neutral-200 rounded hover:bg-gray-300 dark:hover:bg-neutral-500 transition text-sm font-semibold"
                       >
                         Cancel
                       </button>
@@ -374,7 +374,7 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
                   <div>
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
-                        <p className="text-gray-700 whitespace-pre-line text-sm">{msg.message}</p>
+                        <p className="text-gray-700 dark:text-neutral-200 whitespace-pre-line text-sm">{msg.message}</p>
                         <div className="flex items-center gap-4 mt-2">
                           <label className="flex items-center cursor-pointer">
                             <input
@@ -393,7 +393,7 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
                               }}
                               className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                             />
-                            <span className="ml-2 text-xs text-gray-600">
+                            <span className="ml-2 text-xs text-gray-600 dark:text-neutral-400">
                               {msg.enabled === 1 ? 'Enabled' : 'Disabled'}
                             </span>
                           </label>
@@ -405,7 +405,7 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
                             setEditingMessage(msg.id);
                             setNewMessageText(msg.message);
                           }}
-                          className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition text-sm"
+                          className="px-3 py-1.5 bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 rounded hover:bg-gray-200 dark:hover:bg-neutral-600 transition text-sm"
                           title="Edit message"
                         >
                           ✏️ Edit
@@ -438,7 +438,7 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
         </div>
       </div>
 
-      <div className="bg-primary-subtle border border-primary/20 rounded-lg p-4">
+      <div className="bg-primary-subtle dark:bg-primary/10 border border-primary/20 dark:border-primary/30 rounded-lg p-4">
         <h3 className="font-semibold text-neutral-800 mb-2">💡 How it works:</h3>
         <ul className="text-sm text-neutral-700 space-y-1 list-disc list-inside">
           <li>The reminder popup appears when employees clock out at the end of the day (after 2 PM Central Time)</li>

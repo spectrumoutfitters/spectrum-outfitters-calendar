@@ -1,28 +1,29 @@
 import express from 'express';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import db from '../database/db.js';
+import {
+  getTodayInHouston,
+  getWeekEndingFridayHouston,
+  getWeekStartHouston,
+  addDaysInHouston,
+} from '../utils/appTimezone.js';
 
 const router = express.Router();
 router.use(authenticateToken);
 router.use(requireAdmin);
 
 function getWeekEndingFriday(dateStr) {
-  const d = new Date(dateStr + 'T12:00:00');
-  const day = d.getDay();
-  const diff = (5 - day + 7) % 7;
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().split('T')[0];
+  return getWeekEndingFridayHouston(dateStr);
 }
 
 function getWeekStart(weekEndDate) {
-  const d = new Date(weekEndDate + 'T12:00:00');
-  d.setDate(d.getDate() - 6);
-  return d.toISOString().split('T')[0];
+  return getWeekStartHouston(weekEndDate);
 }
 
 /**
  * Get revenue for a single day using one-source-per-day rule:
- * Shop Monkey if present, else manual sales_daily_summary.
+ * Shop Monkey if present, else payment processor (e.g. Stripe), else manual sales_daily_summary.
+ * Never sum two sources for the same day (avoids double-counting).
  */
 async function getDailyRevenue(startDate, endDate) {
   const smRows = await db.allAsync(
@@ -32,6 +33,13 @@ async function getDailyRevenue(startDate, endDate) {
   const smByDate = {};
   for (const r of (smRows || [])) smByDate[r.date] = parseFloat(r.revenue) || 0;
 
+  const procRows = await db.allAsync(
+    'SELECT date, SUM(revenue) as revenue FROM processor_daily_revenue WHERE date >= ? AND date <= ? GROUP BY date',
+    [startDate, endDate]
+  ).catch(() => []);
+  const procByDate = {};
+  for (const r of (procRows || [])) procByDate[r.date] = parseFloat(r.revenue) || 0;
+
   const manualRows = await db.allAsync(`
     SELECT sale_date,
       (COALESCE(gross_sales,0) + COALESCE(check_amount,0) + COALESCE(cash_amount,0) + COALESCE(zelle_ach_amount,0)) as total
@@ -40,12 +48,15 @@ async function getDailyRevenue(startDate, endDate) {
   const manualByDate = {};
   for (const r of manualRows) manualByDate[r.sale_date] = parseFloat(r.total) || 0;
 
-  const allDates = [...new Set([...Object.keys(smByDate), ...Object.keys(manualByDate)])].sort();
+  const allDates = [...new Set([...Object.keys(smByDate), ...Object.keys(procByDate), ...Object.keys(manualByDate)])].sort();
   let total = 0;
   const daily = allDates.map(date => {
-    const rev = smByDate[date] !== undefined ? smByDate[date] : (manualByDate[date] || 0);
+    const rev = smByDate[date] !== undefined
+      ? smByDate[date]
+      : (procByDate[date] !== undefined ? procByDate[date] : (manualByDate[date] || 0));
     total += rev;
-    return { date, revenue: rev, source: smByDate[date] !== undefined ? 'shopmonkey' : 'manual' };
+    const source = smByDate[date] !== undefined ? 'shopmonkey' : (procByDate[date] !== undefined ? 'processor' : 'manual');
+    return { date, revenue: rev, source };
   });
   return { daily, total };
 }
@@ -101,14 +112,12 @@ router.get('/cash-flow', async (req, res) => {
   try {
     const numWeeks = parseInt(req.query.weeks) || 12;
 
-    const today = new Date();
-    const currentFriday = getWeekEndingFriday(today.toISOString().split('T')[0]);
+    const todayStr = getTodayInHouston();
+    const currentFriday = getWeekEndingFriday(todayStr);
 
     const weeks = [];
     for (let i = 0; i < numWeeks; i++) {
-      const fri = new Date(currentFriday + 'T12:00:00');
-      fri.setDate(fri.getDate() - 7 * i);
-      const weekEnd = fri.toISOString().split('T')[0];
+      const weekEnd = i === 0 ? currentFriday : addDaysInHouston(currentFriday, -7 * i);
       const weekStart = getWeekStart(weekEnd);
 
       const rev = await getDailyRevenue(weekStart, weekEnd);
@@ -141,14 +150,12 @@ router.get('/forecast', async (req, res) => {
     const historyWeeks = parseInt(req.query.history) || 12;
     const projectWeeks = parseInt(req.query.project) || 8;
 
-    const today = new Date();
-    const currentFriday = getWeekEndingFriday(today.toISOString().split('T')[0]);
+    const todayStr = getTodayInHouston();
+    const currentFriday = getWeekEndingFriday(todayStr);
 
     const historical = [];
     for (let i = 0; i < historyWeeks; i++) {
-      const fri = new Date(currentFriday + 'T12:00:00');
-      fri.setDate(fri.getDate() - 7 * i);
-      const weekEnd = fri.toISOString().split('T')[0];
+      const weekEnd = i === 0 ? currentFriday : addDaysInHouston(currentFriday, -7 * i);
       const weekStart = getWeekStart(weekEnd);
 
       const rev = await getDailyRevenue(weekStart, weekEnd);

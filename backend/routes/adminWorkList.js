@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { getTodayInHouston } from '../utils/appTimezone.js';
 
 const router = express.Router();
 
@@ -8,16 +9,8 @@ const router = express.Router();
 router.use(authenticateToken);
 router.use(requireAdmin);
 
-// Helper to get today's date in America/Chicago timezone
 function getTodayInCentral() {
-  const now = new Date();
-  const centralTime = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Chicago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(now);
-  return centralTime; // Returns YYYY-MM-DD format
+  return getTodayInHouston();
 }
 
 // Helper to get day of week (0=Sunday, 1=Monday, etc.)

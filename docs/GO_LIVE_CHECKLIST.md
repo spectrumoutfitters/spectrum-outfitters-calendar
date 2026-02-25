@@ -79,9 +79,12 @@ You need to copy your project’s **backend** (code only, no node_modules) and *
   - Wait until you see “built in …” and no errors.
 
 - [ ] **2B.2** From your **PC** (PowerShell, project root), upload backend (excluding node_modules and .env):
-  - You can zip the backend without node_modules and upload, or use scp. Example (adjust paths if needed):
+  - **Important:** Do **not** copy your local database file (`*.db`) to the server. The server must keep its own database so live inventory and data are never overwritten by your local (e.g. low-inventory) data. Copy only code and migration scripts.
+  - You can zip the backend without node_modules and .env and upload, or use scp. Example (adjust paths if needed):
   ```powershell
-  scp -r "C:\Users\pearl\Documents\Spectrum Outfitters\Applications\Spectrum Outfitters Calendar\backend\database" root@165.245.137.192:/var/www/spectrum-outfitters/backend/
+  # Database: copy only .js files (migrations, db.js, etc.), NOT .db — server keeps its own DB
+  ssh root@165.245.137.192 "mkdir -p /var/www/spectrum-outfitters/backend/database"
+  scp "C:\Users\pearl\Documents\Spectrum Outfitters\Applications\Spectrum Outfitters Calendar\backend\database\*.js" root@165.245.137.192:/var/www/spectrum-outfitters/backend/database/
   scp "C:\Users\pearl\Documents\Spectrum Outfitters\Applications\Spectrum Outfitters Calendar\backend\server.js" root@165.245.137.192:/var/www/spectrum-outfitters/backend/
   scp -r "C:\Users\pearl\Documents\Spectrum Outfitters\Applications\Spectrum Outfitters Calendar\backend\routes" root@165.245.137.192:/var/www/spectrum-outfitters/backend/
   scp -r "C:\Users\pearl\Documents\Spectrum Outfitters\Applications\Spectrum Outfitters Calendar\backend\middleware" root@165.245.137.192:/var/www/spectrum-outfitters/backend/
@@ -90,8 +93,7 @@ You need to copy your project’s **backend** (code only, no node_modules) and *
   scp "C:\Users\pearl\Documents\Spectrum Outfitters\Applications\Spectrum Outfitters Calendar\backend\package-lock.json" root@165.245.137.192:/var/www/spectrum-outfitters/backend/
   scp "C:\Users\pearl\Documents\Spectrum Outfitters\Applications\Spectrum Outfitters Calendar\backend\reset_password.js" root@165.245.137.192:/var/www/spectrum-outfitters/backend/
   ```
-  - Do **not** copy `backend/.env` or `backend/node_modules` (server has .env; run `npm install` on server). If you have `backend/uploads` or `backend/downloads`, copy those too.
-  - You may need to copy other backend folders too (e.g. `backend/uploads` if it exists, and any other folders under backend that have code). Do **not** overwrite the server’s `backend/.env`.
+  - Do **not** copy `backend/.env`, `backend/node_modules`, or any `backend/database/*.db` file. The server has its own .env and its own database file. If you have `backend/uploads` or `backend/downloads`, copy those too.
 
 - [ ] **2B.3** Upload the frontend build:
   ```powershell

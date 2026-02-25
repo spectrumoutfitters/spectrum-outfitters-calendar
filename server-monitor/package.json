@@ -11,6 +11,8 @@
   "build": {
     "appId": "com.spectrumoutfitters.servermonitor",
     "productName": "Spectrum Server Monitor",
+    "icon": "assets/icon.png",
+    "files": ["main.js", "preload.js", "renderer.js", "index.html", "assets"],
     "win": { "target": "nsis" }
   },
   "devDependencies": {

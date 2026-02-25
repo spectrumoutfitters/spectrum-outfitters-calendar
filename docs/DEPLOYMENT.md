@@ -49,6 +49,29 @@ This is the simplest and keeps data under your control on a single machine.
 
 ---
 
+## 2b. Deploy and the database (important)
+
+**The server database is never overwritten by deploy.** Your local database (e.g. low inventory, test data) must never replace the live server data.
+
+- **What deploy does:** Pushes **code only** (backend .js, frontend build). Migration **scripts** (e.g. `backend/database/*.js`) are deployed so new schema changes run on the server when the app starts. The **database file** (`*.db`) is **never** copied to the server.
+- **Schema changes (merge only):** When the app starts on the server, it runs **additive** migrations (e.g. `ALTER TABLE ... ADD COLUMN`, `CREATE TABLE IF NOT EXISTS`). Existing data is kept; new columns and tables are added. Nothing is wiped or reset.
+- **First-time setup:** On the server you run `npm run init-db` once to create tables and an initial admin user. After that, do **not** run init-db again on deploy, and **never** copy your local `backend/database/*.db` (or any `.db` file) to the server. The server keeps its own single database file; inventory and all data stay on the server.
+
+If you use the **Spectrum Server Monitor** "Deploy to server" (git push + pull on server), the server gets code from git; the database file is not in git (it's in `.gitignore`), so the server's DB is never touched by deploy. If you use **scripts/deploy.cjs**, it only uploads `backend/database/*.js` (no `.db` files) and does not run `init-db` on deploy.
+
+### Faster deploys (scripts/deploy.cjs)
+
+- **Incremental uploads (only changed files):**
+  - If `rsync` is installed (Mac/Linux, or Git Bash/WSL on Windows), the script uses it to copy only changed files.
+  - **Without rsync (e.g. Windows):** the script uses a local cache (`scripts/.deploy-cache.json`) and only uploads files whose size or modification time changed since the last deploy. No extra software needed.
+- **Deploy only what changed:**
+  - **Backend-only:** `node scripts/deploy.cjs --backend-only` — skips frontend build and frontend upload. Use when you only changed backend code.
+  - **Frontend-only:** `node scripts/deploy.cjs --frontend-only` — skips backend upload and server `npm install`; only builds and uploads the frontend, then restarts the app. Use when you only changed frontend/React code.
+
+This can cut deploy time from several minutes to under a minute when only one side or a few files changed.
+
+---
+
 ## 3. Where to host (push it online)
 
 You need one place that runs **Node** and serves the app (and, for Option A, holds the SQLite file).

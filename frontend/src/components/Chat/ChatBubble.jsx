@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../../contexts/SocketContext';
 import ChatWindow from './ChatWindow';
 import api from '../../utils/api';
@@ -9,6 +9,7 @@ const ChatBubble = ({ stacked = false }) => {
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [newMessages, setNewMessages] = useState([]);
+  const hasAutoSelectedOnce = useRef(false);
 
   useEffect(() => {
     if (!socket || !isOpen) return;
@@ -68,14 +69,19 @@ const ChatBubble = ({ stacked = false }) => {
     }
   };
 
+  // Auto-select first conversation only once when chat opens (so Back doesn’t re-select)
   useEffect(() => {
-    if (isOpen && conversations.length > 0 && !selectedConversation) {
-      // Always select Team Board first, then Admin Board (if admin), then first conversation
+    if (!isOpen) {
+      hasAutoSelectedOnce.current = false;
+      return;
+    }
+    if (conversations.length > 0 && !selectedConversation && !hasAutoSelectedOnce.current) {
       const teamBoardConv = conversations.find(c => c.id === 'team_board');
       const adminBoardConv = conversations.find(c => c.id === 'admin_board');
       setSelectedConversation(teamBoardConv || adminBoardConv || conversations[0]);
+      hasAutoSelectedOnce.current = true;
     }
-  }, [isOpen, conversations]);
+  }, [isOpen, conversations, selectedConversation]);
 
   const chatButton = (
     <button

@@ -5,133 +5,841 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Spectrum Server Monitor</title>
   <style>
-    * { box-sizing: border-box; }
+    :root {
+      --sidebar-w: 256px;
+      --topbar-h: 64px;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      --duration: 200ms;
+      /* Light theme (default) */
+      --bg: #f9fafb;
+      --surface: #ffffff;
+      --surface-raised: #ffffff;
+      --border: #e5e7eb;
+      --border-subtle: #f3f4f6;
+      --text: #374151;
+      --text-strong: #111827;
+      --text-muted: #6b7280;
+      --hover: #f9fafb;
+      --input-bg: #ffffff;
+      --status-ok-bg: #dcfce7;
+      --status-ok-text: #166534;
+      --status-err-bg: #fee2e2;
+      --status-err-text: #991b1b;
+      --status-warn-bg: #fef3c7;
+      --status-warn-text: #92400e;
+      --badge-mobile-bg: #dbeafe;
+      --badge-mobile-text: #1e40af;
+      --badge-desktop-bg: #f3f4f6;
+      --badge-desktop-text: #374151;
+      --code-bg: #f3f4f6;
+      --overlay: rgba(0,0,0,0.4);
+      --btn-primary-bg: #111827;
+      --btn-primary-text: #ffffff;
+    }
+    body.theme-dark {
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+      --bg: #0a0a0a;
+      --surface: #171717;
+      --surface-raised: #262626;
+      --border: #404040;
+      --border-subtle: #262626;
+      --text: #fafafa;
+      --text-strong: #fafafa;
+      --text-muted: #a3a3a3;
+      --hover: #262626;
+      --input-bg: #0a0a0a;
+      --status-ok-bg: #14532d;
+      --status-ok-text: #86efac;
+      --status-err-bg: #7f1d1d;
+      --status-err-text: #fecaca;
+      --status-warn-bg: #78350f;
+      --status-warn-text: #fde68a;
+      --badge-mobile-bg: #1e3a8a;
+      --badge-mobile-text: #93c5fd;
+      --badge-desktop-bg: #404040;
+      --badge-desktop-text: #d4d4d4;
+      --code-bg: #262626;
+      --overlay: rgba(0,0,0,0.6);
+      --btn-primary-bg: #fafafa;
+      --btn-primary-text: #0a0a0a;
+    }
+    @media (prefers-reduced-motion: reduce) { :root { --duration: 0ms; } }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { font-size: 16px; }
     body {
       margin: 0;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text);
+      background: var(--bg);
+      min-height: 100vh;
+      transition: background var(--duration) var(--ease), color var(--duration) var(--ease);
+    }
+
+    .app-layout {
+      display: flex;
       min-height: 100vh;
     }
-    .app { padding: 20px; max-width: 1200px; margin: 0 auto; }
-    h1 { font-size: 1.5rem; margin: 0 0 20px; color: #f8fafc; display: flex; align-items: center; gap: 10px; }
-    .badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
-    .badge-ok { background: #166534; color: #dcfce7; }
-    .badge-err { background: #991b1b; color: #fecaca; }
-    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+
+    /* Sidebar - w-64, clean nav */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar__logo {
+      padding: var(--space-6);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-strong);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+    .sidebar__logo-img {
+      width: 36px;
+      height: 36px;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+    .sidebar__logo-img[data-failed] { display: none; }
+    .sidebar__logo-text { flex: 1; min-width: 0; }
+    .sidebar__nav {
+      flex: 1;
+      padding: var(--space-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+    .sidebar__nav-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius);
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      transition: background var(--duration) var(--ease), color var(--duration) var(--ease);
+    }
+    .sidebar__nav-item:hover { background: var(--hover); color: var(--text-strong); }
+    .sidebar__nav-item:focus-visible { outline: none; box-shadow: 0 0 0 2px #3b82f6; }
+    .sidebar__nav-item.is-active { background: var(--hover); color: var(--text-strong); font-weight: 600; }
+    .sidebar__nav-item svg { flex-shrink: 0; width: 20px; height: 20px; opacity: 0.8; }
+
+    /* Main: top bar + content */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .topbar {
+      height: var(--topbar-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--space-8);
+      flex-shrink: 0;
+    }
+    .topbar__title { font-size: 20px; font-weight: 600; color: var(--text-strong); margin: 0; }
+    .topbar__right {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+    .topbar__status {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .topbar__status--ok { background: var(--status-ok-bg); color: var(--status-ok-text); }
+    .topbar__status--err { background: var(--status-err-bg); color: var(--status-err-text); }
+    .topbar__time { font-size: 12px; color: var(--text-muted); }
+    .topbar .btn { padding: 8px 16px; border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer; transition: all var(--duration) var(--ease); }
+    .topbar .btn--primary { background: var(--btn-primary-bg); color: var(--btn-primary-text); border: none; }
+    .topbar .btn--primary:hover:not(:disabled) { opacity: 0.9; }
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background var(--duration) var(--ease), color var(--duration) var(--ease);
+    }
+    .theme-toggle:hover { background: var(--hover); color: var(--text-strong); }
+    .theme-toggle:focus-visible { outline: none; box-shadow: 0 0 0 2px #3b82f6; }
+    .theme-toggle svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+    .content {
+      flex: 1;
+      padding: var(--space-8);
+      max-width: 1600px;
+      width: 100%;
+      margin: 0 auto;
+      overflow-y: auto;
+    }
+    .content .page { display: none; }
+    .content .page.is-active { display: block; }
+    .content .page__inner { display: flex; flex-direction: column; gap: var(--space-8); }
+
+    /* Buttons */
     .btn {
       padding: 8px 16px;
-      border-radius: 8px;
-      border: 1px solid #334155;
-      background: #1e293b;
-      color: #e2e8f0;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
       cursor: pointer;
-      font-size: 14px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      transition: all var(--duration) var(--ease);
     }
-    .btn:hover { background: #334155; }
-    .btn-primary { background: #2563eb; border-color: #2563eb; color: #fff; }
-    .btn-primary:hover { background: #1d4ed8; }
-    .settings-panel {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 24px;
+    .btn:hover:not(:disabled) { background: var(--hover); border-color: var(--text-muted); }
+    .btn:focus-visible { outline: none; box-shadow: 0 0 0 2px #3b82f6; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn--primary { background: var(--btn-primary-bg); border-color: var(--btn-primary-bg); color: var(--btn-primary-text); }
+    .btn--primary:hover:not(:disabled) { opacity: 0.9; }
+    .btn--success { background: var(--status-ok-bg); border-color: var(--status-ok-text); color: var(--status-ok-text); }
+    .btn--success:hover:not(:disabled) { filter: brightness(1.1); }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border);
+      padding: var(--space-6);
+      transition: box-shadow var(--duration) var(--ease);
     }
-    .settings-panel h2 { margin: 0 0 12px; font-size: 1rem; color: #94a3b8; }
-    .field { margin-bottom: 12px; }
-    .field label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
-    .field input {
-      width: 100%;
-      max-width: 480px;
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid #334155;
-      background: #0f172a;
-      color: #e2e8f0;
-      font-size: 14px;
+    .card:hover { box-shadow: var(--shadow-md); }
+    .card__title { font-size: 18px; font-weight: 600; color: var(--text-strong); margin: 0 0 var(--space-4); }
+    .card__subtitle { font-size: 12px; color: var(--text-muted); margin: -8px 0 var(--space-4); }
+
+    /* Metric cards */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: var(--space-6);
     }
-    .field input::placeholder { color: #64748b; }
-    .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
-    .stat-card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 10px;
-      padding: 14px;
+    .metric {
+      background: var(--surface-raised);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border);
+      padding: var(--space-6);
     }
-    .stat-value { font-size: 1.75rem; font-weight: 700; color: #f8fafc; }
-    .stat-label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
-    .section {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 16px;
-    }
-    .section h3 { margin: 0 0 12px; font-size: 0.95rem; color: #cbd5e1; }
+    .metric__value { font-size: 24px; font-weight: 600; color: var(--text-strong); font-variant-numeric: tabular-nums; }
+    .metric__label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Tables */
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; min-height: 0; }
+    .table-wrap--scroll { max-height: 360px; overflow-y: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #334155; }
-    th { color: #94a3b8; font-weight: 600; }
-    tr:last-child td { border-bottom: 0; }
-    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-    .status-online { background: #22c55e; }
-    .status-idle { background: #eab308; }
-    .status-ok { color: #22c55e; }
-    .status-fail { color: #ef4444; }
-    .muted { color: #64748b; font-size: 12px; }
-    .error-msg { background: #7f1d1d; color: #fecaca; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
-    .empty { color: #64748b; padding: 24px; text-align: center; }
+    table.table--data { min-width: 880px; table-layout: auto; }
+    table.table--data th:nth-child(1), table.table--data td:nth-child(1) { white-space: nowrap; }
+    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
+    th { font-weight: 600; color: var(--text-muted); font-size: 12px; background: var(--hover); position: sticky; top: 0; z-index: 1; }
+    tbody tr { transition: background var(--duration) var(--ease); cursor: pointer; }
+    tbody tr:hover { background: var(--hover); }
+    tbody tr:last-child td { border-bottom: 0; }
+    .table-empty { padding: 48px 16px; text-align: center; color: var(--text-muted); font-size: 14px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge--ok { background: var(--status-ok-bg); color: var(--status-ok-text); }
+    .badge--fail { background: var(--status-err-bg); color: var(--status-err-text); }
+    .badge--mobile { background: var(--badge-mobile-bg); color: var(--badge-mobile-text); }
+    .badge--desktop { background: var(--badge-desktop-bg); color: var(--badge-desktop-text); }
+    .badge--online { background: var(--status-ok-bg); color: var(--status-ok-text); }
+    .badge--idle { background: var(--status-warn-bg); color: var(--status-warn-text); }
+    code { font-size: 13px; background: var(--code-bg); padding: 2px 6px; border-radius: 4px; color: var(--text); }
+
+    /* Filters */
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-4);
+      align-items: center;
+      margin-bottom: var(--space-4);
+    }
+    .filters label { font-size: 12px; font-weight: 500; color: var(--text-muted); margin-right: 4px; }
+    .filters select, .filters input[type="text"] {
+      padding: 8px 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text);
+      font-size: 14px;
+      min-width: 120px;
+    }
+    .filters input[type="text"] { min-width: 200px; }
+
+    /* Quick actions */
+    .quick-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+    .action-feedback { font-size: 12px; color: var(--text-muted); min-height: 20px; }
+
+    /* Detail panel (drawer) */
+    .detail-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 100;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .detail-overlay.is-open { display: flex; }
+    .detail-overlay { background: var(--overlay); }
+    .detail-panel {
+      width: 100%;
+      max-width: 420px;
+      height: 100%;
+      background: var(--surface);
+      box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+      overflow-y: auto;
+      padding: var(--space-6);
+      border-left: 1px solid var(--border);
+    }
+    .detail-panel h3 { font-size: 18px; font-weight: 600; margin: 0 0 var(--space-4); color: var(--text-strong); }
+    .detail-panel .detail-row { margin-bottom: var(--space-4); }
+    .detail-panel .detail-row__label { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+    .detail-panel .detail-row__value { font-size: 14px; color: var(--text-strong); word-break: break-all; }
+    .detail-panel .btn { margin-top: var(--space-4); }
+
+    /* Error banner */
+    .error-banner {
+      display: none;
+      background: var(--status-err-bg);
+      border: 1px solid var(--status-err-text);
+      color: var(--status-err-text);
+      padding: var(--space-4);
+      border-radius: var(--radius);
+      margin-bottom: var(--space-6);
+      font-size: 14px;
+    }
+    .error-banner.is-visible { display: block; }
+
+    /* Status bar (real-time action progress) */
+    .status-bar {
+      display: none;
+      margin-bottom: var(--space-6);
+      padding: var(--space-3) var(--space-4);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+    .status-bar.is-visible { display: block; }
+    .status-bar__label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-strong);
+      margin-bottom: var(--space-2);
+    }
+    .status-bar__track {
+      height: 8px;
+      background: var(--border-subtle);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .status-bar__fill {
+      height: 100%;
+      border-radius: 999px;
+      width: 0;
+      transition: width 300ms var(--ease);
+    }
+    .status-bar--running .status-bar__fill {
+      width: 100%;
+      background: linear-gradient(90deg, var(--border) 0%, var(--text-muted) 50%, var(--border) 100%);
+      background-size: 200% 100%;
+      animation: status-bar-shimmer 1.2s ease-in-out infinite;
+    }
+    .status-bar--success .status-bar__fill {
+      width: 100%;
+      background: var(--status-ok-text);
+    }
+    .status-bar--error .status-bar__fill {
+      width: 100%;
+      background: var(--status-err-text);
+    }
+    @keyframes status-bar-shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Settings modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--overlay);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-6);
+    }
+    .modal-overlay.is-open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border);
+      width: 100%;
+      max-width: 520px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: var(--space-6);
+    }
+    .modal h2 { font-size: 20px; font-weight: 600; margin: 0 0 var(--space-4); color: var(--text-strong); }
+    .field { margin-bottom: var(--space-4); }
+    .field label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 4px; }
+    .field input { width: 100%; padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-size: 14px; }
+    .field-row { display: flex; gap: var(--space-2); align-items: center; }
+    .field-row input { flex: 1; min-width: 0; }
+    .modal-actions { display: flex; gap: var(--space-2); margin-top: var(--space-6); justify-content: flex-end; }
+
+    /* Inventory search */
+    .inventory-search { margin-bottom: var(--space-4); }
+    .inventory-search input { width: 100%; max-width: 320px; padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-size: 14px; }
+    .inventory-categories { display: flex; flex-direction: column; gap: var(--space-4); }
+    .inventory-cat { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+    .inventory-cat__name { font-size: 12px; font-weight: 600; color: var(--text-muted); padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); }
+    .inventory-cat__list { padding: 8px; }
+    .inventory-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background var(--duration) var(--ease);
+    }
+    .inventory-item:hover { background: var(--hover); }
+    .inventory-item__name { flex: 1; min-width: 0; color: var(--text-strong); }
+    .inventory-item__qty { font-variant-numeric: tabular-nums; color: var(--text-muted); }
+    .inventory-item__qty--low { color: var(--status-err-text); font-weight: 600; }
+
+    /* Sessions grouped - compact */
+    .sessions-group { display: flex; flex-direction: column; gap: 8px; }
+    .user-group {
+      background: var(--surface-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .user-group__header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: background var(--duration) var(--ease);
+      width: 100%;
+      text-align: left;
+      border: none;
+      background: none;
+      font: inherit;
+      color: var(--text);
+    }
+    .user-group__header:hover { background: var(--hover); }
+    .user-group__name { font-weight: 600; color: var(--text-strong); }
+    .user-group__meta { font-size: 12px; color: var(--text-muted); }
+    .user-group__summary { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-left: auto; font-size: 12px; color: var(--text-muted); }
+    .user-group__detail { display: none; border-top: 1px solid var(--border); padding: 12px; background: var(--surface); }
+    .user-group__detail.is-open { display: block; }
+    .user-group__detail table { font-size: 13px; }
+    .user-group__detail th, .user-group__detail td { padding: 8px 12px; }
   </style>
 </head>
 <body>
-  <div class="app">
-    <h1>
-      <span>Spectrum Server Monitor</span>
-      <span id="healthBadge" class="badge badge-err" style="display:none;">Offline</span>
-      <span id="healthBadgeOk" class="badge badge-ok" style="display:none;">Server OK</span>
-    </h1>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar__logo">
+        <img src="assets/icon.png" alt="" class="sidebar__logo-img" id="sidebar-logo-img" />
+        <span class="sidebar__logo-text">Spectrum Server Monitor</span>
+      </div>
+      <nav class="sidebar__nav">
+        <button type="button" class="sidebar__nav-item is-active" data-page="dashboard">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+          Dashboard
+        </button>
+        <button type="button" class="sidebar__nav-item" data-page="sessions">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Sessions
+        </button>
+        <button type="button" class="sidebar__nav-item" data-page="logins">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Logins
+        </button>
+        <button type="button" class="sidebar__nav-item" data-page="punches">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Lunch &amp; punches
+        </button>
+        <button type="button" class="sidebar__nav-item" data-page="inventory">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          Inventory
+        </button>
+        <button type="button" class="sidebar__nav-item" data-page="actions">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Dev actions
+        </button>
+        <button type="button" class="sidebar__nav-item" id="btnSettingsNav">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </button>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <h1 class="topbar__title" id="pageTitle">Dashboard</h1>
+        <div class="topbar__right">
+          <button type="button" class="theme-toggle" id="themeToggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+            <svg id="themeIconDark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg id="themeIconLight" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <span id="themeLabel">Dark mode</span>
+          </button>
+          <span id="healthBadge" class="topbar__status topbar__status--err" style="display:none;">Offline</span>
+          <span id="healthBadgeOk" class="topbar__status topbar__status--ok" style="display:none;">Server OK</span>
+          <span id="lastUpdate" class="topbar__time"></span>
+          <button type="button" class="btn btn--primary" id="btnRefresh">Refresh</button>
+        </div>
+      </header>
+      <div class="content">
+        <div id="errorBox" class="error-banner" role="alert"></div>
+        <div id="statusBar" class="status-bar" role="status" aria-live="polite">
+          <div id="statusBarLabel" class="status-bar__label"></div>
+          <div class="status-bar__track">
+            <div id="statusBarFill" class="status-bar__fill"></div>
+          </div>
+        </div>
 
-    <div class="toolbar">
-      <button type="button" class="btn" id="btnSettings">Settings</button>
-      <button type="button" class="btn btn-primary" id="btnRefresh">Refresh now</button>
-      <span id="lastUpdate" class="muted"></span>
+        <div id="page-dashboard" class="page is-active">
+          <div class="page__inner">
+            <section class="card">
+              <h2 class="card__title">Overview</h2>
+              <div id="statsRow" class="metrics"></div>
+            </section>
+            <section class="card">
+              <h2 class="card__title">Quick actions</h2>
+              <p class="card__subtitle">Deploy, open Cursor, or connect via SSH.</p>
+              <div class="quick-actions">
+                <button type="button" class="btn btn--success" id="btnDeploy">Deploy to server</button>
+                <button type="button" class="btn" id="btnDeployBackend" title="Only backend (faster)">Backend only</button>
+                <button type="button" class="btn" id="btnDeployFrontend" title="Only frontend (faster)">Frontend only</button>
+                <button type="button" class="btn" id="btnDeployFullForce" title="Full deploy, always upload all files">Full deploy (force)</button>
+                <button type="button" class="btn" id="btnOpenCursor">Open Cursor</button>
+                <button type="button" class="btn" id="btnOpenSsh">Open SSH</button>
+                <button type="button" class="btn" id="btnPushViaGit">Push via Git</button>
+              </div>
+              <p id="deploy-desc" class="action-feedback"></p>
+            </section>
+          </div>
+        </div>
+
+        <div id="page-sessions" class="page">
+          <div class="page__inner">
+            <section class="card">
+              <h2 class="card__title">Active sessions</h2>
+              <p class="card__subtitle">Grouped by user. Click to expand. Device = Mobile (phone/tablet) or Desktop (computer).</p>
+              <div class="filters">
+                <label>Device</label>
+                <select id="filterSessionDevice">
+                  <option value="">All</option>
+                  <option value="Mobile">Mobile</option>
+                  <option value="Desktop">Desktop</option>
+                </select>
+                <label>Status</label>
+                <select id="filterSessionStatus">
+                  <option value="">All</option>
+                  <option value="online">Online</option>
+                  <option value="idle">Idle</option>
+                </select>
+              </div>
+              <div id="sessionsBody" class="sessions-group"></div>
+            </section>
+          </div>
+        </div>
+
+        <div id="page-logins" class="page">
+          <div class="page__inner">
+            <section class="card">
+              <h2 class="card__title">Login history</h2>
+              <p class="card__subtitle">All login attempts with device type, location, and on-prem score.</p>
+              <div class="filters">
+                <label>Result</label>
+                <select id="filterLoginResult">
+                  <option value="">All</option>
+                  <option value="1">Success</option>
+                  <option value="0">Failed</option>
+                </select>
+                <label>Device</label>
+                <select id="filterLoginDevice">
+                  <option value="">All</option>
+                  <option value="Mobile">Mobile</option>
+                  <option value="Desktop">Desktop</option>
+                </select>
+              </div>
+              <div class="table-wrap table-wrap--scroll">
+                <table class="table--data">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>User</th>
+                      <th>Result</th>
+                      <th>Device</th>
+                      <th>IP</th>
+                      <th>Location</th>
+                      <th>VPN</th>
+                      <th>On-prem</th>
+                    </tr>
+                  </thead>
+                  <tbody id="eventsBody"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="page-punches" class="page">
+          <div class="page__inner">
+            <section class="card">
+              <h2 class="card__title">Lunch clock-out / clock-in</h2>
+              <p class="card__subtitle">When each employee went to lunch and when they returned. Use Refresh to load latest.</p>
+              <div class="table-wrap table-wrap--scroll">
+                <table class="table--data">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Employee</th>
+                      <th>Lunch out</th>
+                      <th>Lunch in</th>
+                      <th>Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody id="lunchHistoryBody"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="card">
+              <h2 class="card__title">Punch history</h2>
+              <p class="card__subtitle">All clock in, clock out, lunch out, and lunch in events in order.</p>
+              <div class="table-wrap table-wrap--scroll">
+                <table class="table--data">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Type</th>
+                      <th>Employee</th>
+                    </tr>
+                  </thead>
+                  <tbody id="punchHistoryBody"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="page-inventory" class="page">
+          <div class="page__inner">
+            <section class="card">
+              <h2 class="card__title">Inventory overview</h2>
+              <p id="inventorySummary" class="card__subtitle"></p>
+              <div id="inventoryMetrics" class="metrics"></div>
+            </section>
+            <section class="card">
+              <h2 class="card__title">Reorder requests</h2>
+              <p class="card__subtitle">Requested refills and their status.</p>
+              <div class="filters">
+                <label>Status</label>
+                <select id="filterRefillStatus">
+                  <option value="">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="ordered">Ordered</option>
+                  <option value="received">Received</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div class="table-wrap table-wrap--scroll">
+                <table class="table--data">
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th>Requested by</th>
+                      <th>Status</th>
+                      <th>Requested at</th>
+                      <th>Received by</th>
+                      <th>Expected</th>
+                    </tr>
+                  </thead>
+                  <tbody id="refillRequestsBody"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="card">
+              <h2 class="card__title">Scan log</h2>
+              <p class="card__subtitle">Every scan in/out: who scanned, when, item, event type.</p>
+              <div class="table-wrap table-wrap--scroll">
+                <table class="table--data">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Item</th>
+                      <th>Barcode</th>
+                      <th>Event</th>
+                      <th>Scanned by</th>
+                    </tr>
+                  </thead>
+                  <tbody id="scanLogBody"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="card">
+              <h2 class="card__title">Quantity / activity log</h2>
+              <p class="card__subtitle">All quantity changes: who changed, before/after, reason.</p>
+              <div class="table-wrap table-wrap--scroll">
+                <table class="table--data">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Item</th>
+                      <th>Before</th>
+                      <th>After</th>
+                      <th>Change</th>
+                      <th>Reason</th>
+                      <th>Changed by</th>
+                    </tr>
+                  </thead>
+                  <tbody id="quantityLogBody"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="card">
+              <h2 class="card__title">Items by category</h2>
+              <p class="card__subtitle">Search and click an item for details.</p>
+              <div class="inventory-search">
+                <input type="text" id="inventorySearch" placeholder="Search by name or category..." />
+              </div>
+              <div id="inventoryCategories" class="inventory-categories"></div>
+            </section>
+          </div>
+        </div>
+
+        <div id="page-actions" class="page">
+          <div class="page__inner">
+            <section class="card">
+              <h2 class="card__title">Dev actions</h2>
+              <p class="card__subtitle">Open Cursor, SSH, or deploy to the live site.</p>
+              <div class="quick-actions">
+                <button type="button" class="btn btn--success" id="btnDeploy2">Deploy to server</button>
+                <button type="button" class="btn" id="btnDeployBackend2" title="Only backend (faster)">Backend only</button>
+                <button type="button" class="btn" id="btnDeployFrontend2" title="Only frontend (faster)">Frontend only</button>
+                <button type="button" class="btn" id="btnDeployFullForce2" title="Full deploy, always upload all files">Full deploy (force)</button>
+                <button type="button" class="btn" id="btnOpenCursor2">Open Cursor</button>
+                <button type="button" class="btn" id="btnOpenSsh2">Open SSH</button>
+                <button type="button" class="btn" id="btnPushViaGit2">Push via Git</button>
+              </div>
+              <p id="deploy-desc2" class="action-feedback"></p>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="detailOverlay" class="detail-overlay">
+    <div class="detail-panel">
+      <h3 id="detailTitle">Details</h3>
+      <div id="detailContent"></div>
+      <button type="button" class="btn" id="detailClose">Close</button>
     </div>
+  </div>
 
-    <div id="settingsPanel" class="settings-panel" style="display:none;">
-      <h2>Connection</h2>
+  <div id="settingsModal" class="modal-overlay">
+    <div class="modal">
+      <h2>Settings</h2>
       <div class="field">
-        <label>API Base URL</label>
+        <label for="inputApiUrl">API Base URL</label>
         <input id="inputApiUrl" type="text" placeholder="https://login.spectrumoutfitters.com/api" />
       </div>
       <div class="field">
-        <label>Admin token (JWT) — get from browser after logging in: DevTools → Application → Local Storage → token</label>
-        <input id="inputToken" type="password" placeholder="Paste your JWT token" />
+        <label for="inputToken">Admin token (JWT)</label>
+        <input id="inputToken" type="password" placeholder="From DevTools → Local Storage → token" />
       </div>
-      <button type="button" class="btn btn-primary" id="btnSaveConfig">Save</button>
-    </div>
-
-    <div id="errorBox" class="error-msg" style="display:none;"></div>
-
-    <div id="statsRow" class="stats"></div>
-    <div id="sessionsSection" class="section">
-      <h3>Active sessions</h3>
-      <div style="overflow-x:auto;">
-        <table>
-          <thead><tr><th>User</th><th>Role</th><th>Status</th><th>IP</th><th>Device</th><th>Last seen</th></tr></thead>
-          <tbody id="sessionsBody"></tbody>
-        </table>
+      <div class="field">
+        <label for="inputProjectPath">Project path</label>
+        <div class="field-row">
+          <input id="inputProjectPath" type="text" placeholder="C:\Users\...\Spectrum Outfitters Calendar" />
+          <button type="button" class="btn" id="btnBrowseProject">Browse</button>
+        </div>
       </div>
-    </div>
-    <div id="eventsSection" class="section">
-      <h3>Recent login events</h3>
-      <div style="overflow-x:auto; max-height:320px; overflow-y:auto;">
-        <table>
-          <thead><tr><th>Time</th><th>User</th><th>Result</th><th>IP</th><th>Location</th><th>On‑prem</th></tr></thead>
-          <tbody id="eventsBody"></tbody>
-        </table>
+      <div class="field">
+        <label>Server (SSH)</label>
+        <div class="field-row" style="flex-wrap:wrap;">
+          <input id="inputServerHost" type="text" placeholder="165.245.137.192" style="width:140px" />
+          <input id="inputServerUser" type="text" placeholder="root" style="width:80px" />
+          <input id="inputServerAppPath" type="text" placeholder="/opt/spectrum-calendar" style="flex:1;min-width:160px" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="inputSshKeyPath">SSH key (optional)</label>
+        <div class="field-row">
+          <input id="inputSshKeyPath" type="text" placeholder="C:\Users\you\.ssh\id_rsa" />
+          <button type="button" class="btn" id="btnBrowseSshKey">Browse</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="btnSettingsClose">Cancel</button>
+        <button type="button" class="btn btn--primary" id="btnSaveConfig">Save</button>
       </div>
     </div>
   </div>
+
+  <script>
+    (function () {
+      var img = document.getElementById('sidebar-logo-img');
+      if (img) img.onerror = function () { img.setAttribute('data-failed', 'true'); };
+    })();
+  </script>
   <script src="renderer.js"></script>
 </body>
 </html>

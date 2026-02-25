@@ -13,9 +13,31 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
+  html.dark body {
+    @apply bg-neutral-950 text-neutral-100;
+  }
+
+  /* Dark mode: ensure all form controls have visible text when typing */
+  html.dark input,
+  html.dark textarea,
+  html.dark select {
+    @apply bg-neutral-800 text-neutral-100 border-neutral-600;
+  }
+  html.dark input::placeholder,
+  html.dark textarea::placeholder {
+    @apply text-neutral-400;
+  }
+  html.dark select option {
+    @apply bg-neutral-800 text-neutral-100;
+  }
+
   *:focus-visible {
     outline: none;
     box-shadow: 0 0 0 2px white, 0 0 0 4px #B8860B;
+  }
+
+  html.dark *:focus-visible {
+    box-shadow: 0 0 0 2px rgb(23 23 23), 0 0 0 4px #B8860B;
   }
 
   @media (prefers-reduced-motion: no-preference) {
@@ -27,15 +49,15 @@
 
 @layer components {
   .card {
-    @apply bg-neutral-50 rounded-2xl border border-neutral-200/80 shadow-sm;
+    @apply bg-neutral-50 rounded-2xl border border-neutral-200/80 shadow-sm dark:bg-neutral-900 dark:border-neutral-800;
   }
 
   .card-hover {
-    @apply card transition-shadow duration-200 hover:shadow-md;
+    @apply card transition-shadow duration-200 hover:shadow-md dark:hover:shadow-neutral-900/50;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center font-medium rounded-xl px-5 py-2.5 text-white transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center font-medium rounded-xl px-5 py-2.5 text-white transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-100 dark:focus-visible:ring-offset-neutral-900 disabled:opacity-50 disabled:pointer-events-none;
     background-color: #B8860B;
   }
   .btn-primary:hover:not(:disabled) {
@@ -44,22 +66,36 @@
   .btn-primary:focus-visible {
     box-shadow: 0 0 0 2px white, 0 0 0 4px #B8860B;
   }
+  html.dark .btn-primary:focus-visible {
+    box-shadow: 0 0 0 2px rgb(23 23 23), 0 0 0 4px #B8860B;
+  }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center font-medium rounded-xl px-5 py-2.5 border-2 border-neutral-200 text-neutral-700 bg-white transition-colors duration-150 hover:border-neutral-300 hover:bg-neutral-50 disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center font-medium rounded-xl px-5 py-2.5 border-2 border-neutral-200 text-neutral-700 bg-white transition-colors duration-150 hover:border-neutral-300 hover:bg-neutral-50 disabled:opacity-50 disabled:pointer-events-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700;
   }
   .btn-secondary:focus-visible {
     outline: none;
     box-shadow: 0 0 0 2px white, 0 0 0 4px #B8860B;
   }
+  html.dark .btn-secondary:focus-visible {
+    box-shadow: 0 0 0 2px rgb(23 23 23), 0 0 0 4px #B8860B;
+  }
 
   .input-base {
-    @apply w-full px-4 py-3 rounded-xl border border-neutral-200 bg-white text-neutral-800 placeholder-neutral-400 transition-colors focus:ring-2 focus:outline-none;
+    @apply w-full px-4 py-3 rounded-xl border border-neutral-200 bg-white text-neutral-800 placeholder-neutral-400 transition-colors focus:ring-2 focus:outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:placeholder-neutral-500;
   }
   .input-base:focus {
     border-color: #B8860B;
     box-shadow: 0 0 0 2px rgba(184, 134, 11, 0.2);
   }
+}
+
+/* Safe area for notched devices (bottom sheet modals, sticky CTAs) */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 * {

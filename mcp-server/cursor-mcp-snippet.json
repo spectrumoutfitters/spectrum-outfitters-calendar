@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "spectrum": {
+      "command": "node",
+      "args": ["C:\\Users\\pearl\\Documents\\Spectrum Outfitters\\Applications\\Spectrum Outfitters Calendar\\mcp-server\\index.js"],
+      "env": {
+        "SPECTRUM_API_BASE_URL": "https://login.spectrumoutfitters.com/api",
+        "SPECTRUM_ADMIN_TOKEN": "PASTE_YOUR_ADMIN_TOKEN_HERE"
+      }
+    }
+  }
+}

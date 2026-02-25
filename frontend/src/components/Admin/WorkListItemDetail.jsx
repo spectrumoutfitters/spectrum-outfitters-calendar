@@ -87,8 +87,8 @@ const WorkListItemDetail = ({ item, onClose, onUpdate }) => {
       case 'urgent': return 'bg-red-100 text-red-800 border-red-300';
       case 'high': return 'bg-orange-100 text-orange-800 border-orange-300';
       case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'low': return 'bg-gray-100 text-gray-800 border-gray-300';
-      default: return 'bg-gray-100 text-gray-800 border-gray-300';
+      case 'low': return 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-200 border-gray-300 dark:border-neutral-600';
+      default: return 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-200 border-gray-300 dark:border-neutral-600';
     }
   };
 
@@ -119,7 +119,7 @@ const WorkListItemDetail = ({ item, onClose, onUpdate }) => {
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg p-6">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg dark:border dark:border-neutral-700 p-6">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-2 text-gray-600">Loading details...</p>
         </div>
@@ -133,11 +133,11 @@ const WorkListItemDetail = ({ item, onClose, onUpdate }) => {
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 max-w-4xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-start">
+        <div className="sticky top-0 bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-700 px-6 py-4 flex justify-between items-start">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <h2 className="text-2xl font-bold text-gray-800">{item?.title}</h2>
@@ -288,7 +288,7 @@ const WorkListItemDetail = ({ item, onClose, onUpdate }) => {
               <h3 className="font-semibold text-gray-800 mb-3">Related Items</h3>
               <div className="space-y-2">
                 {details.relatedItems.map((related, idx) => (
-                  <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div key={idx} className="bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg p-3">
                     {related.full_name && (
                       <p className="font-medium text-gray-800">{related.full_name}</p>
                     )}
@@ -315,7 +315,7 @@ const WorkListItemDetail = ({ item, onClose, onUpdate }) => {
               <h3 className="font-semibold text-gray-800 mb-3">Completion History</h3>
               <div className="space-y-2">
                 {details.history.map((entry) => (
-                  <div key={entry.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div key={entry.id} className="bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg p-3">
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-medium text-gray-800">{entry.completed_by_name || 'Unknown'}</p>
@@ -338,7 +338,7 @@ const WorkListItemDetail = ({ item, onClose, onUpdate }) => {
           {item?.metadata && (
             <div>
               <h3 className="font-semibold text-gray-800 mb-3">Additional Information</h3>
-              <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs overflow-auto">
+              <pre className="bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg p-3 text-xs overflow-auto text-gray-900 dark:text-neutral-100">
                 {JSON.stringify(JSON.parse(item.metadata), null, 2)}
               </pre>
             </div>

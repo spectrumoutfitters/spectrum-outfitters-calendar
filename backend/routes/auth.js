@@ -5,7 +5,7 @@ import db from '../database/db.js';
 import { ensureUserColumns } from '../database/startup.js';
 import { authenticateToken } from '../middleware/auth.js';
 import rateLimit from 'express-rate-limit';
-import { getClientIP, lookupIPGeo, computeOnPremScore, recordLoginEvent } from '../utils/security.js';
+import { getClientIP, lookupIPGeo, computeOnPremScore, recordLoginEvent, recordLogoutEvent, checkVPNAndNotify } from '../utils/security.js';
 
 const router = express.Router();
 
@@ -107,7 +107,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     // Record successful login event
     const premScore = await computeOnPremScore(clientIP, browserGeo, ipGeo);
-    recordLoginEvent({
+    const eventId = await recordLoginEvent({
       userId: user.id, username: user.username, success: true, reason: null,
       ip: clientIP, forwardedFor, userAgent, browserGeo, ipGeo,
       networkOk: premScore.networkOk, geoOk: premScore.geoOk, score: premScore.score
@@ -128,6 +128,13 @@ router.post('/login', loginLimiter, async (req, res) => {
       },
       token
     });
+
+    // VPN check in background (notify admins if VPN/proxy detected)
+    if (eventId && req.app) {
+      setImmediate(() => {
+        checkVPNAndNotify(req.app, eventId, clientIP, user.username, user.full_name, user.id).catch(() => {});
+      });
+    }
   } catch (error) {
     console.error('Login error:', error);
     console.error('Error stack:', error.stack);
@@ -140,6 +147,14 @@ router.post('/login', loginLimiter, async (req, res) => {
 
 // POST /api/auth/logout
 router.post('/logout', authenticateToken, (req, res) => {
+  const ip = getClientIP(req);
+  const userAgent = req.headers['user-agent'] || null;
+  recordLogoutEvent({
+    userId: req.user.id,
+    username: req.user.username || '',
+    ip,
+    userAgent
+  }).catch(() => {});
   res.clearCookie('token');
   res.json({ message: 'Logged out successfully' });
 });

@@ -113,11 +113,11 @@ const TimeEntries = () => {
   if (isAdmin) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-gray-800">Time Clock</h1>
+        <h1 className="text-3xl font-bold text-gray-800 dark:text-neutral-100">Time Clock</h1>
         
         {/* Clock In/Out for Admin */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold mb-4">Your Time Clock</h2>
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
+          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Your Time Clock</h2>
           <ClockInOut />
         </div>
         
@@ -133,51 +133,51 @@ const TimeEntries = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-800">Time Clock</h1>
+      <h1 className="text-3xl font-bold text-gray-800 dark:text-neutral-100">Time Clock</h1>
 
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
         <ClockInOut />
       </div>
 
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
         <div className="flex flex-wrap gap-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
               Start Date
             </label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg"
+              className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
               End Date
             </label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg"
+              className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
             />
           </div>
         </div>
 
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+        <div className="mb-6 p-4 bg-gray-50 dark:bg-neutral-800 rounded-lg">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
-              <p className="text-sm text-gray-600">Total Hours</p>
+              <p className="text-sm text-gray-600 dark:text-neutral-200">Total Hours</p>
               <p className="text-lg font-semibold text-primary">{totalHours.toFixed(2)}</p>
             </div>
           </div>
         </div>
 
         {loading ? (
-          <div className="text-center py-8">Loading time entries...</div>
+          <div className="text-center py-8 text-gray-600 dark:text-neutral-200">Loading time entries...</div>
         ) : groupedDays.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No time entries found for this period</p>
+          <p className="text-gray-500 dark:text-neutral-200 text-center py-8">No time entries found for this period</p>
         ) : (
           <div className="space-y-4">
             {groupedDays.map((day) => {
@@ -192,15 +192,15 @@ const TimeEntries = () => {
               }
               
               return (
-                <div key={day.date} className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                <div key={day.date} className="border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 dark:bg-neutral-800 px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
                     <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-semibold">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">
                         {formatDate(day.date)}
                         {isToday && <span className="text-sm text-primary font-normal ml-2">(Today)</span>}
                       </h3>
                       <div className="flex gap-6 text-sm">
-                        <span className="text-gray-600">
+                        <span className="text-gray-600 dark:text-neutral-200">
                           Hours: <span className="font-semibold text-primary">{parseFloat(day.totalHours || 0).toFixed(2)}</span>
                         </span>
                       </div>
@@ -210,14 +210,14 @@ const TimeEntries = () => {
                   <div className="p-4">
                     {hasWorkEntries ? (
                       <table className="w-full">
-                        <thead className="bg-gray-50">
+                        <thead className="bg-gray-50 dark:bg-neutral-800">
                           <tr>
-                            <th className="text-left py-2 px-4 text-sm font-medium">Clock In</th>
-                            <th className="text-left py-2 px-4 text-sm font-medium">Clock Out</th>
-                            <th className="text-left py-2 px-4 text-sm font-medium">Break</th>
-                            <th className="text-left py-2 px-4 text-sm font-medium">Hours</th>
-                            <th className="text-left py-2 px-4 text-sm font-medium">Lunch Break</th>
-                            <th className="text-left py-2 px-4 text-sm font-medium">Notes</th>
+                            <th className="text-left py-2 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Clock In</th>
+                            <th className="text-left py-2 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Clock Out</th>
+                            <th className="text-left py-2 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Break</th>
+                            <th className="text-left py-2 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Hours</th>
+                            <th className="text-left py-2 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Lunch Break</th>
+                            <th className="text-left py-2 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Notes</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -263,11 +263,11 @@ const TimeEntries = () => {
                               : entry.clock_out;
 
                             return (
-                              <tr key={entry.id} className="border-b hover:bg-gray-50">
-                                <td className="py-2 px-4">
+                              <tr key={entry.id} className="border-b border-gray-100 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
+                                <td className="py-2 px-4 text-gray-900 dark:text-neutral-100">
                                   {entry.clock_in ? formatTime(entry.clock_in) : '—'}
                                 </td>
-                                <td className="py-2 px-4">
+                                <td className="py-2 px-4 text-gray-900 dark:text-neutral-100">
                                   {displayClockOut ? (
                                     formatTime(displayClockOut)
                                   ) : isStillInProgress ? (
@@ -276,52 +276,52 @@ const TimeEntries = () => {
                                     '—'
                                   )}
                                 </td>
-                                <td className="py-2 px-4">{entry.break_minutes || 0} min</td>
-                                <td className="py-2 px-4 font-semibold">{entry.hours || '0.00'}</td>
+                                <td className="py-2 px-4 text-gray-900 dark:text-neutral-100">{entry.break_minutes || 0} min</td>
+                                <td className="py-2 px-4 font-semibold text-gray-900 dark:text-neutral-100">{entry.hours || '0.00'}</td>
                                 <td className="py-2 px-4">
                                   {lunchBreak ? (
                                     <div className="text-sm">
-                                      <div className="text-gray-600">
+                                      <div className="text-gray-600 dark:text-neutral-200">
                                         Out: <span className="font-medium">
                                           {lunchBreak.clockOut ? formatTime(lunchBreak.clockOut) : '—'}
                                         </span>
                                       </div>
-                                      <div className="text-gray-600">
+                                      <div className="text-gray-600 dark:text-neutral-200">
                                         In: <span className="font-medium">
                                           {lunchBreak.clockIn ? formatTime(lunchBreak.clockIn) : 'Not returned yet'}
                                         </span>
                                       </div>
-                                      <div className="text-xs text-gray-500 mt-1">
+                                      <div className="text-xs text-gray-500 dark:text-neutral-300 mt-1">
                                         ({lunchBreak.duration || 0} min)
                                       </div>
                                     </div>
                                   ) : (
-                                    <span className="text-gray-400">—</span>
+                                    <span className="text-gray-400 dark:text-neutral-400">—</span>
                                   )}
                                 </td>
-                                <td className="py-2 px-4 text-sm text-gray-600">{entry.notes || '—'}</td>
+                                <td className="py-2 px-4 text-sm text-gray-600 dark:text-neutral-200">{entry.notes || '—'}</td>
                               </tr>
                             );
                           })}
                         </tbody>
                       </table>
                     ) : (
-                      <p className="text-gray-500 text-center py-4">No work entries for this day</p>
+                      <p className="text-gray-500 dark:text-neutral-200 text-center py-4">No work entries for this day</p>
                     )}
                     
                     {hasLunchBreaks && !hasWorkEntries && (
                       <div className="mt-4">
-                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Lunch Breaks:</h4>
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-neutral-200 mb-2">Lunch Breaks:</h4>
                         {day.lunchBreaks.map((lunchBreak) => (
-                          <div key={lunchBreak.id} className="bg-orange-50 border border-orange-200 rounded p-3 mb-2">
+                          <div key={lunchBreak.id} className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-3 mb-2">
                             <div className="text-sm">
-                              <div className="text-gray-700">
+                              <div className="text-gray-700 dark:text-neutral-200">
                                 Out: <span className="font-medium">{lunchBreak.clockOut ? formatTime(lunchBreak.clockOut) : '—'}</span>
                               </div>
-                              <div className="text-gray-700">
+                              <div className="text-gray-700 dark:text-neutral-200">
                                 In: <span className="font-medium">{lunchBreak.clockIn ? formatTime(lunchBreak.clockIn) : 'Not returned yet'}</span>
                               </div>
-                              <div className="text-xs text-gray-500 mt-1">
+                              <div className="text-xs text-gray-500 dark:text-neutral-300 mt-1">
                                 Duration: {lunchBreak.duration || 0} min
                               </div>
                             </div>
