@@ -45,7 +45,7 @@ const AdminTimeClock = () => {
   const loadUsers = async () => {
     try {
       const response = await api.get('/users');
-      const activeUsers = response.data.users.filter(u => u.is_active);
+      const activeUsers = (Array.isArray(response.data.users) ? response.data.users : []).filter(u => u.is_active);
       setUsers(activeUsers);
       if (activeUsers.length > 0 && !selectedUserId) {
         // Default to current admin user if available, otherwise first user

@@ -40,7 +40,7 @@ const Analytics = () => {
   const loadUsers = async () => {
     try {
       const response = await api.get('/users');
-      setUserList(response.data.users.filter(u => u.is_active));
+      setUserList((Array.isArray(response.data.users) ? response.data.users : []).filter(u => u.is_active));
     } catch (error) {
       console.error('Error loading users:', error);
     }

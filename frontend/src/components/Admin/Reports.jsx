@@ -40,7 +40,7 @@ const Reports = () => {
   const loadUsers = async () => {
     try {
       const response = await api.get('/users');
-      setUsers(response.data.users.filter(u => u.is_active));
+      setUsers((Array.isArray(response.data.users) ? response.data.users : []).filter(u => u.is_active));
     } catch (error) {
       console.error('Error loading users:', error);
     }

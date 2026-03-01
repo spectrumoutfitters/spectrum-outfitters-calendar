@@ -79,7 +79,7 @@ const ChatWindow = ({
     try {
       const response = await api.get('/users/active');
       // Filter out current user
-      setUsers(response.data.users.filter(u => u.id !== user.id));
+      setUsers((Array.isArray(response.data.users) ? response.data.users : []).filter(u => u.id !== user.id));
     } catch (error) {
       console.error('Error loading users:', error);
     }
