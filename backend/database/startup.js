@@ -12,6 +12,7 @@ import { addPushSubscriptionsTable } from './add_push_subscriptions.js';
 import { addInventoryTaskUsageTable } from './add_inventory_task_usage.js';
 import { addTaskPhotosTable } from './add_task_photos.js';
 import { addInventorySupplierColumns } from './add_inventory_supplier.js';
+import { addCustomerStatusTable } from './add_customer_status.js';
 
 export async function ensureUserColumns() {
   const columns = [
@@ -176,4 +177,5 @@ export async function runStartupMigrations() {
   await addInventoryTaskUsageTable();
   await addTaskPhotosTable();
   await addInventorySupplierColumns();
+  await addCustomerStatusTable();
 }
