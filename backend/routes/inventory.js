@@ -535,6 +535,11 @@ router.post('/items/:id/mark-returned', requireAdmin, async (req, res) => {
       [id]
     );
 
+    // Auto-remove from task parts list when returned
+    try {
+      await db.runAsync(`DELETE FROM inventory_task_usage WHERE item_id = ?`, [id]);
+    } catch (_) { /* table may not exist yet */ }
+
     const fields = [
       'i.id', 'i.barcode', 'i.name', 'i.category_id', 'c.name AS category_name', 'i.unit', 'i.price', 'i.quantity',
       'i.weight', 'i.weight_unit', 'i.viscosity', 'i.image_url', 'i.size_per_unit', 'i.last_counted_at', 'i.last_counted_by',
