@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import UserManagement from '../components/Admin/UserManagement';
@@ -18,13 +18,102 @@ import FinanceDashboard from '../components/Admin/FinanceDashboard';
 import SystemUpdates from '../components/Admin/SystemUpdates';
 import SecuritySessions from '../components/Admin/SecuritySessions';
 import AdminHistory from '../components/Admin/AdminHistory';
+import AdminBroadcastNotification from '../components/Notifications/AdminBroadcastNotification';
+
+// Map legacy tab IDs to new main+sub structure
+const LEGACY_MAP = {
+  dashboard:  { main: 'overview', sub: null },
+  worklist:   { main: 'overview', sub: null },
+  status:     { main: 'team',     sub: 'status' },
+  time:       { main: 'team',     sub: 'time' },
+  users:      { main: 'team',     sub: 'users' },
+  schedule:   { main: 'team',     sub: 'schedule' },
+  history:    { main: 'team',     sub: 'history' },
+  inventory:  { main: 'shop',     sub: 'inventory' },
+  orders:     { main: 'shop',     sub: 'orders' },
+  products:   { main: 'shop',     sub: 'products' },
+  payroll:    { main: 'finance',  sub: 'payroll' },
+  finance:    { main: 'finance',  sub: 'finance' },
+  compliance: { main: 'finance',  sub: 'compliance' },
+  analytics:  { main: 'insights', sub: 'analytics' },
+  reports:    { main: 'insights', sub: 'reports' },
+  settings:   { main: 'settings', sub: 'general' },
+  updates:    { main: 'settings', sub: 'updates' },
+  security:   { main: 'settings', sub: 'security' },
+};
+
+const DEFAULT_SUB = {
+  team:     'status',
+  shop:     'inventory',
+  finance:  'payroll',
+  insights: 'analytics',
+  settings: 'general',
+};
+
+const MAIN_TABS = [
+  { id: 'overview',  label: 'Overview' },
+  { id: 'team',      label: 'Team' },
+  { id: 'shop',      label: 'Shop' },
+  { id: 'finance',   label: 'Finance' },
+  { id: 'insights',  label: 'Insights' },
+  { id: 'settings',  label: 'Settings' },
+];
+
+const SUB_TABS = {
+  team:     ['status', 'schedule', 'time', 'users', 'history'],
+  shop:     ['inventory', 'orders', 'products'],
+  finance:  ['payroll', 'finance', 'compliance'],
+  insights: ['analytics', 'reports'],
+  settings: ['general', 'security', 'updates'],
+};
+
+const SUB_TAB_LABELS = {
+  status:     'Status',
+  schedule:   'Schedule',
+  time:       'Time',
+  users:      'Users',
+  history:    'History',
+  inventory:  'Inventory',
+  orders:     'Orders',
+  products:   'Products',
+  payroll:    'Payroll',
+  finance:    'Finance',
+  compliance: 'Compliance',
+  analytics:  'Analytics',
+  reports:    'Reports',
+  general:    'General',
+  security:   'Security',
+  updates:    'Updates',
+};
+
+const LS_KEY = 'admin-active-tab';
+
+function resolveInitialTab(tabFromUrl) {
+  if (tabFromUrl) {
+    if (LEGACY_MAP[tabFromUrl]) return LEGACY_MAP[tabFromUrl];
+    if (MAIN_TABS.find(t => t.id === tabFromUrl)) return { main: tabFromUrl, sub: DEFAULT_SUB[tabFromUrl] || null };
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (saved?.main && MAIN_TABS.find(t => t.id === saved.main)) return saved;
+  } catch {}
+  return { main: 'overview', sub: null };
+}
+
 const Admin = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState(tabFromUrl || 'dashboard');
+
+  const initial = resolveInitialTab(tabFromUrl);
+  const [activeMain, setActiveMain] = useState(initial.main);
+  const [activeSub, setActiveSub] = useState(initial.sub || DEFAULT_SUB[initial.main] || null);
+  const [showBroadcast, setShowBroadcast] = useState(false);
+
   const [dashboardData, setDashboardData] = useState({
     worklistItems: [],
+    worklistCompleted: 0,
+    worklistTotal: 0,
     pendingTimeOff: 0,
     unapprovedTimeEntries: 0,
     tasksInReview: 0,
@@ -32,50 +121,56 @@ const Admin = () => {
     totalEmployees: 0,
     upcomingCompliance: [],
     overdueCompliance: [],
-    recentOrders: 0,
-    lowStockProducts: 0,
-    pendingReorderRequests: 0
+    pendingReorderRequests: 0,
+    lowStockItems: 0,
   });
   const [loading, setLoading] = useState(true);
 
-  // Update tab when URL changes
+  // Sync URL → state when URL changes externally
   useEffect(() => {
-    if (tabFromUrl) {
-      setActiveTab(tabFromUrl);
-    }
+    if (!tabFromUrl) return;
+    const resolved = resolveInitialTab(tabFromUrl);
+    setActiveMain(resolved.main);
+    setActiveSub(resolved.sub || DEFAULT_SUB[resolved.main] || null);
   }, [tabFromUrl]);
 
-  // Load dashboard data
+  // Persist to localStorage on every navigation
   useEffect(() => {
-    if (activeTab === 'dashboard') {
-      loadDashboardData();
-    }
-  }, [activeTab]);
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({ main: activeMain, sub: activeSub }));
+    } catch {}
+  }, [activeMain, activeSub]);
+
+  // Load dashboard data on mount (and when returning to overview)
+  useEffect(() => {
+    if (activeMain === 'overview') loadDashboardData();
+  }, [activeMain]);
 
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      const [worklistRes, statusRes, complianceRes, reorderCountRes] = await Promise.all([
+      const [worklistRes, statusRes, complianceRes, reorderCountRes, lowStockRes] = await Promise.all([
         api.get('/admin/worklist/today').catch(() => ({ data: { items: [] } })),
         api.get('/time/employees/status').catch(() => ({ data: [] })),
         api.get('/compliance/dashboard').catch(() => ({ data: { upcoming: [], overdue: [] } })),
-        api.get('/inventory/refill-requests/count', { params: { status: 'pending' } }).catch(() => ({ data: { count: 0 } }))
+        api.get('/inventory/refill-requests/count', { params: { status: 'pending' } }).catch(() => ({ data: { count: 0 } })),
+        api.get('/inventory/items', { params: { low_stock: true, limit: 1 } }).catch(() => ({ data: { total: 0 } })),
       ]);
 
       const worklist = worklistRes.data?.allItems || worklistRes.data?.items || [];
       const employees = statusRes.data || [];
       const compliance = complianceRes.data || {};
       const pendingReorderRequests = reorderCountRes.data?.count ?? 0;
+      const lowStockItems = lowStockRes.data?.total ?? lowStockRes.data?.count ?? 0;
 
-      // Count pending items from worklist
       const pendingItems = worklist.filter(item => !item.is_completed);
-      const pendingTimeOff = pendingItems.filter(i => i.smart_key === 'pending_time_off').length > 0
+      const pendingTimeOff = pendingItems.find(i => i.smart_key === 'pending_time_off')
         ? parseInt(pendingItems.find(i => i.smart_key === 'pending_time_off')?.title?.match(/\d+/)?.[0] || 0)
         : 0;
-      const unapprovedTime = pendingItems.filter(i => i.smart_key === 'unapproved_time').length > 0
+      const unapprovedTime = pendingItems.find(i => i.smart_key === 'unapproved_time')
         ? parseInt(pendingItems.find(i => i.smart_key === 'unapproved_time')?.title?.match(/\d+/)?.[0] || 0)
         : 0;
-      const tasksReview = pendingItems.filter(i => i.smart_key === 'tasks_in_review').length > 0
+      const tasksReview = pendingItems.find(i => i.smart_key === 'tasks_in_review')
         ? parseInt(pendingItems.find(i => i.smart_key === 'tasks_in_review')?.title?.match(/\d+/)?.[0] || 0)
         : 0;
 
@@ -90,7 +185,8 @@ const Admin = () => {
         totalEmployees: employees.length,
         upcomingCompliance: compliance.upcoming || [],
         overdueCompliance: compliance.overdue || [],
-        pendingReorderRequests
+        pendingReorderRequests,
+        lowStockItems,
       });
     } catch (error) {
       console.error('Error loading dashboard:', error);
@@ -99,331 +195,199 @@ const Admin = () => {
     }
   };
 
-  const navigateToTab = (tabId) => {
-    setActiveTab(tabId);
-    setSearchParams({ tab: tabId });
+  const goToMain = (main) => {
+    const sub = DEFAULT_SUB[main] || null;
+    setActiveMain(main);
+    setActiveSub(sub);
+    setSearchParams({ tab: main });
   };
 
-  const categoryOrder = ['people', 'shop', 'finance', 'insights', 'system'];
-  const categoryLabels = {
-    people: { label: 'People & Team', icon: '👥', description: 'Staff, team schedule, and time off (sidebar Schedule is for viewing your own schedule)' },
-    shop: { label: 'Shop & Orders', icon: '🛒', description: 'Inventory, products, and customer orders' },
-    finance: { label: 'Finance & Compliance', icon: '💰', description: 'Payroll, tax, and filings' },
-    insights: { label: 'Insights & Reports', icon: '📊', description: 'Analytics and business reports' },
-    system: { label: 'System', icon: '🔧', description: 'Settings and updates' }
+  const goToSub = (sub) => {
+    setActiveSub(sub);
+    setSearchParams({ tab: sub });
   };
 
-  const modules = [
-    {
-      id: 'worklist',
-      category: 'people',
-      label: 'Daily Work List',
-      icon: '📋',
-      color: 'bg-primary',
-      description: 'Your daily admin tasks and checklist',
-      getBadge: () => {
-        const pending = dashboardData.worklistTotal - dashboardData.worklistCompleted;
-        return pending > 0 ? { count: pending, color: 'bg-orange-500' } : { count: '✓', color: 'bg-green-500' };
-      }
-    },
-    {
-      id: 'status',
-      category: 'people',
-      label: 'Employee Status',
-      icon: '👥',
-      color: 'bg-green-500',
-      description: 'Who\'s clocked in, on lunch, or off',
-      getBadge: () => ({ count: `${dashboardData.clockedInEmployees}/${dashboardData.totalEmployees}`, color: 'bg-green-600' })
-    },
-    {
-      id: 'time',
-      category: 'people',
-      label: 'Time Off Requests',
-      icon: '🏖️',
-      color: 'bg-primary-light',
-      description: 'Review and approve time off',
-      getBadge: () => dashboardData.pendingTimeOff > 0 ? { count: dashboardData.pendingTimeOff, color: 'bg-red-500' } : null
-    },
-    {
-      id: 'users',
-      category: 'people',
-      label: 'User Management',
-      icon: '⚙️',
-      color: 'bg-gray-500',
-      description: 'Employee accounts and permissions'
-    },
-    {
-      id: 'schedule',
-      category: 'people',
-      label: 'Team schedule',
-      icon: '📅',
-      color: 'bg-primary',
-      description: 'View and manage team schedules'
-    },
-    {
-      id: 'history',
-      category: 'people',
-      label: 'Login & punch history',
-      icon: '📜',
-      color: 'bg-slate-500',
-      description: 'Login/logout and lunch clock-in/out history'
-    },
-    {
-      id: 'products',
-      category: 'shop',
-      label: 'Products',
-      icon: '🛒',
-      color: 'bg-teal-500',
-      description: 'Product catalog for orders'
-    },
-    {
-      id: 'orders',
-      category: 'shop',
-      label: 'Orders',
-      icon: '📦',
-      color: 'bg-amber-500',
-      description: 'Track and manage customer orders'
-    },
-    {
-      id: 'payroll',
-      category: 'finance',
-      label: 'Payroll',
-      icon: '💰',
-      color: 'bg-emerald-500',
-      description: 'Process payroll and compensation'
-    },
-    {
-      id: 'finance',
-      category: 'finance',
-      label: 'Financial Planner',
-      icon: '📈',
-      color: 'bg-indigo-500',
-      description: 'Bank connections, revenue sync, cash flow & forecasting'
-    },
-    {
-      id: 'compliance',
-      category: 'finance',
-      label: 'Tax & Compliance',
-      icon: '🏛️',
-      color: 'bg-red-500',
-      description: 'Sales tax, payroll tax, and filings',
-      getBadge: () => dashboardData.overdueCompliance?.length > 0 
-        ? { count: dashboardData.overdueCompliance.length, color: 'bg-red-600', label: 'OVERDUE' } 
-        : dashboardData.upcomingCompliance?.length > 0 
-          ? { count: dashboardData.upcomingCompliance.length, color: 'bg-yellow-500' }
-          : null
-    },
-    {
-      id: 'analytics',
-      category: 'insights',
-      label: 'Analytics',
-      icon: '📈',
-      color: 'bg-cyan-500',
-      description: 'Business insights and metrics'
-    },
-    {
-      id: 'reports',
-      category: 'insights',
-      label: 'Reports',
-      icon: '📊',
-      color: 'bg-violet-500',
-      description: 'Generate detailed reports'
-    },
-    {
-      id: 'settings',
-      category: 'system',
-      label: 'Settings',
-      icon: '🔧',
-      color: 'bg-slate-500',
-      description: 'Configuration and preferences'
-    },
-    {
-      id: 'updates',
-      category: 'system',
-      label: 'System Updates',
-      icon: '📢',
-      color: 'bg-pink-500',
-      description: 'Update notifications and changelog'
-    },
-    {
-      id: 'security',
-      category: 'system',
-      label: 'Security & Sessions',
-      icon: '🔒',
-      color: 'bg-red-600',
-      description: 'Login audit, active sessions, on-prem verification'
-    }
-  ];
+  // Team badge = pending time approvals
+  const teamBadge = dashboardData.unapprovedTimeEntries + dashboardData.pendingTimeOff;
 
-  // Render dashboard view
-  const renderDashboard = () => {
+  // ── Overview tab ────────────────────────────────────────────────────────────
+  const renderOverview = () => {
     if (loading) {
       return (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <span className="ml-3 text-gray-600 dark:text-neutral-200">Loading dashboard...</span>
+        <div className="flex items-center justify-center py-16">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          <span className="ml-3 text-gray-600 dark:text-neutral-200">Loading…</span>
         </div>
       );
     }
 
     const urgentItems = [];
-    
-    // Check for overdue compliance
     if (dashboardData.overdueCompliance?.length > 0) {
-      urgentItems.push({
-        type: 'error',
-        icon: '🚨',
-        message: `${dashboardData.overdueCompliance.length} overdue tax obligation(s)!`,
-        action: () => navigateToTab('compliance')
-      });
+      urgentItems.push({ icon: '🚨', message: `${dashboardData.overdueCompliance.length} overdue tax obligation(s)`, action: () => { setActiveMain('finance'); setActiveSub('compliance'); setSearchParams({ tab: 'compliance' }); } });
     }
-
-    // Check for pending time off
     if (dashboardData.pendingTimeOff > 0) {
-      urgentItems.push({
-        type: 'warning',
-        icon: '🏖️',
-        message: `${dashboardData.pendingTimeOff} time off request(s) pending approval`,
-        action: () => navigateToTab('time')
-      });
+      urgentItems.push({ icon: '🏖️', message: `${dashboardData.pendingTimeOff} time off request(s) pending`, action: () => { setActiveMain('team'); setActiveSub('time'); setSearchParams({ tab: 'time' }); } });
     }
-
-    // Check for unapproved time entries
     if (dashboardData.unapprovedTimeEntries > 0) {
-      urgentItems.push({
-        type: 'warning',
-        icon: '⏰',
-        message: `${dashboardData.unapprovedTimeEntries} time entries need approval`,
-        action: () => navigateToTab('time')
-      });
+      urgentItems.push({ icon: '⏰', message: `${dashboardData.unapprovedTimeEntries} time entries need approval`, action: () => { setActiveMain('team'); setActiveSub('time'); setSearchParams({ tab: 'time' }); } });
     }
-
-    // Check for tasks in review
     if (dashboardData.tasksInReview > 0) {
-      urgentItems.push({
-        type: 'info',
-        icon: '✅',
-        message: `${dashboardData.tasksInReview} task(s) waiting for review`,
-        action: () => navigate('/tasks?status=review')
-      });
+      urgentItems.push({ icon: '✅', message: `${dashboardData.tasksInReview} task(s) awaiting review`, action: () => navigate('/tasks?status=review') });
     }
-
-    // Reorder requests from the shop (tell office to order)
     if (dashboardData.pendingReorderRequests > 0) {
-      urgentItems.push({
-        type: 'warning',
-        icon: '📦',
-        message: `${dashboardData.pendingReorderRequests} reorder request(s) — fill out where ordered, price & when it will arrive`,
-        action: () => { setSearchParams({ tab: 'inventory', refills: '1' }); setActiveTab('inventory'); }
-      });
+      urgentItems.push({ icon: '📦', message: `${dashboardData.pendingReorderRequests} reorder request(s) need attention`, action: () => { setActiveMain('shop'); setActiveSub('inventory'); setSearchParams({ tab: 'inventory' }); } });
     }
-
-    const allClear = urgentItems.length === 0 && dashboardData.worklistCompleted === dashboardData.worklistTotal;
 
     return (
       <div className="space-y-6">
-        {/* Status + Today's Progress in one block */}
-        <div className="space-y-3">
-          {allClear ? (
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <span className="text-3xl">🎉</span>
-                  <div>
-                    <h2 className="text-lg font-bold">All Caught Up!</h2>
-                    <p className="text-sm opacity-90">No urgent items. Great job staying on top of things!</p>
-                  </div>
-                </div>
+        {/* Alert banner */}
+        {urgentItems.length > 0 ? (
+          <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl p-5 text-white shadow-lg">
+            <div className="flex items-center gap-4 mb-3">
+              <span className="text-3xl">⚡</span>
+              <div>
+                <h2 className="text-lg font-bold">Needs Attention</h2>
+                <p className="text-sm opacity-90">{urgentItems.length} item(s) require action</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {urgentItems.map((item, idx) => (
                 <button
-                  onClick={() => navigateToTab('worklist')}
-                  className="flex items-center gap-3 bg-white/20 hover:bg-white/30 dark:bg-white/10 dark:hover:bg-white/20 rounded-lg px-4 py-2 text-left text-sm font-medium transition shrink-0"
+                  key={idx}
+                  onClick={item.action}
+                  className="w-full text-left bg-white/20 hover:bg-white/30 dark:bg-white/10 dark:hover:bg-white/20 rounded-lg p-3 flex items-center gap-3 transition text-sm"
                 >
-                  <span className="text-gray-200 dark:text-white/90">Today: {dashboardData.worklistCompleted}/{dashboardData.worklistTotal} tasks</span>
-                  <span>View list →</span>
+                  <span>{item.icon}</span>
+                  <span className="flex-1">{item.message}</span>
+                  <span>→</span>
                 </button>
-              </div>
+              ))}
             </div>
-          ) : (
-            <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl p-5 text-white shadow-lg">
-              <div className="flex items-center gap-4 mb-4">
-                <span className="text-3xl">⚡</span>
-                <div>
-                  <h2 className="text-lg font-bold">Needs Your Attention</h2>
-                  <p className="text-sm opacity-90">{urgentItems.length} item(s) require action</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {urgentItems.map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={item.action}
-                    className="w-full text-left bg-white/20 hover:bg-white/30 dark:bg-white/10 dark:hover:bg-white/20 rounded-lg p-3 flex items-center gap-3 transition text-sm"
-                  >
-                    <span className="text-lg">{item.icon}</span>
-                    <span>{item.message}</span>
-                    <span className="ml-auto">→</span>
-                  </button>
-                ))}
-              </div>
-              <div className="mt-3 pt-3 border-t border-white/20 flex items-center justify-between">
-                <span className="text-sm opacity-90">Today: {dashboardData.worklistCompleted}/{dashboardData.worklistTotal} work list tasks</span>
-                <button onClick={() => navigateToTab('worklist')} className="text-sm font-medium underline hover:no-underline">View list →</button>
-              </div>
+          </div>
+        ) : (
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg flex items-center gap-4">
+            <span className="text-3xl">🎉</span>
+            <div>
+              <h2 className="text-lg font-bold">All Caught Up!</h2>
+              <p className="text-sm opacity-90">No urgent items. Great work!</p>
             </div>
-          )}
+          </div>
+        )}
+
+        {/* Stats cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <button
+            onClick={() => { setActiveMain('team'); setActiveSub('status'); setSearchParams({ tab: 'status' }); }}
+            className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-left hover:shadow-md transition group"
+          >
+            <p className="text-xs text-gray-500 dark:text-neutral-400 mb-1">Staff In</p>
+            <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">
+              {dashboardData.clockedInEmployees}
+              <span className="text-sm font-normal text-gray-400 ml-1">/ {dashboardData.totalEmployees}</span>
+            </p>
+            <p className="text-xs text-primary mt-1 group-hover:underline">View status →</p>
+          </button>
+
+          <button
+            onClick={() => { setActiveMain('team'); setActiveSub('time'); setSearchParams({ tab: 'time' }); }}
+            className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-left hover:shadow-md transition group"
+          >
+            <p className="text-xs text-gray-500 dark:text-neutral-400 mb-1">Pending Approvals</p>
+            <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">
+              {dashboardData.unapprovedTimeEntries + dashboardData.pendingTimeOff}
+            </p>
+            <p className="text-xs text-primary mt-1 group-hover:underline">Review →</p>
+          </button>
+
+          <button
+            onClick={() => navigate('/tasks?status=review')}
+            className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-left hover:shadow-md transition group"
+          >
+            <p className="text-xs text-gray-500 dark:text-neutral-400 mb-1">Open Tasks</p>
+            <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">
+              {dashboardData.tasksInReview}
+            </p>
+            <p className="text-xs text-primary mt-1 group-hover:underline">View tasks →</p>
+          </button>
+
+          <button
+            onClick={() => { setActiveMain('shop'); setActiveSub('inventory'); setSearchParams({ tab: 'inventory' }); }}
+            className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-left hover:shadow-md transition group"
+          >
+            <p className="text-xs text-gray-500 dark:text-neutral-400 mb-1">Low Stock</p>
+            <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">
+              {dashboardData.lowStockItems > 0 ? dashboardData.lowStockItems : dashboardData.pendingReorderRequests}
+            </p>
+            <p className="text-xs text-primary mt-1 group-hover:underline">Inventory →</p>
+          </button>
         </div>
 
-        {/* Today's daily tasks — always visible so admins are reminded */}
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5 shadow-sm dark:shadow-neutral-950/50">
+        {/* Today's work list */}
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">📋 Today&apos;s tasks</h3>
-            <button
-              onClick={() => navigateToTab('worklist')}
-              className="text-primary hover:text-primary/80 text-sm font-medium"
-            >
-              View full list →
-            </button>
+            <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">📋 Today&apos;s Tasks</h3>
+            <p className="text-xs text-gray-500 dark:text-neutral-400">
+              {dashboardData.worklistCompleted}/{dashboardData.worklistTotal} completed
+            </p>
           </div>
-          {loading ? (
-            <p className="text-gray-500 dark:text-neutral-200 text-sm py-2">Loading…</p>
-          ) : !dashboardData.worklistItems?.length ? (
-            <p className="text-gray-500 dark:text-neutral-200 text-sm py-2">No tasks for today. Add some on the work list.</p>
+          {!dashboardData.worklistItems?.length ? (
+            <p className="text-sm text-gray-500 dark:text-neutral-400 py-2">No tasks for today.</p>
           ) : (
-            <ul className="space-y-2 max-h-64 overflow-y-auto">
+            <ul className="space-y-2 max-h-56 overflow-y-auto">
               {dashboardData.worklistItems
-                .filter((i) => !i.is_completed)
+                .filter(i => !i.is_completed)
                 .slice(0, 10)
-                .map((item) => (
+                .map(item => (
                   <li key={item.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800">
-                    <span className="flex-shrink-0 w-5 h-5 rounded border-2 border-gray-300 dark:border-neutral-600" aria-hidden />
-                    <span className="text-sm text-gray-800 dark:text-neutral-100 flex-1 min-w-0 truncate">{item.title}</span>
+                    <span className="flex-shrink-0 w-4 h-4 rounded border-2 border-gray-300 dark:border-neutral-600" />
+                    <span className="text-sm text-gray-800 dark:text-neutral-100 flex-1 truncate">{item.title}</span>
                     {item.link_target && (
                       <button
-                        type="button"
                         onClick={() => navigate(item.link_target)}
-                        className="text-xs text-primary shrink-0 hover:underline"
+                        className="text-xs text-primary hover:underline shrink-0"
                       >
                         Open
                       </button>
                     )}
                   </li>
                 ))}
-              {dashboardData.worklistItems.filter((i) => i.is_completed).length > 0 && (
-                <li className="pt-2 mt-2 border-t border-gray-100 dark:border-neutral-700 text-xs text-gray-500 dark:text-neutral-300">
-                  ✓ {dashboardData.worklistItems.filter((i) => i.is_completed).length} completed
+              {dashboardData.worklistItems.filter(i => i.is_completed).length > 0 && (
+                <li className="pt-2 mt-1 border-t border-gray-100 dark:border-neutral-700 text-xs text-gray-500 dark:text-neutral-300">
+                  ✓ {dashboardData.worklistItems.filter(i => i.is_completed).length} completed
                 </li>
               )}
             </ul>
           )}
         </div>
 
-        {/* Upcoming Compliance — only when there's data */}
+        {/* Quick links */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {[
+            { label: 'Employee Status', icon: '👥', main: 'team', sub: 'status' },
+            { label: 'Time Approvals', icon: '⏰', main: 'team', sub: 'time' },
+            { label: 'Inventory', icon: '📦', main: 'shop', sub: 'inventory' },
+            { label: 'Payroll', icon: '💰', main: 'finance', sub: 'payroll' },
+            { label: 'Analytics', icon: '📊', main: 'insights', sub: 'analytics' },
+            { label: 'Settings', icon: '🔧', main: 'settings', sub: 'general' },
+          ].map(link => (
+            <button
+              key={link.label}
+              onClick={() => { setActiveMain(link.main); setActiveSub(link.sub); setSearchParams({ tab: link.sub }); }}
+              className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 flex items-center gap-3 hover:shadow-md hover:border-primary/40 transition text-left"
+            >
+              <span className="text-xl">{link.icon}</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">{link.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Upcoming compliance */}
         {dashboardData.upcomingCompliance?.length > 0 && (
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5 shadow-sm dark:shadow-neutral-950/50">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">🏛️ Upcoming Tax Deadlines</h3>
               <button
-                onClick={() => navigateToTab('compliance')}
+                onClick={() => { setActiveMain('finance'); setActiveSub('compliance'); setSearchParams({ tab: 'compliance' }); }}
                 className="text-primary hover:text-primary-dark text-sm font-medium"
               >
                 View All →
@@ -434,122 +398,142 @@ const Admin = () => {
                 <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg">
                   <div>
                     <p className="font-medium text-gray-800 dark:text-neutral-100 text-sm">{item.obligation_name}</p>
-                    <p className="text-xs text-gray-500 dark:text-neutral-200">Due: {new Date(item.due_date).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-500 dark:text-neutral-400">Due: {new Date(item.due_date).toLocaleDateString()}</p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    item.days_until_due <= 7 ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : 'bg-primary-subtle dark:bg-primary/20 text-primary'
+                    item.days_until_due <= 7
+                      ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300'
+                      : 'bg-primary-subtle dark:bg-primary/20 text-primary'
                   }`}>
-                    {item.days_until_due} days
+                    {item.days_until_due}d
                   </span>
                 </div>
               ))}
             </div>
           </div>
         )}
-
-        {/* Modules by category */}
-        <div className="space-y-6">
-          {categoryOrder.map((catId) => {
-            const cat = categoryLabels[catId];
-            const catModules = modules.filter((m) => m.category === catId);
-            if (catModules.length === 0) return null;
-            return (
-              <div key={catId}>
-                <div className="mb-3">
-                  <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100 flex items-center gap-2">
-                    <span>{cat.icon}</span>
-                    {cat.label}
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-neutral-300 mt-0.5">{cat.description}</p>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {catModules.map((module) => {
-                    const badge = module.getBadge?.();
-                    return (
-                      <button
-                        key={module.id}
-                        onClick={() => navigateToTab(module.id)}
-                        className="relative bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 hover:shadow-md hover:border-gray-300 dark:hover:border-neutral-600 dark:shadow-neutral-950/50 transition-all text-left group"
-                      >
-                        {badge && (
-                          <span className={`absolute -top-1.5 -right-1.5 ${badge.color} text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[22px] text-center`}>
-                            {badge.count}
-                          </span>
-                        )}
-                        <div className={`w-10 h-10 ${module.color} rounded-lg flex items-center justify-center text-xl mb-2 group-hover:scale-105 transition-transform`}>
-                          {module.icon}
-                        </div>
-                        <h4 className="font-semibold text-gray-800 dark:text-neutral-100 text-sm">{module.label}</h4>
-                        <p className="text-xs text-gray-500 dark:text-neutral-200 mt-0.5 line-clamp-2">{module.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
     );
   };
 
-  // If not on dashboard, show module with back button
-  if (activeTab !== 'dashboard') {
-    const currentModule = modules.find(m => m.id === activeTab);
-    
-    return (
-      <div className="space-y-4">
-        {/* Breadcrumb header */}
-        <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => navigateToTab('dashboard')}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700 rounded-lg transition text-gray-700 dark:text-neutral-200"
-          >
-            <span>←</span>
-            <span>Dashboard</span>
-          </button>
-          <span className="text-gray-400 dark:text-neutral-500">/</span>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-neutral-100 flex items-center gap-2">
-            <span>{currentModule?.icon}</span>
-            {currentModule?.label || 'Admin'}
-          </h1>
-        </div>
+  // ── Sub-tab content renderer ─────────────────────────────────────────────────
+  const renderSubContent = () => {
+    switch (activeSub) {
+      // Team
+      case 'status':     return <EmployeeStatus />;
+      case 'schedule':   return <ScheduleCalendar />;
+      case 'time':       return <TimeApproval />;
+      case 'users':      return <UserManagement />;
+      case 'history':    return <AdminHistory />;
+      // Shop
+      case 'inventory':  return <InventoryManagement />;
+      case 'orders':     return <OrderManagement />;
+      case 'products':   return <ProductManagement />;
+      // Finance
+      case 'payroll':    return <PayrollManagement />;
+      case 'finance':    return <FinanceDashboard />;
+      case 'compliance': return <ComplianceCenter />;
+      // Insights
+      case 'analytics':  return <Analytics />;
+      case 'reports':    return <Reports />;
+      // Settings
+      case 'general':    return <Settings />;
+      case 'security':   return <SecuritySessions />;
+      case 'updates':    return <SystemUpdates />;
+      default:           return null;
+    }
+  };
 
-        {/* Module content */}
-        <div>
-          {activeTab === 'worklist' && <AdminWorkList />}
-          {activeTab === 'status' && <EmployeeStatus />}
-          {activeTab === 'users' && <UserManagement />}
-          {activeTab === 'time' && <TimeApproval />}
-          {activeTab === 'schedule' && <ScheduleCalendar />}
-          {activeTab === 'inventory' && <InventoryManagement />}
-          {activeTab === 'products' && <ProductManagement />}
-          {activeTab === 'orders' && <OrderManagement />}
-          {activeTab === 'payroll' && <PayrollManagement />}
-          {activeTab === 'finance' && <FinanceDashboard />}
-          {activeTab === 'compliance' && <ComplianceCenter />}
-          {activeTab === 'analytics' && <Analytics />}
-          {activeTab === 'reports' && <Reports />}
-          {activeTab === 'settings' && <Settings />}
-          {activeTab === 'updates' && <SystemUpdates />}
-          {activeTab === 'security' && <SecuritySessions />}
-          {activeTab === 'history' && <AdminHistory />}
-        </div>
-      </div>
-    );
-  }
+  const GOLD = '#D4A017';
 
-  // Dashboard view
   return (
     <div className="space-y-4 md:space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">Admin Dashboard</h1>
-        <p className="text-gray-500 dark:text-neutral-200">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </p>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">Admin</h1>
+        <div className="flex items-center gap-2">
+          <p className="hidden sm:block text-sm text-gray-500 dark:text-neutral-400">
+            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+          </p>
+          <button
+            onClick={() => setShowBroadcast(true)}
+            title="Broadcast notification"
+            className="flex items-center gap-2 px-3 py-1.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition"
+          >
+            <span>📢</span>
+            <span className="hidden sm:inline">Broadcast</span>
+          </button>
+        </div>
       </div>
 
-      {renderDashboard()}
+      {/* Main tab bar */}
+      <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+        <div className="flex gap-1 min-w-max border-b border-gray-200 dark:border-neutral-700">
+          {MAIN_TABS.map((tab) => {
+            const isActive = activeMain === tab.id;
+            const badge = tab.id === 'team' && teamBadge > 0 ? teamBadge : null;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => goToMain(tab.id)}
+                className={`relative px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors ${
+                  isActive
+                    ? 'text-gray-900 dark:text-neutral-100'
+                    : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'
+                }`}
+              >
+                {tab.label}
+                {badge && (
+                  <span className="ml-1.5 inline-flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5">
+                    {badge > 9 ? '9+' : badge}
+                  </span>
+                )}
+                {isActive && (
+                  <span
+                    className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+                    style={{ backgroundColor: GOLD }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Sub-tab bar (when applicable) */}
+      {activeMain !== 'overview' && SUB_TABS[activeMain] && (
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <div className="flex gap-1 min-w-max">
+            {SUB_TABS[activeMain].map((sub) => {
+              const isActive = activeSub === sub;
+              return (
+                <button
+                  key={sub}
+                  onClick={() => goToSub(sub)}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                    isActive
+                      ? 'text-white font-medium'
+                      : 'text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800'
+                  }`}
+                  style={isActive ? { backgroundColor: GOLD } : {}}
+                >
+                  {SUB_TAB_LABELS[sub]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tab content */}
+      <div>
+        {activeMain === 'overview' ? renderOverview() : renderSubContent()}
+      </div>
+
+      {/* Broadcast modal */}
+      {showBroadcast && (
+        <AdminBroadcastNotification onClose={() => setShowBroadcast(false)} />
+      )}
     </div>
   );
 };
