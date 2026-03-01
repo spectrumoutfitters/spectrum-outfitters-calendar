@@ -286,29 +286,29 @@ const ComplianceCenter = () => {
           <h2 className="text-2xl font-semibold text-gray-800">Tax & Compliance Center</h2>
           <p className="text-gray-600">Track obligations, record payments, and stay compliant</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-2">
           <button
             onClick={() => setShowSalesModal(true)}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm"
+            className="h-10 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm w-full sm:w-auto"
           >
             💵 Enter Daily Sales
           </button>
           <button
             onClick={handleAiReview}
             disabled={aiLoading}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition text-sm disabled:opacity-50"
+            className="h-10 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition text-sm disabled:opacity-50 w-full sm:w-auto"
           >
             {aiLoading ? '⏳ Analyzing...' : '🤖 AI Review'}
           </button>
           <button
             onClick={handleExportPacket}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition text-sm"
+            className="h-10 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition text-sm w-full sm:w-auto"
           >
             📦 Export CPA Packet
           </button>
           <button
             onClick={loadDashboard}
-            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition text-sm"
+            className="h-10 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition text-sm w-full sm:w-auto"
           >
             🔄 Refresh
           </button>
@@ -333,7 +333,7 @@ const ComplianceCenter = () => {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
           <div className="text-3xl font-bold text-red-700">{summary?.overdue || 0}</div>
           <div className="text-sm text-red-600">Overdue</div>
@@ -377,7 +377,7 @@ const ComplianceCenter = () => {
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="flex gap-4">
+        <nav className="flex gap-4 overflow-x-auto pb-1 -mx-1 px-1">
           {[
             { id: 'overview', label: 'Overview', icon: '📊' },
             { id: 'sales', label: 'Daily Sales', icon: '💵' },
@@ -482,7 +482,7 @@ const ComplianceCenter = () => {
           {salesSummary && (
             <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">💰 Recent Sales Summary (Last 30 Days)</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <div className="text-sm text-gray-600">Days Entered</div>
                   <div className="text-xl font-bold">{salesSummary.days_entered || 0}</div>
@@ -507,11 +507,11 @@ const ComplianceCenter = () => {
 
       {activeTab === 'sales' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <h3 className="text-lg font-semibold">Daily Sales Log</h3>
             <button
               onClick={() => { resetSalesForm(); setShowSalesModal(true); }}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm"
+              className="h-10 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm w-full sm:w-auto"
             >
               + Add Entry
             </button>
@@ -520,7 +520,8 @@ const ComplianceCenter = () => {
           {salesEntries.length === 0 ? (
             <p className="text-gray-500 text-center py-8">No sales entries yet. Click "Add Entry" to start tracking.</p>
           ) : (
-            <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden">
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden min-w-[700px] sm:min-w-0">
               <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-neutral-950">
                   <tr>
@@ -596,6 +597,7 @@ const ComplianceCenter = () => {
                 </tbody>
               </table>
             </div>
+            </div>
           )}
         </div>
       )}
@@ -607,7 +609,8 @@ const ComplianceCenter = () => {
       {activeTab === 'obligations' && (
         <div className="space-y-4">
           <h3 className="text-lg font-semibold">Configured Obligations</h3>
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden min-w-[500px] sm:min-w-0">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
@@ -637,6 +640,7 @@ const ComplianceCenter = () => {
               </tbody>
             </table>
           </div>
+          </div>
           <p className="text-sm text-gray-500">
             Contact support to add custom obligations or modify due date rules.
           </p>
@@ -646,7 +650,7 @@ const ComplianceCenter = () => {
       {/* Payment Modal */}
       {showPaymentModal && selectedInstance && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-xl dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 max-w-md w-full p-6">
+          <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-xl dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 w-full sm:max-w-md px-4 sm:px-6 py-6">
             <h3 className="text-lg font-bold mb-4">Record Payment</h3>
             <p className="text-gray-600 mb-4">
               <strong>{selectedInstance.obligation_name}</strong><br />
@@ -713,16 +717,16 @@ const ComplianceCenter = () => {
               </div>
             </div>
             
-            <div className="flex gap-3 mt-6">
+            <div className="flex flex-col sm:flex-row gap-3 mt-6">
               <button
                 onClick={handleMarkPaid}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                className="flex-1 h-10 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
               >
                 Record Payment
               </button>
               <button
                 onClick={() => { setShowPaymentModal(false); setSelectedInstance(null); }}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                className="h-10 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition w-full sm:w-auto"
               >
                 Cancel
               </button>
@@ -761,7 +765,7 @@ const ComplianceCenter = () => {
               {/* Date and Batch Info */}
               <div className="bg-gray-50 dark:bg-neutral-950 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-800 mb-3">📅 Batch Information</h4>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
                     <input
@@ -835,7 +839,7 @@ const ComplianceCenter = () => {
               <div className="bg-gray-50 dark:bg-neutral-950 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-800 mb-3">💳 Card Breakdown (Optional)</h4>
                 <p className="text-xs text-gray-500 mb-3">Enter amounts by card type from your batch report</p>
-                <div className="grid grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">VISA</label>
                     <input
@@ -961,7 +965,7 @@ const ComplianceCenter = () => {
               <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-800 mb-3">🏛️ Sales Tax (for TX Comptroller)</h4>
                 <p className="text-xs text-gray-500 mb-3">Calculate taxable amount from your invoices (labor + parts = taxable in TX)</p>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Taxable Sales</label>
                     <div className="relative">
@@ -1030,17 +1034,17 @@ const ComplianceCenter = () => {
             </div>
             
             {/* Fixed Footer */}
-            <div className="flex gap-3 p-4 sm:p-6 pt-4 border-t border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 flex-shrink-0 rounded-b-lg">
+            <div className="flex flex-col sm:flex-row gap-3 p-4 sm:p-6 pt-4 border-t border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 flex-shrink-0 rounded-b-lg">
               <button
                 onClick={handleSaveSales}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                className="flex-1 h-10 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
               >
                 {editingSalesId ? '✓ Update Entry' : '✓ Save Batch Report'}
               </button>
               {!editingSalesId && (
                 <button
                   onClick={handleNoSales}
-                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
+                  className="h-10 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition w-full sm:w-auto"
                   title="Record that there were no sales today"
                 >
                   🚫 No Sales
@@ -1048,7 +1052,7 @@ const ComplianceCenter = () => {
               )}
               <button
                 onClick={() => { setShowSalesModal(false); setEditingSalesId(null); }}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                className="h-10 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition w-full sm:w-auto"
               >
                 Cancel
               </button>
@@ -1087,17 +1091,17 @@ const InstanceCard = ({ instance, onMarkPaid, onMarkFiled, formatDate, formatCur
             <p className="text-sm text-amber-600 font-medium">Estimated: {formatCurrency(instance.amount_due_estimate)}</p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <button
             onClick={onMarkPaid}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm"
+            className="h-10 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm w-full sm:w-auto"
           >
             💳 Mark Paid
           </button>
           {needsFiling && (
             <button
               onClick={onMarkFiled}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
+              className="h-10 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm w-full sm:w-auto"
             >
               📄 Mark Filed
             </button>
