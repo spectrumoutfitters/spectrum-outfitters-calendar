@@ -43,23 +43,22 @@ jobs:
             echo "backend_changed=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build frontend (if changed)
+      - name: Build frontend
         if: steps.changes.outputs.frontend_changed == 'true'
         run: |
           cd frontend
           npm ci
           npm run build
 
-      - name: Deploy frontend (if changed)
+      - name: Deploy frontend
         if: steps.changes.outputs.frontend_changed == 'true'
         run: |
           rsync -avz --delete \
             --exclude='.git' \
             frontend/dist/ \
             root@165.245.137.192:/var/www/spectrum-outfitters/frontend/dist/
-          echo "Frontend deployed"
 
-      - name: Deploy backend (if changed)
+      - name: Deploy backend
         if: steps.changes.outputs.backend_changed == 'true'
         run: |
           rsync -avz \
@@ -73,12 +72,13 @@ jobs:
             --exclude='.env' \
             backend/ \
             root@165.245.137.192:/var/www/spectrum-outfitters/backend/
-          echo "Backend deployed - database and .env untouched"
 
-      - name: Install deps and restart (if backend changed)
+      - name: Restart server
         if: steps.changes.outputs.backend_changed == 'true'
         run: |
-          ssh root@165.245.137.192 "cd /var/www/spectrum-outfitters/backend && npm ci --omit=dev && node database/startup.js && pm2 restart spectrum-outfitters && echo Server restarted"
+          ssh root@165.245.137.192 "cd /var/www/spectrum-outfitters/backend && npm ci --omit=dev && node database/startup.js && pm2 restart spectrum-outfitters"
 
-      - name: Reload nginx (if frontend changed)
+      - name: Reload nginx
         if: steps.changes.outputs.frontend_changed == 'true'
+        run: |
+          ssh root@165.245.137.192 "systemctl reload nginx"
