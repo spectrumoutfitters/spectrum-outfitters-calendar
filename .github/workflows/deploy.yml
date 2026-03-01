@@ -84,3 +84,4 @@ jobs:
         if: steps.changes.outputs.frontend_changed == 'true'
         run: |
           ssh root@165.245.137.192 "systemctl reload nginx && echo Nginx reloaded"
+test
