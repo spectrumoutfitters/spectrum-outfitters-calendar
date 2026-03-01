@@ -1,21 +1,86 @@
-name: Deploy to Production
+name: Deploy to DigitalOcean
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            export APP_DIR="${{ secrets.APP_DIR }}"
-            export BRANCH="main"
-            bash "$APP_DIR/scripts/deploy.sh"
+          fetch-depth: 2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+
+      - name: Detect changed files
+        id: changes
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -q "^frontend/"; then
+            echo "frontend_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "frontend_changed=false" >> $GITHUB_OUTPUT
+          fi
+          if echo "$CHANGED" | grep -q "^backend/"; then
+            echo "backend_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "backend_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build frontend (if changed)
+        if: steps.changes.outputs.frontend_changed == 'true'
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Deploy frontend (if changed)
+        if: steps.changes.outputs.frontend_changed == 'true'
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            frontend/dist/ \
+            root@165.245.137.192:/var/www/spectrum-outfitters/frontend/dist/
+          echo "Frontend deployed"
+
+      - name: Deploy backend (if changed)
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: |
+          rsync -avz \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='database/shop_tasks.db' \
+            --exclude='database/shop_tasks.db-wal' \
+            --exclude='database/shop_tasks.db-shm' \
+            --exclude='uploads/' \
+            --exclude='backups/' \
+            --exclude='.env' \
+            backend/ \
+            root@165.245.137.192:/var/www/spectrum-outfitters/backend/
+          echo "Backend deployed - database and .env untouched"
+
+      - name: Install deps and restart (if backend changed)
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: |
+          ssh root@165.245.137.192 "cd /var/www/spectrum-outfitters/backend && npm ci --omit=dev && node database/startup.js && pm2 restart spectrum-outfitters && echo Server restarted"
+
+      - name: Reload nginx (if frontend changed)
+        if: steps.changes.outputs.frontend_changed == 'true'
+        run: |
+          ssh root@165.245.137.192 "systemctl reload nginx && echo Nginx reloaded"
