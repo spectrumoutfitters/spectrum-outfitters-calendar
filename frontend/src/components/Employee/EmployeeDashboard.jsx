@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import CleanupChecklist from '../TimeEntry/CleanupChecklist';
+import EmployeeTaskModal from '../Tasks/EmployeeTaskModal';
 
 // ─── Constants ───────────────────────────────────────────────
 
@@ -200,6 +201,7 @@ export default function EmployeeDashboard({ onClockAction }) {
   const [clockLoading, setClockLoading] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
 
   // Break timer
   const [breakTimer, setBreakTimer] = useState(null); // { endTime, duration }
@@ -243,7 +245,9 @@ export default function EmployeeDashboard({ onClockAction }) {
         });
       setTasks(myTasks);
 
-      setUpcomingDaysOff(daysOffRes.data?.upcoming || null);
+      const daysOff = daysOffRes.data?.upcoming || null;
+      console.log('[VacationWidget] upcoming-days-off response:', daysOffRes.data, '| upcomingDaysOff:', daysOff);
+      setUpcomingDaysOff(daysOff);
       setRecentlyReturned(!!daysOffRes.data?.recently_returned);
     } catch (err) {
       console.error('EmployeeDashboard loadData error:', err);
@@ -576,7 +580,8 @@ export default function EmployeeDashboard({ onClockAction }) {
             {activeTasks.slice(0, 6).map((task, i) => (
               <div
                 key={task.id}
-                className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+                onClick={() => setSelectedTask(task)}
+                className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 -mx-5 px-5 transition-colors"
               >
                 <span className="text-sm font-bold text-gray-300 dark:text-neutral-600 w-5 flex-shrink-0">
                   {i + 1}.
@@ -596,6 +601,9 @@ export default function EmployeeDashboard({ onClockAction }) {
                     Active
                   </span>
                 )}
+                <svg className="w-4 h-4 text-gray-300 dark:text-neutral-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </div>
             ))}
             {activeTasks.length > 6 && (
@@ -625,6 +633,14 @@ export default function EmployeeDashboard({ onClockAction }) {
           onConfirm={handleClockOutConfirm}
           onCancel={() => setShowChecklist(false)}
           loading={clockLoading}
+        />
+      )}
+
+      {/* ── Task detail modal ── */}
+      {selectedTask && (
+        <EmployeeTaskModal
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
         />
       )}
     </div>
