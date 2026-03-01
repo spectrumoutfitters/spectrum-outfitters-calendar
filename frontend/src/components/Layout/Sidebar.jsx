@@ -23,7 +23,6 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/inventory', label: 'Inventory', key: 'inventory' },
     { path: '/products', label: 'Products', key: 'products' },
     { path: '/profile', label: 'Profile', key: 'profile' },
-    { path: '/dispatch', label: 'Dispatch Board', key: 'dispatch', adminOnly: true },
     { path: '/admin', label: 'Admin', key: 'admin', adminOnly: true },
   ];
 
