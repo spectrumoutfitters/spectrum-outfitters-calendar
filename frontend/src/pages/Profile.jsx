@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
+import PushNotificationSettings from '../components/Notifications/PushNotificationSettings';
 
 const Profile = () => {
   const { user, isAdmin, refreshUser } = useAuth();
@@ -243,6 +244,8 @@ const Profile = () => {
           </form>
         </div>
       )}
+
+      <PushNotificationSettings />
 
       <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Change Password</h2>

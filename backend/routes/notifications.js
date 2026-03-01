@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { sendPushToAdmins } from '../utils/pushNotifications.js';
 
 const router = express.Router();
 
@@ -119,8 +120,16 @@ router.post('/quick', async (req, res) => {
 
     io.to('admin').emit('admin_notification', notificationData);
 
-    res.json({ 
-      success: true, 
+    // Also send push notification to admins
+    sendPushToAdmins({
+      title: 'Spectrum Outfitters',
+      body: notificationMessage.replace(/^[\p{Emoji}\s]+/u, '').trim() || notificationMessage,
+      url: '/admin?tab=status',
+      tag: `quick-notification-${type}`
+    }).catch(err => console.error('Push to admins failed:', err));
+
+    res.json({
+      success: true,
       message: 'Notification sent to admins',
       notification: notificationMessage
     });

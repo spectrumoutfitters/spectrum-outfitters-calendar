@@ -8,6 +8,8 @@ import { addPlaidTables } from './add_plaid_tables.js';
 import { addShopmonkeyRevenueTable } from './add_shopmonkey_revenue_table.js';
 import { addProcessorRevenueTable } from './add_processor_revenue_table.js';
 import { addSecurityTables } from './add_security_tables.js';
+import { addPushSubscriptionsTable } from './add_push_subscriptions.js';
+import { addTimeclockLocationColumns } from './add_timeclock_location.js';
 
 export async function ensureUserColumns() {
   const columns = [
@@ -168,4 +170,6 @@ export async function runStartupMigrations() {
   await addProcessorRevenueTable();
   await addSecurityTables();
   await ensureLoginEventsIsVpn();
+  await addPushSubscriptionsTable();
+  await addTimeclockLocationColumns();
 }
