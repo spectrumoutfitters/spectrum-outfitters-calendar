@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
-import AdminBroadcastNotification from '../components/Notifications/AdminBroadcastNotification';
 import UserManagement from '../components/Admin/UserManagement';
 import TimeApproval from '../components/Admin/TimeApproval';
 import Reports from '../components/Admin/Reports';
@@ -19,13 +18,131 @@ import FinanceDashboard from '../components/Admin/FinanceDashboard';
 import SystemUpdates from '../components/Admin/SystemUpdates';
 import SecuritySessions from '../components/Admin/SecuritySessions';
 import AdminHistory from '../components/Admin/AdminHistory';
+import AdminBroadcastNotification from '../components/Notifications/AdminBroadcastNotification';
+
+const GOLD = '#D4A017';
+
+// Tab definitions
+const MAIN_TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'team', label: 'Team' },
+  { id: 'shop', label: 'Shop' },
+  { id: 'finance', label: 'Finance' },
+  { id: 'insights', label: 'Insights' },
+  { id: 'settings', label: 'Settings' },
+];
+
+const SUB_TABS = {
+  team: [
+    { id: 'status', label: 'Status' },
+    { id: 'schedule', label: 'Schedule' },
+    { id: 'time', label: 'Time' },
+    { id: 'users', label: 'Users' },
+    { id: 'worklist', label: 'Worklist' },
+    { id: 'history', label: 'History' },
+  ],
+  shop: [
+    { id: 'inventory', label: 'Inventory' },
+    { id: 'orders', label: 'Orders' },
+    { id: 'products', label: 'Products' },
+  ],
+  finance: [
+    { id: 'payroll', label: 'Payroll' },
+    { id: 'finance', label: 'Finance' },
+    { id: 'compliance', label: 'Compliance' },
+  ],
+  insights: [
+    { id: 'analytics', label: 'Analytics' },
+    { id: 'reports', label: 'Reports' },
+  ],
+  settings: [
+    { id: 'general', label: 'General' },
+    { id: 'security', label: 'Security' },
+    { id: 'updates', label: 'Updates' },
+  ],
+};
+
+function TabBar({ tabs, activeId, onSelect, badge }) {
+  return (
+    <div className="flex overflow-x-auto scrollbar-hide border-b border-gray-200 dark:border-neutral-700 -mx-4 px-4 sm:mx-0 sm:px-0">
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeId;
+        const hasBadge = badge && tab.id === badge.tabId && badge.count > 0;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => onSelect(tab.id)}
+            className={`relative flex-shrink-0 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+              isActive
+                ? 'text-gray-900 dark:text-white'
+                : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'
+            }`}
+          >
+            {tab.label}
+            {hasBadge && (
+              <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-red-500 text-white rounded-full">
+                {badge.count}
+              </span>
+            )}
+            {isActive && (
+              <span
+                className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t"
+                style={{ backgroundColor: GOLD }}
+              />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SubTabBar({ tabs, activeId, onSelect }) {
+  return (
+    <div className="flex overflow-x-auto scrollbar-hide gap-1 mb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeId;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => onSelect(tab.id)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+              isActive
+                ? 'text-white'
+                : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
+            }`}
+            style={isActive ? { backgroundColor: GOLD } : {}}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const Admin = () => {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tabFromUrl = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState(tabFromUrl || 'dashboard');
+
+  // Restore last tab from localStorage
+  const savedMain = localStorage.getItem('admin_main_tab') || 'overview';
+  const savedSubs = (() => {
+    try { return JSON.parse(localStorage.getItem('admin_sub_tabs') || '{}'); } catch { return {}; }
+  })();
+
+  const [mainTab, setMainTab] = useState(savedMain);
+  const [subTabs, setSubTabs] = useState({
+    team: savedSubs.team || 'status',
+    shop: savedSubs.shop || 'inventory',
+    finance: savedSubs.finance || 'payroll',
+    insights: savedSubs.insights || 'analytics',
+    settings: savedSubs.settings || 'general',
+  });
+
   const [dashboardData, setDashboardData] = useState({
     worklistItems: [],
+    worklistCompleted: 0,
+    worklistTotal: 0,
     pendingTimeOff: 0,
     unapprovedTimeEntries: 0,
     tasksInReview: 0,
@@ -33,25 +150,24 @@ const Admin = () => {
     totalEmployees: 0,
     upcomingCompliance: [],
     overdueCompliance: [],
-    recentOrders: 0,
-    lowStockProducts: 0,
     pendingReorderRequests: 0
   });
   const [loading, setLoading] = useState(true);
 
-  // Update tab when URL changes
-  useEffect(() => {
-    if (tabFromUrl) {
-      setActiveTab(tabFromUrl);
-    }
-  }, [tabFromUrl]);
+  const selectMainTab = (id) => {
+    setMainTab(id);
+    localStorage.setItem('admin_main_tab', id);
+  };
 
-  // Load dashboard data
+  const selectSubTab = (main, sub) => {
+    const updated = { ...subTabs, [main]: sub };
+    setSubTabs(updated);
+    localStorage.setItem('admin_sub_tabs', JSON.stringify(updated));
+  };
+
   useEffect(() => {
-    if (activeTab === 'dashboard') {
-      loadDashboardData();
-    }
-  }, [activeTab]);
+    if (mainTab === 'overview') loadDashboardData();
+  }, [mainTab]);
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -68,15 +184,14 @@ const Admin = () => {
       const compliance = complianceRes.data || {};
       const pendingReorderRequests = reorderCountRes.data?.count ?? 0;
 
-      // Count pending items from worklist
       const pendingItems = worklist.filter(item => !item.is_completed);
-      const pendingTimeOff = pendingItems.filter(i => i.smart_key === 'pending_time_off').length > 0
+      const pendingTimeOff = pendingItems.find(i => i.smart_key === 'pending_time_off')
         ? parseInt(pendingItems.find(i => i.smart_key === 'pending_time_off')?.title?.match(/\d+/)?.[0] || 0)
         : 0;
-      const unapprovedTime = pendingItems.filter(i => i.smart_key === 'unapproved_time').length > 0
+      const unapprovedTime = pendingItems.find(i => i.smart_key === 'unapproved_time')
         ? parseInt(pendingItems.find(i => i.smart_key === 'unapproved_time')?.title?.match(/\d+/)?.[0] || 0)
         : 0;
-      const tasksReview = pendingItems.filter(i => i.smart_key === 'tasks_in_review').length > 0
+      const tasksReview = pendingItems.find(i => i.smart_key === 'tasks_in_review')
         ? parseInt(pendingItems.find(i => i.smart_key === 'tasks_in_review')?.title?.match(/\d+/)?.[0] || 0)
         : 0;
 
@@ -100,295 +215,109 @@ const Admin = () => {
     }
   };
 
-  const navigateToTab = (tabId) => {
-    setActiveTab(tabId);
-    setSearchParams({ tab: tabId });
-  };
+  // Pending approvals badge count for Team tab
+  const teamBadgeCount = dashboardData.pendingTimeOff + dashboardData.unapprovedTimeEntries + dashboardData.tasksInReview;
 
-  const categoryOrder = ['people', 'shop', 'finance', 'insights', 'system'];
-  const categoryLabels = {
-    people: { label: 'People & Team', icon: '👥', description: 'Staff, team schedule, and time off (sidebar Schedule is for viewing your own schedule)' },
-    shop: { label: 'Shop & Orders', icon: '🛒', description: 'Inventory, products, and customer orders' },
-    finance: { label: 'Finance & Compliance', icon: '💰', description: 'Payroll, tax, and filings' },
-    insights: { label: 'Insights & Reports', icon: '📊', description: 'Analytics and business reports' },
-    system: { label: 'System', icon: '🔧', description: 'Settings and updates' }
-  };
-
-  const modules = [
-    {
-      id: 'worklist',
-      category: 'people',
-      label: 'Daily Work List',
-      icon: '📋',
-      color: 'bg-primary',
-      description: 'Your daily admin tasks and checklist',
-      getBadge: () => {
-        const pending = dashboardData.worklistTotal - dashboardData.worklistCompleted;
-        return pending > 0 ? { count: pending, color: 'bg-orange-500' } : { count: '✓', color: 'bg-green-500' };
-      }
-    },
-    {
-      id: 'status',
-      category: 'people',
-      label: 'Employee Status',
-      icon: '👥',
-      color: 'bg-green-500',
-      description: 'Who\'s clocked in, on lunch, or off',
-      getBadge: () => ({ count: `${dashboardData.clockedInEmployees}/${dashboardData.totalEmployees}`, color: 'bg-green-600' })
-    },
-    {
-      id: 'time',
-      category: 'people',
-      label: 'Time Off Requests',
-      icon: '🏖️',
-      color: 'bg-primary-light',
-      description: 'Review and approve time off',
-      getBadge: () => dashboardData.pendingTimeOff > 0 ? { count: dashboardData.pendingTimeOff, color: 'bg-red-500' } : null
-    },
-    {
-      id: 'users',
-      category: 'people',
-      label: 'User Management',
-      icon: '⚙️',
-      color: 'bg-gray-500',
-      description: 'Employee accounts and permissions'
-    },
-    {
-      id: 'schedule',
-      category: 'people',
-      label: 'Team schedule',
-      icon: '📅',
-      color: 'bg-primary',
-      description: 'View and manage team schedules'
-    },
-    {
-      id: 'history',
-      category: 'people',
-      label: 'Login & punch history',
-      icon: '📜',
-      color: 'bg-slate-500',
-      description: 'Login/logout and lunch clock-in/out history'
-    },
-    {
-      id: 'products',
-      category: 'shop',
-      label: 'Products',
-      icon: '🛒',
-      color: 'bg-teal-500',
-      description: 'Product catalog for orders'
-    },
-    {
-      id: 'orders',
-      category: 'shop',
-      label: 'Orders',
-      icon: '📦',
-      color: 'bg-amber-500',
-      description: 'Track and manage customer orders'
-    },
-    {
-      id: 'payroll',
-      category: 'finance',
-      label: 'Payroll',
-      icon: '💰',
-      color: 'bg-emerald-500',
-      description: 'Process payroll and compensation'
-    },
-    {
-      id: 'finance',
-      category: 'finance',
-      label: 'Financial Planner',
-      icon: '📈',
-      color: 'bg-indigo-500',
-      description: 'Bank connections, revenue sync, cash flow & forecasting'
-    },
-    {
-      id: 'compliance',
-      category: 'finance',
-      label: 'Tax & Compliance',
-      icon: '🏛️',
-      color: 'bg-red-500',
-      description: 'Sales tax, payroll tax, and filings',
-      getBadge: () => dashboardData.overdueCompliance?.length > 0 
-        ? { count: dashboardData.overdueCompliance.length, color: 'bg-red-600', label: 'OVERDUE' } 
-        : dashboardData.upcomingCompliance?.length > 0 
-          ? { count: dashboardData.upcomingCompliance.length, color: 'bg-yellow-500' }
-          : null
-    },
-    {
-      id: 'analytics',
-      category: 'insights',
-      label: 'Analytics',
-      icon: '📈',
-      color: 'bg-cyan-500',
-      description: 'Business insights and metrics'
-    },
-    {
-      id: 'reports',
-      category: 'insights',
-      label: 'Reports',
-      icon: '📊',
-      color: 'bg-violet-500',
-      description: 'Generate detailed reports'
-    },
-    {
-      id: 'settings',
-      category: 'system',
-      label: 'Settings',
-      icon: '🔧',
-      color: 'bg-slate-500',
-      description: 'Configuration and preferences'
-    },
-    {
-      id: 'updates',
-      category: 'system',
-      label: 'System Updates',
-      icon: '📢',
-      color: 'bg-pink-500',
-      description: 'Update notifications and changelog'
-    },
-    {
-      id: 'security',
-      category: 'system',
-      label: 'Security & Sessions',
-      icon: '🔒',
-      color: 'bg-red-600',
-      description: 'Login audit, active sessions, on-prem verification'
-    }
-  ];
-
-  // Render dashboard view
-  const renderDashboard = () => {
+  const renderOverview = () => {
     if (loading) {
       return (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <span className="ml-3 text-gray-600 dark:text-neutral-200">Loading dashboard...</span>
+          <span className="ml-3 text-gray-600 dark:text-neutral-200">Loading...</span>
         </div>
       );
     }
 
     const urgentItems = [];
-    
-    // Check for overdue compliance
     if (dashboardData.overdueCompliance?.length > 0) {
-      urgentItems.push({
-        type: 'error',
-        icon: '🚨',
-        message: `${dashboardData.overdueCompliance.length} overdue tax obligation(s)!`,
-        action: () => navigateToTab('compliance')
-      });
+      urgentItems.push({ type: 'error', icon: '🚨', message: `${dashboardData.overdueCompliance.length} overdue tax obligation(s)!`, action: () => { selectMainTab('finance'); selectSubTab('finance', 'compliance'); } });
     }
-
-    // Check for pending time off
     if (dashboardData.pendingTimeOff > 0) {
-      urgentItems.push({
-        type: 'warning',
-        icon: '🏖️',
-        message: `${dashboardData.pendingTimeOff} time off request(s) pending approval`,
-        action: () => navigateToTab('time')
-      });
+      urgentItems.push({ type: 'warning', icon: '🏖️', message: `${dashboardData.pendingTimeOff} time off request(s) pending`, action: () => { selectMainTab('team'); selectSubTab('team', 'time'); } });
     }
-
-    // Check for unapproved time entries
     if (dashboardData.unapprovedTimeEntries > 0) {
-      urgentItems.push({
-        type: 'warning',
-        icon: '⏰',
-        message: `${dashboardData.unapprovedTimeEntries} time entries need approval`,
-        action: () => navigateToTab('time')
-      });
+      urgentItems.push({ type: 'warning', icon: '⏰', message: `${dashboardData.unapprovedTimeEntries} time entries need approval`, action: () => { selectMainTab('team'); selectSubTab('team', 'time'); } });
     }
-
-    // Check for tasks in review
     if (dashboardData.tasksInReview > 0) {
-      urgentItems.push({
-        type: 'info',
-        icon: '✅',
-        message: `${dashboardData.tasksInReview} task(s) waiting for review`,
-        action: () => navigate('/tasks?status=review')
-      });
+      urgentItems.push({ type: 'info', icon: '✅', message: `${dashboardData.tasksInReview} task(s) waiting for review`, action: () => navigate('/tasks?status=review') });
     }
-
-    // Reorder requests from the shop (tell office to order)
     if (dashboardData.pendingReorderRequests > 0) {
-      urgentItems.push({
-        type: 'warning',
-        icon: '📦',
-        message: `${dashboardData.pendingReorderRequests} reorder request(s) — fill out where ordered, price & when it will arrive`,
-        action: () => { setSearchParams({ tab: 'inventory', refills: '1' }); setActiveTab('inventory'); }
-      });
+      urgentItems.push({ type: 'warning', icon: '📦', message: `${dashboardData.pendingReorderRequests} reorder request(s) pending`, action: () => { selectMainTab('shop'); selectSubTab('shop', 'inventory'); } });
     }
 
     const allClear = urgentItems.length === 0 && dashboardData.worklistCompleted === dashboardData.worklistTotal;
 
     return (
-      <div className="space-y-6">
-        {/* Status + Today's Progress in one block */}
-        <div className="space-y-3">
-          {allClear ? (
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <span className="text-3xl">🎉</span>
-                  <div>
-                    <h2 className="text-lg font-bold">All Caught Up!</h2>
-                    <p className="text-sm opacity-90">No urgent items. Great job staying on top of things!</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => navigateToTab('worklist')}
-                  className="flex items-center gap-3 bg-white/20 hover:bg-white/30 dark:bg-white/10 dark:hover:bg-white/20 rounded-lg px-4 py-2 text-left text-sm font-medium transition shrink-0"
-                >
-                  <span className="text-gray-200 dark:text-white/90">Today: {dashboardData.worklistCompleted}/{dashboardData.worklistTotal} tasks</span>
-                  <span>View list →</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl p-5 text-white shadow-lg">
-              <div className="flex items-center gap-4 mb-4">
-                <span className="text-3xl">⚡</span>
-                <div>
-                  <h2 className="text-lg font-bold">Needs Your Attention</h2>
-                  <p className="text-sm opacity-90">{urgentItems.length} item(s) require action</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {urgentItems.map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={item.action}
-                    className="w-full text-left bg-white/20 hover:bg-white/30 dark:bg-white/10 dark:hover:bg-white/20 rounded-lg p-3 flex items-center gap-3 transition text-sm"
-                  >
-                    <span className="text-lg">{item.icon}</span>
-                    <span>{item.message}</span>
-                    <span className="ml-auto">→</span>
-                  </button>
-                ))}
-              </div>
-              <div className="mt-3 pt-3 border-t border-white/20 flex items-center justify-between">
-                <span className="text-sm opacity-90">Today: {dashboardData.worklistCompleted}/{dashboardData.worklistTotal} work list tasks</span>
-                <button onClick={() => navigateToTab('worklist')} className="text-sm font-medium underline hover:no-underline">View list →</button>
-              </div>
-            </div>
-          )}
+      <div className="space-y-6 pt-4">
+        {/* Quick stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
+            <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">{dashboardData.clockedInEmployees}<span className="text-base font-normal text-gray-400">/{dashboardData.totalEmployees}</span></p>
+            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">Clocked In</p>
+          </div>
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
+            <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">{dashboardData.worklistCompleted}<span className="text-base font-normal text-gray-400">/{dashboardData.worklistTotal}</span></p>
+            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">Tasks Done</p>
+          </div>
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
+            <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">{dashboardData.pendingTimeOff + dashboardData.unapprovedTimeEntries}</p>
+            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">Pending Approvals</p>
+          </div>
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
+            <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">{dashboardData.overdueCompliance?.length || 0}</p>
+            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">Overdue Items</p>
+          </div>
         </div>
 
-        {/* Today's daily tasks — always visible so admins are reminded */}
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5 shadow-sm dark:shadow-neutral-950/50">
+        {/* Status banner */}
+        {allClear ? (
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-5 text-white">
+            <div className="flex items-center gap-4">
+              <span className="text-3xl">🎉</span>
+              <div>
+                <h2 className="text-lg font-bold">All Caught Up!</h2>
+                <p className="text-sm opacity-90">No urgent items. Great job staying on top of things!</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl p-5 text-white">
+            <div className="flex items-center gap-4 mb-3">
+              <span className="text-3xl">⚡</span>
+              <div>
+                <h2 className="text-lg font-bold">Needs Your Attention</h2>
+                <p className="text-sm opacity-90">{urgentItems.length} item(s) require action</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {urgentItems.map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={item.action}
+                  className="w-full text-left bg-white/20 hover:bg-white/30 dark:bg-white/10 dark:hover:bg-white/20 rounded-lg p-3 flex items-center gap-3 transition text-sm"
+                >
+                  <span className="text-lg">{item.icon}</span>
+                  <span>{item.message}</span>
+                  <span className="ml-auto">→</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Today's work list */}
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">📋 Today&apos;s tasks</h3>
+            <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">📋 Today&apos;s Tasks</h3>
             <button
-              onClick={() => navigateToTab('worklist')}
+              onClick={() => { selectMainTab('team'); selectSubTab('team', 'worklist'); }}
               className="text-primary hover:text-primary/80 text-sm font-medium"
             >
               View full list →
             </button>
           </div>
-          {loading ? (
-            <p className="text-gray-500 dark:text-neutral-200 text-sm py-2">Loading…</p>
-          ) : !dashboardData.worklistItems?.length ? (
-            <p className="text-gray-500 dark:text-neutral-200 text-sm py-2">No tasks for today. Add some on the work list.</p>
+          {!dashboardData.worklistItems?.length ? (
+            <p className="text-gray-500 dark:text-neutral-400 text-sm py-2">No tasks for today.</p>
           ) : (
             <ul className="space-y-2 max-h-64 overflow-y-auto">
               {dashboardData.worklistItems
@@ -398,15 +327,6 @@ const Admin = () => {
                   <li key={item.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800">
                     <span className="flex-shrink-0 w-5 h-5 rounded border-2 border-gray-300 dark:border-neutral-600" aria-hidden />
                     <span className="text-sm text-gray-800 dark:text-neutral-100 flex-1 min-w-0 truncate">{item.title}</span>
-                    {item.link_target && (
-                      <button
-                        type="button"
-                        onClick={() => navigate(item.link_target)}
-                        className="text-xs text-primary shrink-0 hover:underline"
-                      >
-                        Open
-                      </button>
-                    )}
                   </li>
                 ))}
               {dashboardData.worklistItems.filter((i) => i.is_completed).length > 0 && (
@@ -418,15 +338,12 @@ const Admin = () => {
           )}
         </div>
 
-        {/* Upcoming Compliance — only when there's data */}
+        {/* Upcoming compliance */}
         {dashboardData.upcomingCompliance?.length > 0 && (
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5 shadow-sm dark:shadow-neutral-950/50">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">🏛️ Upcoming Tax Deadlines</h3>
-              <button
-                onClick={() => navigateToTab('compliance')}
-                className="text-primary hover:text-primary-dark text-sm font-medium"
-              >
+              <button onClick={() => { selectMainTab('finance'); selectSubTab('finance', 'compliance'); }} className="text-primary hover:text-primary-dark text-sm font-medium">
                 View All →
               </button>
             </div>
@@ -437,9 +354,7 @@ const Admin = () => {
                     <p className="font-medium text-gray-800 dark:text-neutral-100 text-sm">{item.obligation_name}</p>
                     <p className="text-xs text-gray-500 dark:text-neutral-200">Due: {new Date(item.due_date).toLocaleDateString()}</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    item.days_until_due <= 7 ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : 'bg-primary-subtle dark:bg-primary/20 text-primary'
-                  }`}>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${item.days_until_due <= 7 ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : 'bg-primary-subtle dark:bg-primary/20 text-primary'}`}>
                     {item.days_until_due} days
                   </span>
                 </div>
@@ -447,104 +362,77 @@ const Admin = () => {
             </div>
           </div>
         )}
-
-        {/* Modules by category */}
-        <div className="space-y-6">
-          {categoryOrder.map((catId) => {
-            const cat = categoryLabels[catId];
-            const catModules = modules.filter((m) => m.category === catId);
-            if (catModules.length === 0) return null;
-            return (
-              <div key={catId}>
-                <div className="mb-3">
-                  <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100 flex items-center gap-2">
-                    <span>{cat.icon}</span>
-                    {cat.label}
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-neutral-300 mt-0.5">{cat.description}</p>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {catModules.map((module) => {
-                    const badge = module.getBadge?.();
-                    return (
-                      <button
-                        key={module.id}
-                        onClick={() => navigateToTab(module.id)}
-                        className="relative bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 hover:shadow-md hover:border-gray-300 dark:hover:border-neutral-600 dark:shadow-neutral-950/50 transition-all text-left group"
-                      >
-                        {badge && (
-                          <span className={`absolute -top-1.5 -right-1.5 ${badge.color} text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[22px] text-center`}>
-                            {badge.count}
-                          </span>
-                        )}
-                        <div className={`w-10 h-10 ${module.color} rounded-lg flex items-center justify-center text-xl mb-2 group-hover:scale-105 transition-transform`}>
-                          {module.icon}
-                        </div>
-                        <h4 className="font-semibold text-gray-800 dark:text-neutral-100 text-sm">{module.label}</h4>
-                        <p className="text-xs text-gray-500 dark:text-neutral-200 mt-0.5 line-clamp-2">{module.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
     );
   };
 
-  // If not on dashboard, show module with back button
-  if (activeTab !== 'dashboard') {
-    const currentModule = modules.find(m => m.id === activeTab);
-    
+  const renderTeam = () => {
+    const sub = subTabs.team;
     return (
-      <div className="space-y-4">
-        {/* Breadcrumb header */}
-        <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => navigateToTab('dashboard')}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700 rounded-lg transition text-gray-700 dark:text-neutral-200"
-          >
-            <span>←</span>
-            <span>Dashboard</span>
-          </button>
-          <span className="text-gray-400 dark:text-neutral-500">/</span>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-neutral-100 flex items-center gap-2">
-            <span>{currentModule?.icon}</span>
-            {currentModule?.label || 'Admin'}
-          </h1>
-        </div>
-
-        {/* Module content */}
-        <div>
-          {activeTab === 'worklist' && <AdminWorkList />}
-          {activeTab === 'status' && <EmployeeStatus />}
-          {activeTab === 'users' && <UserManagement />}
-          {activeTab === 'time' && <TimeApproval />}
-          {activeTab === 'schedule' && <ScheduleCalendar />}
-          {activeTab === 'inventory' && <InventoryManagement />}
-          {activeTab === 'products' && <ProductManagement />}
-          {activeTab === 'orders' && <OrderManagement />}
-          {activeTab === 'payroll' && <PayrollManagement />}
-          {activeTab === 'finance' && <FinanceDashboard />}
-          {activeTab === 'compliance' && <ComplianceCenter />}
-          {activeTab === 'analytics' && <Analytics />}
-          {activeTab === 'reports' && <Reports />}
-          {activeTab === 'settings' && <Settings />}
-          {activeTab === 'updates' && <SystemUpdates />}
-          {activeTab === 'security' && <SecuritySessions />}
-          {activeTab === 'history' && <AdminHistory />}
-        </div>
-      </div>
+      <>
+        <SubTabBar tabs={SUB_TABS.team} activeId={sub} onSelect={(id) => selectSubTab('team', id)} />
+        {sub === 'status' && <EmployeeStatus />}
+        {sub === 'schedule' && <ScheduleCalendar />}
+        {sub === 'time' && <TimeApproval />}
+        {sub === 'users' && <UserManagement />}
+        {sub === 'worklist' && <AdminWorkList />}
+        {sub === 'history' && <AdminHistory />}
+      </>
     );
-  }
+  };
 
-  // Dashboard view
+  const renderShop = () => {
+    const sub = subTabs.shop;
+    return (
+      <>
+        <SubTabBar tabs={SUB_TABS.shop} activeId={sub} onSelect={(id) => selectSubTab('shop', id)} />
+        {sub === 'inventory' && <InventoryManagement />}
+        {sub === 'orders' && <OrderManagement />}
+        {sub === 'products' && <ProductManagement />}
+      </>
+    );
+  };
+
+  const renderFinance = () => {
+    const sub = subTabs.finance;
+    return (
+      <>
+        <SubTabBar tabs={SUB_TABS.finance} activeId={sub} onSelect={(id) => selectSubTab('finance', id)} />
+        {sub === 'payroll' && <PayrollManagement />}
+        {sub === 'finance' && <FinanceDashboard />}
+        {sub === 'compliance' && <ComplianceCenter />}
+      </>
+    );
+  };
+
+  const renderInsights = () => {
+    const sub = subTabs.insights;
+    return (
+      <>
+        <SubTabBar tabs={SUB_TABS.insights} activeId={sub} onSelect={(id) => selectSubTab('insights', id)} />
+        {sub === 'analytics' && <Analytics />}
+        {sub === 'reports' && <Reports />}
+      </>
+    );
+  };
+
+  const renderSettings = () => {
+    const sub = subTabs.settings;
+    return (
+      <>
+        <SubTabBar tabs={SUB_TABS.settings} activeId={sub} onSelect={(id) => selectSubTab('settings', id)} />
+        {sub === 'general' && <Settings />}
+        {sub === 'security' && <SecuritySessions />}
+        {sub === 'updates' && <SystemUpdates />}
+      </>
+    );
+  };
+
   return (
-    <div className="space-y-4 md:space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">Admin Dashboard</h1>
+    <div className="space-y-0">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">Admin</h1>
         <div className="flex items-center gap-3">
           <p className="text-gray-500 dark:text-neutral-200 text-sm hidden sm:block">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -553,7 +441,23 @@ const Admin = () => {
         </div>
       </div>
 
-      {renderDashboard()}
+      {/* Main tab bar */}
+      <TabBar
+        tabs={MAIN_TABS}
+        activeId={mainTab}
+        onSelect={selectMainTab}
+        badge={{ tabId: 'team', count: teamBadgeCount }}
+      />
+
+      {/* Tab content */}
+      <div className="pt-4">
+        {mainTab === 'overview' && renderOverview()}
+        {mainTab === 'team' && renderTeam()}
+        {mainTab === 'shop' && renderShop()}
+        {mainTab === 'finance' && renderFinance()}
+        {mainTab === 'insights' && renderInsights()}
+        {mainTab === 'settings' && renderSettings()}
+      </div>
     </div>
   );
 };
