@@ -16,8 +16,6 @@ const AFFIRMATIONS = [
   "Your hard work doesn't go unnoticed. Keep going!",
 ];
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 // ─── Helpers ─────────────────────────────────────────────────
 
 const getDailyAffirmation = () => {
@@ -62,6 +60,132 @@ const formatTaskDuration = (minutes) => {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
 
+// ─── VacationCountdownWidget ──────────────────────────────
+
+const VACATION_CHECKLIST_ITEMS = [
+  'Update team on your projects',
+  'Hand off any urgent items',
+  'Document your progress',
+  'Out-of-office message set',
+  'All tools cleaned up',
+];
+
+function VacationCountdownWidget({ daysOff, onNotifyAdmin }) {
+  const [checked, setChecked] = useState({});
+  const [notified, setNotified] = useState(false);
+
+  const { days_remaining, start_date } = daysOff;
+  const showChecklist = days_remaining <= 3;
+
+  const startLabel = new Date(start_date + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  const toggle = (i) => setChecked((prev) => ({ ...prev, [i]: !prev[i] }));
+
+  const handleNotify = async () => {
+    if (notified) return;
+    await onNotifyAdmin(days_remaining);
+    setNotified(true);
+  };
+
+  return (
+    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/40 rounded-2xl p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-2xl">🏖️</span>
+        <h2 className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider">
+          Upcoming Time Off
+        </h2>
+      </div>
+
+      <p className="text-gray-800 dark:text-blue-100 font-semibold text-base mb-1">
+        {days_remaining === 0
+          ? 'Your time off starts today!'
+          : days_remaining === 1
+          ? '1 day until your time off'
+          : `${days_remaining} days until your time off`}
+      </p>
+      <p className="text-sm text-gray-500 dark:text-blue-300/70 mb-4">
+        Starts {startLabel}
+      </p>
+
+      {showChecklist && (
+        <div className="bg-white dark:bg-neutral-900 rounded-xl p-4 border border-blue-100 dark:border-blue-900">
+          <p className="text-xs font-bold text-gray-500 dark:text-neutral-400 uppercase tracking-wider mb-3">
+            Before you go — make sure to:
+          </p>
+          <div className="space-y-2.5">
+            {VACATION_CHECKLIST_ITEMS.map((item, i) => (
+              <label
+                key={i}
+                className="flex items-center gap-3 cursor-pointer group"
+                onClick={() => toggle(i)}
+              >
+                <div
+                  className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition ${
+                    checked[i]
+                      ? 'bg-green-500 border-green-500'
+                      : 'border-gray-300 dark:border-neutral-600 group-hover:border-green-400'
+                  }`}
+                >
+                  {checked[i] && (
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <span
+                  className={`text-sm transition ${
+                    checked[i]
+                      ? 'line-through text-gray-400 dark:text-neutral-500'
+                      : 'text-gray-700 dark:text-neutral-200'
+                  }`}
+                >
+                  {item}
+                </span>
+              </label>
+            ))}
+          </div>
+
+          <button
+            onClick={handleNotify}
+            disabled={notified}
+            className={`mt-4 w-full py-2.5 rounded-xl text-sm font-semibold transition active:scale-95 ${
+              notified
+                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 cursor-default'
+                : 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm'
+            }`}
+          >
+            {notified ? '✓ Admin notified' : 'Notify admin of handoff'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── WelcomeBackBanner ────────────────────────────────────
+
+function WelcomeBackBanner() {
+  return (
+    <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800/40 rounded-2xl p-5">
+      <div className="flex items-start gap-3">
+        <span className="text-2xl flex-shrink-0">👋</span>
+        <div>
+          <p className="font-bold text-green-800 dark:text-green-200 text-base">
+            Welcome back!
+          </p>
+          <p className="text-sm text-green-700 dark:text-green-300 mt-0.5">
+            Catch up with the team on what happened while you were out.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────
 
 export default function EmployeeDashboard({ onClockAction }) {
@@ -70,7 +194,8 @@ export default function EmployeeDashboard({ onClockAction }) {
   const [clockStatus, setClockStatus] = useState(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [tasks, setTasks] = useState([]);
-  const [weekDays, setWeekDays] = useState([]);
+  const [upcomingDaysOff, setUpcomingDaysOff] = useState(null);
+  const [recentlyReturned, setRecentlyReturned] = useState(false);
   const [loading, setLoading] = useState(true);
   const [clockLoading, setClockLoading] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
@@ -89,28 +214,10 @@ export default function EmployeeDashboard({ onClockAction }) {
 
   const loadData = useCallback(async () => {
     try {
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
-
-      // Week Monday–Sunday
-      const weekStart = new Date(today);
-      const dow = today.getDay();
-      const daysToMon = dow === 0 ? -6 : 1 - dow;
-      weekStart.setDate(today.getDate() + daysToMon);
-      weekStart.setHours(0, 0, 0, 0);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      const weekStartStr = weekStart.toISOString().split('T')[0];
-      const weekEndStr = weekEnd.toISOString().split('T')[0];
-
-      const [clockRes, tasksRes, scheduleRes] = await Promise.all([
+      const [clockRes, tasksRes, daysOffRes] = await Promise.all([
         api.get('/time/current').catch(() => ({ data: { clockedIn: false } })),
         api.get('/tasks').catch(() => ({ data: { tasks: [] } })),
-        api
-          .get('/schedule', {
-            params: { start_date: weekStartStr, end_date: weekEndStr },
-          })
-          .catch(() => ({ data: { entries: [] } })),
+        api.get('/employee/upcoming-days-off').catch(() => ({ data: { upcoming: null, recently_returned: null } })),
       ]);
 
       const cs = clockRes.data;
@@ -136,30 +243,8 @@ export default function EmployeeDashboard({ onClockAction }) {
         });
       setTasks(myTasks);
 
-      // Days off this week
-      const entries = scheduleRes.data?.entries || [];
-      const offEntries = entries.filter(
-        (e) =>
-          [
-            'day_off',
-            'approved_time_off',
-            'vacation',
-            'sick_leave',
-            'personal_leave',
-          ].includes(e.type) && e.status !== 'rejected'
-      );
-
-      const days = [];
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(weekStart);
-        d.setDate(weekStart.getDate() + i);
-        const dStr = d.toISOString().split('T')[0];
-        const isOff = offEntries.some(
-          (e) => dStr >= e.start_date && dStr <= e.end_date
-        );
-        days.push({ date: d, dateStr: dStr, isOff });
-      }
-      setWeekDays(days);
+      setUpcomingDaysOff(daysOffRes.data?.upcoming || null);
+      setRecentlyReturned(!!daysOffRes.data?.recently_returned);
     } catch (err) {
       console.error('EmployeeDashboard loadData error:', err);
     } finally {
@@ -269,6 +354,14 @@ export default function EmployeeDashboard({ onClockAction }) {
     }
   };
 
+  const handleNotifyAdmin = async (days_remaining) => {
+    try {
+      await api.post('/employee/vacation-checklist', { days_remaining });
+    } catch {
+      /* silent */
+    }
+  };
+
   // ─── Derived values ───────────────────────────────────────
 
   if (loading) {
@@ -280,17 +373,11 @@ export default function EmployeeDashboard({ onClockAction }) {
   }
 
   const isClockedIn = clockStatus?.clockedIn;
-  const todayStr = new Date().toISOString().split('T')[0];
   const activeTasks = tasks.filter((t) => t.status !== 'completed');
   const currentTask =
     tasks.find((t) => t.status === 'in_progress') ||
     tasks.find((t) => t.status === 'todo');
   const affirmation = getDailyAffirmation();
-
-  // Next upcoming day off (on or after today)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const nextDayOff = weekDays.find((d) => d.isOff && d.date >= today);
 
   return (
     <div className="space-y-4 max-w-lg mx-auto pb-6">
@@ -369,6 +456,17 @@ export default function EmployeeDashboard({ onClockAction }) {
         </div>
       )}
 
+      {/* ── Welcome back (after returning from time off) ── */}
+      {recentlyReturned && <WelcomeBackBanner />}
+
+      {/* ── Vacation countdown (only when time off in next 14 days) ── */}
+      {upcomingDaysOff && (
+        <VacationCountdownWidget
+          daysOff={upcomingDaysOff}
+          onNotifyAdmin={handleNotifyAdmin}
+        />
+      )}
+
       {/* ── Break timer (when clocked in) ── */}
       {isClockedIn && (
         <div className="bg-white dark:bg-neutral-900 rounded-2xl p-5 border border-gray-100 dark:border-neutral-800 shadow-sm">
@@ -408,47 +506,6 @@ export default function EmployeeDashboard({ onClockAction }) {
           )}
         </div>
       )}
-
-      {/* ── Days off this week ── */}
-      <div className="bg-white dark:bg-neutral-900 rounded-2xl p-5 border border-gray-100 dark:border-neutral-800 shadow-sm">
-        <h2 className="text-xs font-bold text-gray-500 dark:text-neutral-400 uppercase tracking-wider mb-3">
-          📅 Days Off This Week
-        </h2>
-        <div className="flex gap-1.5 mb-3">
-          {weekDays.map((day, i) => {
-            const isToday = day.dateStr === todayStr;
-            return (
-              <div
-                key={i}
-                className={`flex-1 text-center py-2.5 rounded-xl text-xs font-semibold transition ${
-                  day.isOff
-                    ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
-                    : 'bg-gray-50 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500'
-                } ${isToday ? 'ring-2 ring-primary ring-offset-1 dark:ring-offset-neutral-900' : ''}`}
-              >
-                <div className="text-[10px] font-bold">{DAY_NAMES[day.date.getDay()]}</div>
-                <div className="mt-1">{day.isOff ? '✓' : '·'}</div>
-              </div>
-            );
-          })}
-        </div>
-        {nextDayOff ? (
-          <p className="text-sm text-gray-600 dark:text-neutral-300">
-            Next day off:{' '}
-            <span className="font-semibold text-gray-900 dark:text-white">
-              {nextDayOff.date.toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'short',
-                day: 'numeric',
-              })}
-            </span>
-          </p>
-        ) : (
-          <p className="text-sm text-gray-400 dark:text-neutral-500">
-            No days off scheduled this week
-          </p>
-        )}
-      </div>
 
       {/* ── Current task (when clocked in) ── */}
       {isClockedIn && currentTask && (
