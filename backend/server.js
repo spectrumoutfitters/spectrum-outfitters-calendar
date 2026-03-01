@@ -43,6 +43,7 @@ import taskPhotoRoutes from './routes/taskPhotos.js';
 import dashboardRevenueRoutes from './routes/dashboardRevenue.js';
 import customerStatusRoutes from './routes/customerStatus.js';
 import dispatchRoutes from './routes/dispatch.js';
+import employeeRoutes from './routes/employee.js';
 import paymentProcessorRoutes from './routes/paymentProcessor.js';
 import { handleStripeWebhook } from './routes/paymentProcessor.js';
 import { syncShopMonkeyRevenue } from './routes/shopmonkey.js';
@@ -666,6 +667,7 @@ app.use('/api/push', pushRoutes);
 app.use('/api/dashboard', dashboardRevenueRoutes);
 app.use('/api/customer-status', customerStatusRoutes);
 app.use('/api/admin/dispatch', dispatchRoutes);
+app.use('/api/employee', employeeRoutes);
 
 // Serve uploaded files
 const uploadsPath = process.env.UPLOADS_PATH || path.join(__dirname, 'uploads');
