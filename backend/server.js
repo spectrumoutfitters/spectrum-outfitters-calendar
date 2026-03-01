@@ -38,6 +38,7 @@ import { isPlaidConfigured } from './utils/plaidClient.js';
 import financeRoutes from './routes/finance.js';
 import securityRoutes from './routes/security.js';
 import geocodeRoutes from './routes/geocode.js';
+import pushRoutes from './routes/push.js';
 import paymentProcessorRoutes from './routes/paymentProcessor.js';
 import { handleStripeWebhook } from './routes/paymentProcessor.js';
 import { syncShopMonkeyRevenue } from './routes/shopmonkey.js';
@@ -656,6 +657,7 @@ app.use('/api/finance', financeRoutes);
 app.use('/api/payment-processor', paymentProcessorRoutes);
 app.use('/api/admin/security', securityRoutes);
 app.use('/api/geocode', geocodeRoutes);
+app.use('/api/push', pushRoutes);
 
 // Serve uploaded files
 const uploadsPath = process.env.UPLOADS_PATH || path.join(__dirname, 'uploads');

@@ -3,6 +3,7 @@ import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { calculateHours, getWeekEndingDate } from '../utils/helpers.js';
 import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
+import { sendPushToAdmins } from '../utils/pushNotifications.js';
 
 const router = express.Router();
 
@@ -190,6 +191,12 @@ router.post('/clock-in', async (req, res) => {
     );
 
     const entry = await db.getAsync('SELECT * FROM time_entries WHERE id = ?', [result.lastID]);
+
+    // Push notification to admins on clock-in
+    const pushTitle = 'Employee Clocked In';
+    const pushBody = `${req.user.full_name || req.user.username} has clocked in`;
+    sendPushToAdmins({ title: pushTitle, body: pushBody }).catch(() => {});
+
     res.status(201).json({
       entry,
       lunchOvertimeMinutes, // Include overtime info for frontend
