@@ -16,6 +16,7 @@ import Products from './pages/Products';
 import Inventory from './pages/Inventory';
 import InventoryManagement from './components/Admin/InventoryManagement';
 import MyWorkList from './pages/MyWorkList';
+import CustomerStatus from './pages/CustomerStatus';
 import Layout from './components/Layout/Layout';
 import FloatingActions from './components/Layout/FloatingActions';
 import Logo from './components/Logo';
@@ -157,6 +158,7 @@ function AppRoutes() {
           </PrivateRoute>
         }
       />
+      <Route path="/status/:token" element={<CustomerStatus />} />
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
   );

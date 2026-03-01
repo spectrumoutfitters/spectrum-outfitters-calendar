@@ -42,6 +42,12 @@ const TaskModal = ({ task, onClose }) => {
   const [partsLoading, setPartsLoading] = useState(false);
   const [showPartScanner, setShowPartScanner] = useState(false);
 
+  // Share Status (admin only)
+  const [shareCustomerName, setShareCustomerName] = useState('');
+  const [shareCustomerPhone, setShareCustomerPhone] = useState('');
+  const [shareUrl, setShareUrl] = useState('');
+  const [shareLoading, setShareLoading] = useState(false);
+
   useEffect(() => {
     loadFullTaskData();
     loadUsers();
@@ -167,6 +173,23 @@ const TaskModal = ({ task, onClose }) => {
       setHistory(response.data.history);
     } catch (error) {
       console.error('Error loading history:', error);
+    }
+  };
+
+  const handleGenerateShareLink = async () => {
+    setShareLoading(true);
+    try {
+      const res = await api.post('/customer-status/generate', {
+        task_id: task.id,
+        customer_name: shareCustomerName || null,
+        customer_phone: shareCustomerPhone || null,
+      });
+      const fullUrl = `${window.location.origin}${res.data.url}`;
+      setShareUrl(fullUrl);
+    } catch (err) {
+      console.error('Failed to generate share link:', err);
+    } finally {
+      setShareLoading(false);
     }
   };
 
@@ -1471,6 +1494,57 @@ const TaskModal = ({ task, onClose }) => {
                   </button>
                 </div>
               </div>
+
+              {/* Share Status Link (Admin Only) */}
+              {isAdmin && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-amber-800 mb-3">🔗 Share Status with Customer</h3>
+                  <div className="space-y-2 mb-3">
+                    <input
+                      type="text"
+                      value={shareCustomerName}
+                      onChange={(e) => setShareCustomerName(e.target.value)}
+                      placeholder="Customer name (optional)"
+                      className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm bg-white"
+                    />
+                    <input
+                      type="tel"
+                      value={shareCustomerPhone}
+                      onChange={(e) => setShareCustomerPhone(e.target.value)}
+                      placeholder="Customer phone (optional)"
+                      className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm bg-white"
+                    />
+                  </div>
+                  <button
+                    onClick={handleGenerateShareLink}
+                    disabled={shareLoading}
+                    className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition disabled:opacity-50"
+                  >
+                    {shareLoading ? 'Generating…' : 'Generate Link'}
+                  </button>
+                  {shareUrl && (
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center gap-2 p-2 bg-white border border-amber-200 rounded-lg">
+                        <span className="flex-1 text-xs text-gray-700 break-all">{shareUrl}</span>
+                        <button
+                          onClick={() => navigator.clipboard?.writeText(shareUrl)}
+                          className="shrink-0 px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded hover:bg-amber-200 transition"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                      {shareCustomerPhone && (
+                        <a
+                          href={`sms:${shareCustomerPhone}?body=${encodeURIComponent('Track your vehicle at ' + shareUrl)}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition"
+                        >
+                          📱 Send SMS
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {history.length > 0 && (
                 <div>

@@ -104,6 +104,10 @@ const Dashboard = () => {
   // Low stock alert
   const [lowStockCount, setLowStockCount] = useState(0);
 
+  // Today revenue (admin only)
+  const [todayRevenue, setTodayRevenue] = useState(null);
+  const [todayRevenueLoading, setTodayRevenueLoading] = useState(true);
+
   // Employee-specific
   const [employeeStats, setEmployeeStats] = useState({ tasksTodo: 0, tasksInProgress: 0, tasksCompleted: 0, todayHours: 0, weekHours: 0 });
 
@@ -128,6 +132,24 @@ const Dashboard = () => {
     const interval = setInterval(loadDashboardData, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const fetchTodayRevenue = async () => {
+      setTodayRevenueLoading(true);
+      try {
+        const res = await api.get('/dashboard/today-revenue');
+        setTodayRevenue(res.data);
+      } catch {
+        setTodayRevenue({ total_revenue: 0, invoice_count: 0, error: true });
+      } finally {
+        setTodayRevenueLoading(false);
+      }
+    };
+    fetchTodayRevenue();
+    const interval = setInterval(fetchTodayRevenue, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [isAdmin]);
 
   const loadDashboardData = async () => {
     try {
@@ -347,6 +369,34 @@ const Dashboard = () => {
             </p>
           </div>
           <button onClick={loadDashboardData} className="min-h-[2.5rem] px-3 py-1.5 text-sm text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition">Refresh</button>
+        </div>
+
+        {/* ── Today Revenue ───────────────────────────────────── */}
+        <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 flex items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-gray-500 dark:text-neutral-300 uppercase tracking-wider font-medium mb-1">Today's Revenue</p>
+            {todayRevenueLoading ? (
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-32 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+                <div className="h-4 w-20 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+              </div>
+            ) : (
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <span className="text-3xl font-bold text-green-600 dark:text-green-400">
+                  {todayRevenue?.error && todayRevenue?.total_revenue === 0 ? '$--' : fmt$(todayRevenue?.total_revenue || 0)}
+                </span>
+                {todayRevenue && !todayRevenue.error && (
+                  <span className="text-sm text-gray-500 dark:text-neutral-400">
+                    {todayRevenue.invoice_count} invoice{todayRevenue.invoice_count !== 1 ? 's' : ''} today
+                  </span>
+                )}
+                {todayRevenue?.error && (
+                  <span className="text-xs text-amber-600 dark:text-amber-400">Shopmonkey unavailable</span>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="text-3xl">💰</div>
         </div>
 
         {/* ── Key Metrics ────────────────────────────────────── */}
