@@ -154,7 +154,7 @@ const Analytics = () => {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+            className="px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
           />
           <span className="self-center text-gray-500">to</span>
           <input
@@ -289,13 +289,13 @@ const DashboardView = ({ data, kpis }) => {
       {/* Insights Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Performers */}
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="text-yellow-500">🏆</span> Top Performers
           </h3>
           <div className="space-y-3">
             {topPerformers.map((emp, idx) => (
-              <div key={emp.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg">
+              <div key={emp.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-neutral-950 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
                     idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : 'bg-orange-500'
@@ -317,13 +317,13 @@ const DashboardView = ({ data, kpis }) => {
         </div>
 
         {/* Category Insights */}
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="text-blue-500">📊</span> Category Performance
           </h3>
           <div className="space-y-3">
             {categories.slice(0, 5).map((cat) => (
-              <div key={cat.category} className="p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg">
+              <div key={cat.category} className="p-3 bg-gray-50 dark:bg-neutral-950 rounded-lg">
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-medium">{cat.category}</span>
                   <span className="text-sm text-gray-600">{cat.completion_rate}% complete</span>
@@ -346,7 +346,7 @@ const DashboardView = ({ data, kpis }) => {
         </div>
 
         {/* Efficiency Insights */}
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="text-green-500">💡</span> Key Insights
           </h3>
@@ -389,7 +389,7 @@ const DashboardView = ({ data, kpis }) => {
         </div>
 
         {/* Employee Summary */}
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="text-purple-500">👥</span> Team Overview
           </h3>
@@ -419,8 +419,8 @@ const PerformanceView = ({ data }) => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
-        <div className="p-4 bg-gray-50 dark:bg-neutral-800 border-b dark:border-neutral-700">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
+        <div className="p-4 bg-gray-50 dark:bg-neutral-950 border-b dark:border-neutral-700">
           <h3 className="text-lg font-semibold">Employee Performance Metrics</h3>
           <p className="text-sm text-gray-600">Detailed performance breakdown by employee</p>
         </div>
@@ -477,7 +477,7 @@ const CategoriesView = ({ data }) => {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {categories.map((cat) => (
-          <div key={cat.category} className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+          <div key={cat.category} className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
             <h3 className="text-lg font-semibold mb-4">{cat.category}</h3>
             <div className="space-y-3">
               <div className="flex justify-between">
@@ -534,7 +534,7 @@ const TrendsView = ({ data }) => {
               <h4 className="font-medium mb-3">{week.week_label}</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {week.employees.map((emp) => (
-                  <div key={emp.id} className="bg-gray-50 dark:bg-neutral-800 rounded p-3">
+                  <div key={emp.id} className="bg-gray-50 dark:bg-neutral-950 rounded p-3">
                     <p className="font-medium">{emp.full_name}</p>
                     <div className="flex justify-between text-sm mt-2">
                       <span className="text-gray-600">{emp.tasks_completed} tasks</span>

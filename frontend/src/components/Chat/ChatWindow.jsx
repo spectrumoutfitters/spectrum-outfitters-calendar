@@ -450,7 +450,7 @@ const ChatWindow = ({
   };
 
   return (
-    <div className="fixed inset-0 lg:inset-auto lg:bottom-6 lg:right-6 lg:w-[800px] lg:max-w-[calc(100vw-2rem)] lg:h-[700px] lg:max-h-[calc(100vh-3rem)] lg:rounded-xl bg-white dark:bg-neutral-900 shadow-2xl z-50 flex flex-col overflow-hidden border-0 lg:border border-neutral-200 dark:border-neutral-700">
+    <div className="fixed inset-0 lg:inset-auto lg:bottom-6 lg:right-6 lg:w-[800px] lg:max-w-[calc(100vw-2rem)] lg:h-[700px] lg:max-h-[calc(100vh-3rem)] lg:rounded-xl bg-white dark:bg-neutral-950 shadow-2xl z-50 flex flex-col overflow-hidden border-0 lg:border border-neutral-200 dark:border-neutral-700">
       {/* Header */}
       <div className="bg-primary text-white p-3 md:p-4 flex justify-between items-center flex-shrink-0">
         <h3 className="font-semibold text-base md:text-lg">Messages</h3>
@@ -463,7 +463,7 @@ const ChatWindow = ({
 
       <div className="flex flex-1 overflow-hidden">
         {/* Conversations Sidebar - hidden when a conversation is selected on mobile/tablet so back button returns here */}
-        <div className={`${selectedConversation ? 'hidden lg:flex' : 'flex'} w-full lg:w-1/3 border-r border-gray-200 dark:border-neutral-700 flex-col bg-white dark:bg-neutral-900`}>
+        <div className={`${selectedConversation ? 'hidden lg:flex' : 'flex'} w-full lg:w-1/3 border-r border-gray-200 dark:border-neutral-700 flex-col bg-white dark:bg-neutral-950`}>
           {/* New Message Button */}
           <div className="p-3 border-b border-gray-200 dark:border-neutral-700">
             <button
@@ -482,7 +482,7 @@ const ChatWindow = ({
                 placeholder="Search users..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
               />
               <div className="max-h-40 overflow-y-auto mt-2">
                 {filteredUsers.map((u) => (
@@ -542,14 +542,14 @@ const ChatWindow = ({
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-neutral-900">
+        <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-neutral-950">
           {currentConv ? (
             <>
               {/* Conversation Header - Back button always visible on mobile/tablet (when sidebar is hidden) */}
               <div className="p-3 md:p-4 border-b border-gray-200 dark:border-neutral-700 flex-shrink-0 flex items-center gap-2">
                 <button
                   onClick={() => onSelectConversation(null)}
-                  className="lg:hidden flex items-center justify-center min-h-[2.5rem] min-w-[2.5rem] rounded-lg text-gray-700 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 -ml-1"
+                  className="lg:hidden flex items-center justify-center min-h-[2.5rem] min-w-[2.5rem] rounded-lg text-gray-700 dark:text-neutral-100 hover:bg-gray-100 dark:hover:bg-neutral-800 -ml-1"
                   aria-label="Back to conversations"
                 >
                   <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -630,7 +630,7 @@ const ChatWindow = ({
               </div>
 
               {/* Input */}
-              <div className="border-t border-gray-200 dark:border-neutral-700 p-3 md:p-4 flex-shrink-0 bg-white dark:bg-neutral-900 safe-area-pb">
+              <div className="border-t border-gray-200 dark:border-neutral-700 p-3 md:p-4 flex-shrink-0 bg-white dark:bg-neutral-950 safe-area-pb">
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -638,7 +638,7 @@ const ChatWindow = ({
                     onChange={handleInputChange}
                     onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                     placeholder="Type a message..."
-                    className="flex-1 min-h-[2.75rem] px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400 text-sm md:text-base"
+                    className="flex-1 min-h-[2.75rem] px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400 text-sm md:text-base"
                   />
                   <button
                     onClick={handleSend}

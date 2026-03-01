@@ -131,7 +131,7 @@ const UserManagement = () => {
   };
 
   if (loading && users.length === 0) {
-    return <div className="text-center py-8 text-gray-600 dark:text-neutral-300">Loading users...</div>;
+    return <div className="text-center py-8 text-gray-600 dark:text-neutral-100">Loading users...</div>;
   }
 
   return (
@@ -158,7 +158,7 @@ const UserManagement = () => {
       </div>
 
       {showForm && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-lg dark:shadow-neutral-950/50 p-6 border-2 border-primary dark:border-neutral-700">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-lg dark:shadow-neutral-950/50 p-6 border-2 border-primary dark:border-neutral-700">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-2xl font-semibold text-primary">
               {editingUser ? '✏️ Edit User' : '➕ Create New User'}
@@ -176,36 +176,36 @@ const UserManagement = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Username *
                 </label>
                 <input
                   type="text"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                   required
                 />
               </div>
               {!editingUser && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                     Password *
                   </label>
                   <input
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                     required
                     minLength={6}
                     placeholder="Minimum 6 characters"
                   />
-                  <p className="text-xs text-gray-500 dark:text-neutral-300 mt-1">Password must be at least 6 characters</p>
+                  <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">Password must be at least 6 characters</p>
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Full Name *
                 </label>
                 <input
@@ -217,36 +217,36 @@ const UserManagement = () => {
                       setFormData({ ...formData, full_name: toTitleCase(e.target.value) });
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Email
                 </label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Role
                 </label>
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                 >
                   <option value="employee">Employee</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Hourly Rate ($)
                 </label>
                 <input
@@ -254,12 +254,12 @@ const UserManagement = () => {
                   step="0.01"
                   value={formData.hourly_rate}
                   onChange={(e) => setFormData({ ...formData, hourly_rate: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                   placeholder="For hourly employees"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Weekly Salary ($)
                 </label>
                 <input
@@ -267,10 +267,10 @@ const UserManagement = () => {
                   step="0.01"
                   value={formData.weekly_salary}
                   onChange={(e) => setFormData({ ...formData, weekly_salary: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                   placeholder="For salaried employees"
                 />
-                <p className="text-xs text-gray-500 dark:text-neutral-300 mt-1">Hourly rate will be calculated as salary ÷ 40 hours</p>
+                <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">Hourly rate will be calculated as salary ÷ 40 hours</p>
               </div>
             </div>
             <div className="flex gap-3 pt-4">
@@ -287,7 +287,7 @@ const UserManagement = () => {
                   setShowForm(false);
                   setEditingUser(null);
                 }}
-                className="px-6 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200"
+                className="px-6 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-100"
               >
                 Cancel
               </button>
@@ -296,20 +296,20 @@ const UserManagement = () => {
         </div>
       )}
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 overflow-hidden border border-transparent dark:border-neutral-700">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 overflow-hidden border border-transparent dark:border-neutral-700">
         <div className="overflow-x-auto">
         <table className="min-w-full">
-          <thead className="bg-gray-50 dark:bg-neutral-800">
+          <thead className="bg-gray-50 dark:bg-neutral-950">
             <tr>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Name</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Username</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Email</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Role</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Hourly Rate</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Weekly Salary</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Status</th>
-              {isMasterAdmin && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Payroll Access</th>}
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Actions</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-100">Name</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-100">Username</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-100">Email</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-100">Role</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-100">Hourly Rate</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-100">Weekly Salary</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-100">Status</th>
+              {isMasterAdmin && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-100">Payroll Access</th>}
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-100">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -350,7 +350,7 @@ const UserManagement = () => {
                         className={`px-3 py-1 rounded text-xs font-medium ${
                           (user.payroll_access === 1 || user.payroll_access === true) || (user.is_master_admin === 1 || user.is_master_admin === true)
                             ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-800/50'
-                            : 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-200 hover:bg-gray-200 dark:hover:bg-neutral-600'
+                            : 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-100 hover:bg-gray-200 dark:hover:bg-neutral-600'
                         }`}
                         disabled={user.is_master_admin === 1 || user.is_master_admin === true}
                         title={user.is_master_admin === 1 || user.is_master_admin === true ? 'Master admin always has access' : 'Toggle payroll access'}

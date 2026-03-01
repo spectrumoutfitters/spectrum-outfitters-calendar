@@ -244,7 +244,7 @@ const EmployeeTaskModal = ({ task, onClose }) => {
   if (initialLoading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-[9999] p-0 sm:p-4">
-        <div className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-2xl w-full p-6">
+        <div className="bg-white dark:bg-neutral-950 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-2xl w-full p-6">
           <div className="text-center">Loading task details...</div>
         </div>
       </div>
@@ -261,7 +261,7 @@ const EmployeeTaskModal = ({ task, onClose }) => {
       }}
     >
       <div
-        className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-neutral-950 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 sm:p-6">
@@ -680,7 +680,7 @@ const EmployeeTaskModal = ({ task, onClose }) => {
       {/* Pause Modal */}
       {showBreakModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-[10000] p-0 sm:p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full p-4 sm:p-6">
+          <div className="bg-white dark:bg-neutral-950 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full p-4 sm:p-6">
             <h3 className="text-lg sm:text-xl font-bold mb-4 text-gray-900 dark:text-neutral-100">Pause Task</h3>
             <div className="space-y-4">
               <div>

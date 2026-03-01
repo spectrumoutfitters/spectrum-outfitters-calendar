@@ -450,7 +450,7 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-xl border border-transparent dark:border-neutral-800 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-xl border border-transparent dark:border-neutral-700 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-gray-800 dark:text-neutral-100">
@@ -474,20 +474,20 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                 Employee
               </label>
               <input
                 type="text"
                 value={entry.user_name || entry.username || 'Unknown'}
                 disabled
-                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-gray-100 dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
               />
             </div>
 
             {!isLunchBreak && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Clock In *
                 </label>
                 <input
@@ -496,14 +496,14 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
                   value={formData.clock_in}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                 />
               </div>
             )}
             
             {isLunchBreak && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Work Start Time (Before Lunch)
                 </label>
                 <input
@@ -511,14 +511,14 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
                   name="clock_in"
                   value={formData.clock_in}
                   disabled
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-gray-100 dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                 />
-                <p className="text-xs text-gray-500 dark:text-neutral-300 mt-1">This is when work started before lunch (read-only)</p>
+                <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">This is when work started before lunch (read-only)</p>
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                 {isLunchBreak ? 'Lunch Start Time (Clock Out) *' : 'Clock Out'}
               </label>
               <input
@@ -527,19 +527,19 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
                 value={formData.clock_out}
                 onChange={handleChange}
                 required={isLunchBreak}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
               />
               {!isLunchBreak && (
-                <p className="text-xs text-gray-500 dark:text-neutral-300 mt-1">Leave empty if still clocked in</p>
+                <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">Leave empty if still clocked in</p>
               )}
               {isLunchBreak && (
-                <p className="text-xs text-gray-500 dark:text-neutral-300 mt-1">Time when employee went to lunch</p>
+                <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">Time when employee went to lunch</p>
               )}
             </div>
 
             {isLunchBreak && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Lunch End Time (Clock Back In)
                 </label>
                 <input
@@ -547,16 +547,16 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
                   name="lunch_return_clock_in"
                   value={formData.lunch_return_clock_in}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                 />
-                <p className="text-xs text-gray-500 dark:text-neutral-300 mt-1">
+                <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">
                   Time when employee returned from lunch. Leave empty if they haven't returned yet. The system will find and update the correct entry automatically.
                 </p>
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                 Break Minutes
               </label>
               <input
@@ -565,12 +565,12 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
                 value={formData.break_minutes}
                 onChange={handleChange}
                 min="0"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                 Notes
               </label>
               <textarea
@@ -578,7 +578,7 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
                 value={formData.notes}
                 onChange={handleChange}
                 rows="3"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                 placeholder="Optional notes about this time entry..."
               />
             </div>
@@ -594,7 +594,7 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800"
+                className="px-4 py-2 border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-neutral-100 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800"
               >
                 Cancel
               </button>

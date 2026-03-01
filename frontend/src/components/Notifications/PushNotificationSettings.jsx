@@ -31,15 +31,15 @@ const PushNotificationSettings = () => {
   };
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
+    <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md border border-transparent dark:border-neutral-700 p-6">
       <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Push Notifications</h2>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">
+            <label className="text-sm font-medium text-gray-700 dark:text-neutral-100">
               Enable Push Notifications
             </label>
-            <p className="text-xs text-gray-500 dark:text-neutral-300 mt-1">
+            <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">
               Receive alerts even when the app is in the background
             </p>
           </div>
@@ -62,7 +62,7 @@ const PushNotificationSettings = () => {
             <button
               onClick={handleTest}
               disabled={testStatus === 'sending'}
-              className="px-4 py-2 bg-gray-100 dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 text-gray-700 dark:text-neutral-200 text-sm rounded-lg transition disabled:opacity-50"
+              className="px-4 py-2 bg-gray-100 dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 text-gray-700 dark:text-neutral-100 text-sm rounded-lg transition disabled:opacity-50"
             >
               {testStatus === 'sending' ? 'Sending...' : 'Send Test Notification'}
             </button>

@@ -121,7 +121,7 @@ const MyWorkList = () => {
         <div className="flex items-center justify-center py-16">
           <div className="text-center">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-sm text-gray-500 dark:text-neutral-200">Loading your work list...</p>
+            <p className="text-sm text-gray-500 dark:text-neutral-100">Loading your work list...</p>
           </div>
         </div>
       </div>
@@ -135,12 +135,12 @@ const MyWorkList = () => {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold text-gray-800 dark:text-neutral-100">My Work List</h1>
-          <p className="text-sm text-gray-500 dark:text-neutral-200">
+          <p className="text-sm text-gray-500 dark:text-neutral-100">
             {new Date().toLocaleDateString('en-US', {
               weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
               timeZone: 'America/Chicago'
             })}
-            {user?.full_name && <span className="text-gray-400 dark:text-neutral-300"> &middot; {user.full_name}</span>}
+            {user?.full_name && <span className="text-gray-400 dark:text-neutral-100"> &middot; {user.full_name}</span>}
           </p>
           <p className="text-xs text-gray-400 dark:text-neutral-400 mt-0.5">List stays until you check items off. Completed items archive after 24 hours.</p>
         </div>
@@ -155,15 +155,15 @@ const MyWorkList = () => {
 
       {/* Archived section (when toggled) */}
       {showArchived && (
-        <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4">
+        <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
           <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider mb-2">Archived</h2>
           <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">Uncheck an item to restore it to your list.</p>
           {archivedItems.length === 0 ? (
-            <p className="text-sm text-gray-400 dark:text-neutral-200">No archived items.</p>
+            <p className="text-sm text-gray-400 dark:text-neutral-100">No archived items.</p>
           ) : (
             <div className="space-y-1">
               {archivedItems.map(item => (
-                <div key={item.id} className="group flex items-center gap-3 bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg px-4 py-3">
+                <div key={item.id} className="group flex items-center gap-3 bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg px-4 py-3">
                   <button
                     onClick={() => handleToggleItem(item.id)}
                     className="flex-shrink-0 w-6 h-6 rounded-full bg-green-500 border-2 border-green-500 text-white flex items-center justify-center hover:opacity-90"
@@ -180,7 +180,7 @@ const MyWorkList = () => {
       )}
 
       {/* Quick-Add (hide when showing archived) */}
-      {!showArchived && <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4">
+      {!showArchived && <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
         <form onSubmit={handleAddItem} className="flex gap-2">
           <input
             ref={addInputRef}
@@ -188,7 +188,7 @@ const MyWorkList = () => {
             value={newItemTitle}
             onChange={(e) => setNewItemTitle(e.target.value)}
             placeholder="What do you need to do today?"
-            className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+            className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
           />
           <button
             type="submit"
@@ -201,7 +201,7 @@ const MyWorkList = () => {
       </div>}
 
       {/* Focus (hide when showing archived) */}
-      {!showArchived && <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4">
+      {!showArchived && <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-2">
           <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -215,7 +215,7 @@ const MyWorkList = () => {
           onChange={(e) => setFocusText(e.target.value)}
           onBlur={() => handleSaveFocus(focusText)}
           placeholder="What's your #1 priority today?"
-          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
         />
       </div>}
 
@@ -225,9 +225,9 @@ const MyWorkList = () => {
           <div className="flex items-center justify-between">
             <p className="text-sm">
               <span className="font-bold">{summary.completed}</span>
-              <span className="text-gray-400 dark:text-neutral-300"> of </span>
+              <span className="text-gray-400 dark:text-neutral-100"> of </span>
               <span className="font-bold">{summary.total}</span>
-              <span className="text-gray-400 dark:text-neutral-300"> done</span>
+              <span className="text-gray-400 dark:text-neutral-100"> done</span>
             </p>
             <div className="flex items-center gap-3">
               <div className="w-20 h-2 bg-white/20 dark:bg-white/30 rounded-full overflow-hidden">
@@ -246,15 +246,15 @@ const MyWorkList = () => {
       {!showArchived && pendingItems.length > 0 && (
         <div className="space-y-1">
           {pendingItems.map(item => (
-            <div key={item.id} className="group flex items-center gap-3 bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg px-4 py-3 hover:border-primary/30 dark:hover:border-primary/40 transition">
+            <div key={item.id} className="group flex items-center gap-3 bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg px-4 py-3 hover:border-primary/30 dark:hover:border-primary/40 transition">
               <button
                 onClick={() => handleToggleItem(item.id)}
-                className="flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-300 dark:border-neutral-600 hover:border-primary hover:bg-primary/5 dark:hover:bg-primary/10 flex items-center justify-center transition"
+                className="flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-300 dark:border-neutral-700 hover:border-primary hover:bg-primary/5 dark:hover:bg-primary/10 flex items-center justify-center transition"
                 title="Mark complete"
               />
               <span className="flex-1 text-sm text-gray-800 dark:text-neutral-100 min-w-0">
                 {item.title}
-                {item.description && <span className="text-gray-400 dark:text-neutral-300 ml-1 text-xs">- {item.description}</span>}
+                {item.description && <span className="text-gray-400 dark:text-neutral-100 ml-1 text-xs">- {item.description}</span>}
               </span>
               <button
                 onClick={() => handleDeleteItem(item.id)}
@@ -275,7 +275,7 @@ const MyWorkList = () => {
         <div className="space-y-1">
           <p className="text-xs text-gray-400 dark:text-neutral-400 font-medium px-1 mb-1">Completed ({completedItems.length})</p>
           {completedItems.map(item => (
-            <div key={item.id} className="group flex items-center gap-3 bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg px-4 py-3 opacity-60">
+            <div key={item.id} className="group flex items-center gap-3 bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg px-4 py-3 opacity-60">
               <button
                 onClick={() => handleToggleItem(item.id)}
                 className="flex-shrink-0 w-6 h-6 rounded-full bg-green-500 border-2 border-green-500 text-white flex items-center justify-center transition"
@@ -302,8 +302,8 @@ const MyWorkList = () => {
 
       {/* Empty State */}
       {!showArchived && items.length === 0 && (
-        <div className="bg-neutral-50 dark:bg-neutral-900 border border-dashed border-gray-300 dark:border-neutral-700 rounded-xl p-8 text-center">
-          <p className="text-gray-400 dark:text-neutral-300 text-sm mb-1">No tasks yet.</p>
+        <div className="bg-neutral-50 dark:bg-neutral-950 border border-dashed border-gray-300 dark:border-neutral-700 rounded-xl p-8 text-center">
+          <p className="text-gray-400 dark:text-neutral-100 text-sm mb-1">No tasks yet.</p>
           <p className="text-xs text-gray-400 dark:text-neutral-400">Add a task above. List stays until you check items off; completed items archive after 24 hours.</p>
         </div>
       )}

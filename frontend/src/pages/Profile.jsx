@@ -135,25 +135,25 @@ const Profile = () => {
     <div className="space-y-4 sm:space-y-6">
       <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-neutral-100">My Profile</h1>
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-4 sm:p-6">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md border border-transparent dark:border-neutral-700 p-4 sm:p-6">
         <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Account Information</h2>
         <div className="space-y-3">
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Full Name</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-neutral-100">Full Name</label>
             <p className="text-gray-800 dark:text-neutral-100 mt-1">{user?.full_name}</p>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Email</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-neutral-100">Email</label>
             <p className="text-gray-800 dark:text-neutral-100 mt-1">{user?.email || 'Not set'}</p>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Role</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-neutral-100">Role</label>
             <p className="text-gray-800 dark:text-neutral-100 mt-1 capitalize">{user?.role}</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-4 sm:p-6">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md border border-transparent dark:border-neutral-700 p-4 sm:p-6">
         <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Preferences</h2>
         
         {preferencesMessage.text && (
@@ -169,10 +169,10 @@ const Profile = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">
+              <label className="text-sm font-medium text-gray-700 dark:text-neutral-100">
                 Show Clock In/Out in Header
               </label>
-              <p className="text-xs text-gray-500 dark:text-neutral-300 mt-1">
+              <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">
                 Display clock in/out buttons in the header for quick access
               </p>
             </div>
@@ -201,7 +201,7 @@ const Profile = () => {
       <PushNotificationSettings />
 
       {isAdmin && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-4 sm:p-6">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md border border-transparent dark:border-neutral-700 p-4 sm:p-6">
           <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Change Username</h2>
           
           {usernameMessage.text && (
@@ -216,21 +216,21 @@ const Profile = () => {
 
           <form onSubmit={handleUsernameChange} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                 Current Username
               </label>
-              <p className="text-gray-600 dark:text-neutral-200 mb-3">{user?.username}</p>
+              <p className="text-gray-600 dark:text-neutral-100 mb-3">{user?.username}</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                 New Username *
               </label>
               <input
                 type="text"
                 value={usernameData.newUsername}
                 onChange={(e) => setUsernameData({ newUsername: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
                 required
                 placeholder="Enter new username"
               />
@@ -247,7 +247,7 @@ const Profile = () => {
         </div>
       )}
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-4 sm:p-6">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md border border-transparent dark:border-neutral-700 p-4 sm:p-6">
         <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Change Password</h2>
         
         {message.text && (
@@ -262,42 +262,42 @@ const Profile = () => {
 
         <form onSubmit={handlePasswordChange} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
               Current Password *
             </label>
             <input
               type="password"
               value={passwordData.currentPassword}
               onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
               New Password *
             </label>
             <input
               type="password"
               value={passwordData.newPassword}
               onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
               required
               minLength={6}
             />
-            <p className="text-xs text-gray-500 dark:text-neutral-300 mt-1">Must be at least 6 characters</p>
+            <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">Must be at least 6 characters</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
               Confirm New Password *
             </label>
             <input
               type="password"
               value={passwordData.confirmPassword}
               onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
               required
               minLength={6}
             />

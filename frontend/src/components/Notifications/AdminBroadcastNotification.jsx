@@ -39,7 +39,7 @@ const AdminBroadcastNotification = () => {
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+          <div className="bg-white dark:bg-neutral-950 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-gray-900 dark:text-neutral-100">
                 Broadcast Push Notification
@@ -54,7 +54,7 @@ const AdminBroadcastNotification = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Title *
                 </label>
                 <input
@@ -62,12 +62,12 @@ const AdminBroadcastNotification = () => {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Notification title"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Message *
                 </label>
                 <textarea
@@ -75,18 +75,18 @@ const AdminBroadcastNotification = () => {
                   onChange={(e) => setBody(e.target.value)}
                   placeholder="Notification message"
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Send To
                 </label>
                 <select
                   value={target}
                   onChange={(e) => setTarget(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-transparent"
                 >
                   <option value="all">Everyone</option>
                   <option value="employees">Employees Only</option>
@@ -108,7 +108,7 @@ const AdminBroadcastNotification = () => {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="flex-1 px-4 py-2 bg-gray-100 dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 text-gray-700 dark:text-neutral-200 rounded-lg transition text-sm"
+                  className="flex-1 px-4 py-2 bg-gray-100 dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 text-gray-700 dark:text-neutral-100 rounded-lg transition text-sm"
                 >
                   Cancel
                 </button>

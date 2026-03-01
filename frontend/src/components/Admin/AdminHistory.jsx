@@ -82,7 +82,7 @@ export default function AdminHistory() {
   };
 
   const typeBadge = (t) => {
-    const c = t === 'clock_in' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : t === 'clock_out' ? 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200' : t === 'lunch_out' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300';
+    const c = t === 'clock_in' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : t === 'clock_out' ? 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100' : t === 'lunch_out' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300';
     return <span className={`px-2 py-0.5 rounded text-xs font-medium ${c}`}>{typeLabel(t)}</span>;
   };
 
@@ -93,13 +93,13 @@ export default function AdminHistory() {
         <div className="flex gap-2">
           <button
             onClick={() => setView('lunch')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg ${view === 'lunch' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 hover:bg-gray-200 dark:hover:bg-neutral-600'}`}
+            className={`px-4 py-2 text-sm font-medium rounded-lg ${view === 'lunch' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100 hover:bg-gray-200 dark:hover:bg-neutral-600'}`}
           >
             Lunch clock-out / clock-in
           </button>
           <button
             onClick={() => setView('punch')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg ${view === 'punch' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 hover:bg-gray-200 dark:hover:bg-neutral-600'}`}
+            className={`px-4 py-2 text-sm font-medium rounded-lg ${view === 'punch' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100 hover:bg-gray-200 dark:hover:bg-neutral-600'}`}
           >
             All punches
           </button>
@@ -107,19 +107,19 @@ export default function AdminHistory() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm text-gray-600 dark:text-neutral-300">From</label>
-        <input type="date" value={from} onChange={e => setFrom(e.target.value)} className="border border-gray-200 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100" />
-        <label className="text-sm text-gray-600 dark:text-neutral-300">To</label>
-        <input type="date" value={to} onChange={e => setTo(e.target.value)} className="border border-gray-200 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100" />
-        <label className="text-sm text-gray-600 dark:text-neutral-300">Employee</label>
-        <select value={userId} onChange={e => setUserId(e.target.value)} className="border border-gray-200 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm min-w-[160px] bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100">
+        <label className="text-sm text-gray-600 dark:text-neutral-100">From</label>
+        <input type="date" value={from} onChange={e => setFrom(e.target.value)} className="border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100" />
+        <label className="text-sm text-gray-600 dark:text-neutral-100">To</label>
+        <input type="date" value={to} onChange={e => setTo(e.target.value)} className="border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100" />
+        <label className="text-sm text-gray-600 dark:text-neutral-100">Employee</label>
+        <select value={userId} onChange={e => setUserId(e.target.value)} className="border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm min-w-[160px] bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100">
           <option value="">All</option>
           {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
         {view === 'punch' && (
           <>
-            <label className="text-sm text-gray-600 dark:text-neutral-300">Type</label>
-            <select value={punchType} onChange={e => setPunchType(e.target.value)} className="border border-gray-200 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100">
+            <label className="text-sm text-gray-600 dark:text-neutral-100">Type</label>
+            <select value={punchType} onChange={e => setPunchType(e.target.value)} className="border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100">
               <option value="">All</option>
               <option value="clock_in">Clock In</option>
               <option value="clock_out">Clock Out</option>
@@ -135,26 +135,26 @@ export default function AdminHistory() {
 
       {loading && (
         <div className="flex items-center gap-2 text-gray-500 dark:text-neutral-400">
-          <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 dark:border-neutral-600 border-t-primary"></div>
+          <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 dark:border-neutral-700 border-t-primary"></div>
           <span>Loading...</span>
         </div>
       )}
 
       {view === 'lunch' && !loading && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-700">
             <h3 className="font-semibold text-gray-800 dark:text-neutral-100">Lunch clock-out and clock-in</h3>
             <p className="text-sm text-gray-500 dark:text-neutral-400 mt-0.5">When each employee went to lunch and when they returned.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-neutral-800">
+              <thead className="bg-gray-50 dark:bg-neutral-950">
                 <tr>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-300">Date</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-300">Employee</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-300">Lunch out</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-300">Lunch in</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-300">Duration</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-100">Date</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-100">Employee</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-100">Lunch out</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-100">Lunch in</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-100">Duration</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,11 +162,11 @@ export default function AdminHistory() {
                   <tr><td colSpan={5} className="text-center py-8 text-gray-500 dark:text-neutral-400">No lunch records in this range.</td></tr>
                 ) : lunches.map(l => (
                   <tr key={l.id} className="border-t border-gray-50 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
-                    <td className="py-3 px-4 text-gray-600 dark:text-neutral-300">{formatDate(l.date)}</td>
+                    <td className="py-3 px-4 text-gray-600 dark:text-neutral-100">{formatDate(l.date)}</td>
                     <td className="py-3 px-4 font-medium text-gray-800 dark:text-neutral-100">{l.userName}</td>
-                    <td className="py-3 px-4 text-gray-600 dark:text-neutral-300">{formatDateTime(l.lunchOut)}</td>
-                    <td className="py-3 px-4 text-gray-600 dark:text-neutral-300">{l.lunchIn ? formatDateTime(l.lunchIn) : '—'}</td>
-                    <td className="py-3 px-4 text-gray-600 dark:text-neutral-300">{l.durationMinutes != null ? `${l.durationMinutes} min` : '—'}</td>
+                    <td className="py-3 px-4 text-gray-600 dark:text-neutral-100">{formatDateTime(l.lunchOut)}</td>
+                    <td className="py-3 px-4 text-gray-600 dark:text-neutral-100">{l.lunchIn ? formatDateTime(l.lunchIn) : '—'}</td>
+                    <td className="py-3 px-4 text-gray-600 dark:text-neutral-100">{l.durationMinutes != null ? `${l.durationMinutes} min` : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -176,18 +176,18 @@ export default function AdminHistory() {
       )}
 
       {view === 'punch' && !loading && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-700">
             <h3 className="font-semibold text-gray-800 dark:text-neutral-100">All punch history</h3>
             <p className="text-sm text-gray-500 dark:text-neutral-400 mt-0.5">Clock in, clock out, lunch out, and lunch in events in order.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-neutral-800">
+              <thead className="bg-gray-50 dark:bg-neutral-950">
                 <tr>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-300">Time</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-300">Type</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-300">Employee</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-100">Time</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-100">Type</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-neutral-100">Employee</th>
                 </tr>
               </thead>
               <tbody>
@@ -195,7 +195,7 @@ export default function AdminHistory() {
                   <tr><td colSpan={3} className="text-center py-8 text-gray-500 dark:text-neutral-400">No punches in this range.</td></tr>
                 ) : punches.map((p, i) => (
                   <tr key={`${p.entryId}-${p.time}-${i}`} className="border-t border-gray-50 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
-                    <td className="py-3 px-4 text-gray-600 dark:text-neutral-300 whitespace-nowrap">{formatDateTime(p.time)}</td>
+                    <td className="py-3 px-4 text-gray-600 dark:text-neutral-100 whitespace-nowrap">{formatDateTime(p.time)}</td>
                     <td className="py-3 px-4">{typeBadge(p.type)}</td>
                     <td className="py-3 px-4 font-medium text-gray-800 dark:text-neutral-100">{p.userName}</td>
                   </tr>
@@ -207,7 +207,7 @@ export default function AdminHistory() {
       )}
 
       <p className="text-sm text-gray-500 dark:text-neutral-400">
-        Login and logout history is in <strong className="text-gray-800 dark:text-neutral-200">Admin → Security &amp; Sessions</strong> under the &quot;Login History&quot; tab (filter by &quot;All (login &amp; logout)&quot; or &quot;Logout only&quot;).
+        Login and logout history is in <strong className="text-gray-800 dark:text-neutral-100">Admin → Security &amp; Sessions</strong> under the &quot;Login History&quot; tab (filter by &quot;All (login &amp; logout)&quot; or &quot;Logout only&quot;).
       </p>
     </div>
   );

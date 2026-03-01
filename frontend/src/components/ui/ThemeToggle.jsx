@@ -11,7 +11,7 @@ export default function ThemeToggle({ showLabel = false, variant = 'header' }) {
   const isDark = theme === 'dark';
   const isStandalone = variant === 'standalone';
   const buttonClass = isStandalone
-    ? 'flex items-center justify-center gap-2 w-10 h-10 min-w-[2.5rem] rounded-lg text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-transparent'
+    ? 'flex items-center justify-center gap-2 w-10 h-10 min-w-[2.5rem] rounded-lg text-neutral-600 dark:text-neutral-100 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-transparent'
     : 'flex items-center justify-center gap-2 w-10 h-10 min-w-[2.5rem] rounded-lg text-white/90 hover:text-white hover:bg-white/10 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-transparent';
 
   return (

@@ -182,7 +182,7 @@ const ProfitAndLoss = () => {
       utilities: 'bg-blue-100 text-blue-800',
       insurance: 'bg-green-100 text-green-800',
       supplies: 'bg-yellow-100 text-yellow-800',
-      other: 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-200'
+      other: 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-100'
     };
     return colors[category] || colors.other;
   };
@@ -211,7 +211,7 @@ const ProfitAndLoss = () => {
   return (
     <div className="space-y-6">
       {/* Week Selector */}
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-4">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-4">
         <div className="flex items-center justify-between">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -231,7 +231,7 @@ const ProfitAndLoss = () => {
       </div>
 
       {/* Summary Card - Large and Prominent */}
-      <div className={`bg-white dark:bg-neutral-900 rounded-lg shadow-lg dark:shadow-neutral-950/50 p-6 border-2 dark:border-neutral-700 ${
+      <div className={`bg-white dark:bg-neutral-950 rounded-lg shadow-lg dark:shadow-neutral-950/50 p-6 border-2 dark:border-neutral-700 ${
         summary.is_profitable ? 'border-green-500' : 'border-red-500'
       }`}>
         <div className="text-center">
@@ -283,7 +283,7 @@ const ProfitAndLoss = () => {
       </div>
 
       {/* Revenue Section */}
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
         <h3 className="text-xl font-bold text-gray-800 mb-4">Revenue</h3>
         <div className="mb-4">
           <div className="text-3xl font-bold text-green-600">
@@ -302,7 +302,7 @@ const ProfitAndLoss = () => {
 
         <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
           {revenue.daily.map((day, idx) => (
-            <div key={idx} className="text-center p-2 bg-gray-50 dark:bg-neutral-800 rounded">
+            <div key={idx} className="text-center p-2 bg-gray-50 dark:bg-neutral-950 rounded">
               <div className="text-xs text-gray-600">{formatDate(day.date)}</div>
               <div className="text-sm font-semibold text-gray-800">
                 {formatCurrency(day.revenue)}
@@ -313,7 +313,7 @@ const ProfitAndLoss = () => {
       </div>
 
       {/* Payroll Section */}
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
         <h3 className="text-xl font-bold text-gray-800 mb-4">Payroll</h3>
         <div className="mb-4">
           <div className="text-3xl font-bold text-red-600">
@@ -327,7 +327,7 @@ const ProfitAndLoss = () => {
             <p className="text-sm text-gray-500">No payroll data for this week</p>
           ) : (
             payroll.employees.map((emp, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded">
+              <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-950 rounded">
                 <div>
                   <div className="font-medium text-gray-800">{emp.employee_name}</div>
                   <div className="text-xs text-gray-600">
@@ -347,7 +347,7 @@ const ProfitAndLoss = () => {
       </div>
 
       {/* Monthly Expenses Section */}
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
         <div className="flex justify-between items-center mb-4">
           <div>
             <h3 className="text-xl font-bold text-gray-800">Monthly Expenses</h3>
@@ -409,7 +409,7 @@ const ProfitAndLoss = () => {
                   
                   <div className="space-y-2">
                     {monthlyExpenses.map((expense, idx) => (
-                      <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded border border-gray-200 dark:border-neutral-700">
+                      <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-950 rounded border border-gray-200 dark:border-neutral-700">
                         <div className="flex-1">
                           <div className="font-medium text-gray-800">{expense.expense_name}</div>
                           <div className="text-xs text-gray-600 flex items-center gap-2 mt-1">
@@ -445,7 +445,7 @@ const ProfitAndLoss = () => {
       </div>
 
       {/* Weekly Expenses Section */}
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-gray-800">Weekly & One-Time Expenses</h3>
           <button
@@ -499,7 +499,7 @@ const ProfitAndLoss = () => {
                             </span>
                           )}
                           {expense.frequency === 'one_time' && (
-                            <span className="px-2 py-0.5 bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-200 text-xs rounded">
+                            <span className="px-2 py-0.5 bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-100 text-xs rounded">
                               One-Time
                             </span>
                           )}
@@ -532,7 +532,7 @@ const ProfitAndLoss = () => {
       {/* Expense Modal */}
       {showExpenseModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-xl dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-xl dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold">
@@ -693,7 +693,7 @@ const ProfitAndLoss = () => {
                         <button
                           key={exp.id}
                           onClick={() => handleUseRecurring(exp)}
-                          className="w-full text-left p-2 bg-gray-50 dark:bg-neutral-800 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded border border-gray-200 dark:border-neutral-600 text-gray-900 dark:text-neutral-100"
+                          className="w-full text-left p-2 bg-gray-50 dark:bg-neutral-950 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-neutral-100"
                         >
                           <div className="font-medium text-sm">{exp.expense_name}</div>
                           <div className="text-xs text-gray-600">
@@ -708,7 +708,7 @@ const ProfitAndLoss = () => {
                 <div className="flex justify-end gap-2 pt-4">
                   <button
                     onClick={() => setShowExpenseModal(false)}
-                    className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200"
+                    className="px-4 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-100"
                   >
                     Cancel
                   </button>

@@ -48,11 +48,11 @@ export default function AdaptiveModal({
 
       {/* Panel: bottom sheet on mobile, centered on sm+ */}
       <div
-        className={`relative w-full max-h-[90vh] sm:max-h-[85vh] flex flex-col rounded-t-2xl sm:rounded-2xl shadow-xl bg-white dark:bg-neutral-900 dark:border dark:border-neutral-800 ${sizeClass} mx-0 sm:mx-4`}
+        className={`relative w-full max-h-[90vh] sm:max-h-[85vh] flex flex-col rounded-t-2xl sm:rounded-2xl shadow-xl bg-white dark:bg-neutral-950 dark:border dark:border-neutral-700 ${sizeClass} mx-0 sm:mx-4`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between shrink-0 px-4 py-4 sm:px-6 border-b border-neutral-200 dark:border-neutral-800">
+        <div className="flex items-center justify-between shrink-0 px-4 py-4 sm:px-6 border-b border-neutral-200 dark:border-neutral-700">
           {title && (
             <h2 id="adaptive-modal-title" className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-neutral-100 pr-4">
               {title}
@@ -77,7 +77,7 @@ export default function AdaptiveModal({
 
         {/* Optional sticky footer (e.g. form actions) */}
         {footer && (
-          <div className="shrink-0 px-4 py-4 sm:px-6 border-t border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/50 rounded-b-2xl sm:rounded-b-2xl pb-safe">
+          <div className="shrink-0 px-4 py-4 sm:px-6 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-950/50 rounded-b-2xl sm:rounded-b-2xl pb-safe">
             {footer}
           </div>
         )}

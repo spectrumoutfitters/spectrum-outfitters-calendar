@@ -72,6 +72,9 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
   const [batchSubmitting, setBatchSubmitting] = useState(false);
   const [batchSuccess, setBatchSuccess] = useState(false);
   const [batchError, setBatchError] = useState(null);
+  const [lastScannedId, setLastScannedId] = useState(null);
+  const [batchConfirming, setBatchConfirming] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
   const batchScannedRef = useRef(new Set()); // prevent double-scan
 
   onCloseRef.current = onClose;
@@ -90,6 +93,9 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
       setBatchItems([]);
       setBatchSuccess(false);
       setBatchError(null);
+      setLastScannedId(null);
+      setBatchConfirming(false);
+      setShowSuccessToast(false);
       batchScannedRef.current = new Set();
     }
   }, [isOpen]);
@@ -273,9 +279,11 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
     batchScannedRef.current.add(barcode);
     setBatchLookupLoading(true);
     setBatchError(null);
+    setBatchConfirming(false);
     try {
       const res = await api.get(`/inventory/items/by-barcode/${encodeURIComponent(barcode)}`);
       const found = res.data.item;
+      setLastScannedId(found.id);
       setBatchItems((prev) => {
         const exists = prev.find((b) => b.item.id === found.id);
         if (exists) {
@@ -293,8 +301,13 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
 
   const handleBatchSubmit = async () => {
     if (batchItems.length === 0) return;
+    if (!batchConfirming) {
+      setBatchConfirming(true);
+      return;
+    }
     setBatchSubmitting(true);
     setBatchError(null);
+    setBatchConfirming(false);
     try {
       const items = batchItems
         .map((b) => ({ item_id: b.item.id, quantity: parseFloat(b.qty) || 0 }))
@@ -302,7 +315,8 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
       const res = await api.post('/inventory/batch-receive', { items });
       onDetectedRef.current(res.data.results);
       setBatchSuccess(true);
-      setTimeout(() => onCloseRef.current(), 1500);
+      setShowSuccessToast(true);
+      setTimeout(() => onCloseRef.current(), 2000);
     } catch (e) {
       setBatchError(e.response?.data?.error || 'Batch receive failed');
     } finally {
@@ -373,7 +387,7 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
 
       <div
-        className="relative w-full max-w-xl bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-200 dark:border-neutral-700 flex flex-col overflow-hidden max-h-[100dvh] sm:max-h-[90vh] md:max-h-[85vh] flex-1 sm:flex-initial min-h-0"
+        className="relative w-full max-w-xl bg-white dark:bg-neutral-950 rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-200 dark:border-neutral-700 flex flex-col overflow-hidden max-h-[100dvh] sm:max-h-[90vh] md:max-h-[85vh] flex-1 sm:flex-initial min-h-0"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -402,7 +416,7 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
 
           <div
             ref={videoWrapRef}
-            className="relative rounded-xl overflow-hidden border-2 border-gray-300 dark:border-neutral-600 bg-black flex-shrink-0"
+            className="relative rounded-xl overflow-hidden border-2 border-gray-300 dark:border-neutral-700 bg-black flex-shrink-0"
           >
             <video
               ref={videoRef}
@@ -451,7 +465,7 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
           </div>
 
           <div className="text-center py-2 safe-area-pb">
-            <p className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+            <p className="text-sm font-medium text-gray-700 dark:text-neutral-100">
               {starting ? 'Starting camera…' : scanning ? 'Align the barcode or QR code in the frame' : 'Point the camera at a barcode or QR code.'}
             </p>
             <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
@@ -476,25 +490,25 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
               </div>
               {uotError && <p className="text-sm text-red-600">{uotError}</p>}
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-neutral-300 whitespace-nowrap">Qty used:</label>
+                <label className="text-sm font-medium text-gray-700 dark:text-neutral-100 whitespace-nowrap">Qty used:</label>
                 <input
                   type="number"
                   min="0.01"
                   step="any"
                   value={uotQty}
                   onChange={(e) => setUotQty(e.target.value)}
-                  className="w-24 min-h-10 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm"
+                  className="w-24 min-h-10 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm"
                   autoFocus
                 />
                 <span className="text-sm text-gray-500">{uotItem.unit || 'each'}</span>
               </div>
               {!pendingContext.task_id && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Task:</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Task:</label>
                   <select
                     value={uotTaskId}
                     onChange={(e) => setUotTaskId(e.target.value)}
-                    className="w-full min-h-10 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm"
+                    className="w-full min-h-10 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm"
                   >
                     <option value="">Select task…</option>
                     {uotTasks.map((t) => (
@@ -527,7 +541,7 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
           )}
           {pendingContext?.type === 'use_on_task' && !uotStep && (
             <div className="border-t border-gray-200 dark:border-neutral-700 pt-3 mt-1 space-y-2">
-              <p className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+              <p className="text-sm font-medium text-gray-700 dark:text-neutral-100">
                 Scan an item to log it on a task and deduct from stock.
               </p>
               {uotError && <p className="text-sm text-red-600">{uotError}</p>}
@@ -537,7 +551,7 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
                   value={manualBarcode}
                   onChange={(e) => setManualBarcode(e.target.value)}
                   placeholder="Enter barcode manually"
-                  className="flex-1 min-h-10 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 font-mono text-sm"
+                  className="flex-1 min-h-10 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 font-mono text-sm"
                   autoComplete="off"
                 />
                 <button type="submit" disabled={!manualBarcode.trim()} className="min-h-10 px-3 py-2 rounded-lg bg-primary text-white text-sm disabled:opacity-50">Search</button>
@@ -548,43 +562,129 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
           {/* batch_receive UI */}
           {pendingContext?.type === 'batch_receive' && (
             <div className="border-t border-gray-200 dark:border-neutral-700 pt-3 mt-1 space-y-3">
-              <p className="text-sm font-medium text-gray-700 dark:text-neutral-300">
-                Batch receive — scan items one by one. Scanner stays open.
-              </p>
-              {batchLookupLoading && <p className="text-xs text-gray-500">Looking up item…</p>}
-              {batchError && <p className="text-xs text-red-600">{batchError}</p>}
+              {/* Running total header */}
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-700 dark:text-neutral-100">
+                  Batch receive — scanner stays open
+                </p>
+                {batchItems.length > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                    {batchItems.length} item{batchItems.length !== 1 ? 's' : ''} scanned
+                  </span>
+                )}
+              </div>
+              {batchLookupLoading && (
+                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-neutral-400">
+                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Looking up item…
+                </div>
+              )}
+              {batchError && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                  <svg className="w-4 h-4 text-red-500 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-xs text-red-600 dark:text-red-400">{batchError}</p>
+                </div>
+              )}
               {batchItems.length > 0 && (
-                <ul className="space-y-1 max-h-40 overflow-y-auto">
-                  {batchItems.map((b) => (
-                    <li key={b.item.id} className="flex items-center gap-2 py-1.5 border-b border-gray-100 dark:border-neutral-700 last:border-0">
-                      <span className="flex-1 text-sm font-medium text-gray-900 dark:text-neutral-100 truncate">{b.item.name}</span>
+                <ul className="space-y-1 max-h-44 overflow-y-auto rounded-lg border border-gray-200 dark:border-neutral-700">
+                  {batchItems.map((b, idx) => (
+                    <li
+                      key={b.item.id}
+                      className={`flex items-center gap-2 px-3 py-2 transition-colors ${
+                        b.item.id === lastScannedId
+                          ? 'bg-primary/10 dark:bg-primary/15 border-l-2 border-primary'
+                          : idx % 2 === 0
+                            ? 'bg-white dark:bg-neutral-950'
+                            : 'bg-gray-50 dark:bg-neutral-950/80'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-gray-900 dark:text-neutral-100 truncate block">
+                          {b.item.id === lastScannedId && <span className="text-primary mr-1">→</span>}
+                          {b.item.name}
+                        </span>
+                      </div>
                       <input
                         type="number"
                         min="0.01"
                         step="any"
                         value={b.qty}
                         onChange={(e) => setBatchItems((prev) => prev.map((x) => x.item.id === b.item.id ? { ...x, qty: e.target.value } : x))}
-                        className="w-16 px-2 py-1 border border-gray-300 dark:border-neutral-600 rounded text-sm bg-white dark:bg-neutral-800"
+                        className="w-16 px-2 py-1 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                       />
-                      <span className="text-xs text-gray-500">{b.item.unit || 'ea'}</span>
-                      <button type="button" onClick={() => { setBatchItems((prev) => prev.filter((x) => x.item.id !== b.item.id)); batchScannedRef.current.delete(b.barcode); }} className="text-red-500 text-xs">✕</button>
+                      <span className="text-xs text-gray-400 dark:text-neutral-400 w-6 text-right">{b.item.unit || 'ea'}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBatchItems((prev) => prev.filter((x) => x.item.id !== b.item.id));
+                          batchScannedRef.current.delete(b.barcode);
+                          if (lastScannedId === b.item.id) setLastScannedId(null);
+                        }}
+                        className="flex items-center justify-center w-6 h-6 rounded-full bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/50 flex-shrink-0 transition-colors"
+                        aria-label="Remove item"
+                      >
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </li>
                   ))}
                 </ul>
               )}
               {batchItems.length === 0 && !batchLookupLoading && (
-                <p className="text-xs text-gray-400">No items scanned yet.</p>
+                <div className="flex flex-col items-center py-4 text-gray-400 dark:text-neutral-500">
+                  <svg className="w-8 h-8 mb-1 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM17 14h.01M14 17h.01M17 17h.01M20 17h.01M20 14h.01M14 20h.01M17 20h.01M20 20h.01" />
+                  </svg>
+                  <p className="text-xs">Scan your first item to begin</p>
+                </div>
               )}
               {batchSuccess ? (
-                <p className="text-sm font-medium text-green-700">✓ All items received!</p>
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                  <svg className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <p className="text-sm font-medium text-green-700 dark:text-green-400">All items received successfully!</p>
+                </div>
+              ) : batchConfirming ? (
+                <div className="space-y-2">
+                  <div className="px-3 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-sm text-amber-800 dark:text-amber-300">
+                    Confirm receiving <strong>{batchItems.length} item{batchItems.length !== 1 ? 's' : ''}</strong> into stock?
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBatchConfirming(false)}
+                      className="flex-1 min-h-10 rounded-lg border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-neutral-100 text-sm font-medium hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBatchSubmit}
+                      disabled={batchSubmitting}
+                      className="flex-1 min-h-10 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                      {batchSubmitting ? 'Receiving…' : 'Yes, Receive All'}
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <button
                   type="button"
                   onClick={handleBatchSubmit}
                   disabled={batchItems.length === 0 || batchSubmitting}
-                  className="w-full min-h-10 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+                  className="w-full min-h-10 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
                 >
-                  {batchSubmitting ? 'Receiving…' : `Receive All (${batchItems.length} item${batchItems.length !== 1 ? 's' : ''})`}
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Receive All ({batchItems.length} item{batchItems.length !== 1 ? 's' : ''})
                 </button>
               )}
             </div>
@@ -592,7 +692,7 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
 
           {pendingContext && descriptionText && pendingContext.type !== 'use_on_task' && pendingContext.type !== 'batch_receive' && (
             <div className="border-t border-gray-200 dark:border-neutral-700 pt-3 mt-1 space-y-3">
-              <p className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+              <p className="text-sm font-medium text-gray-700 dark:text-neutral-100">
                 {pendingContext.type === 'add_quantity' && <>Adding quantity for: <strong className="text-gray-900 dark:text-neutral-100">{descriptionText}</strong></>}
                 {pendingContext.type === 'add_barcode' && <>Adding barcode for: <strong className="text-gray-900 dark:text-neutral-100">{descriptionText}</strong></>}
                 {pendingContext.type === 'refill_receive' && <>Receiving: <strong className="text-gray-900 dark:text-neutral-100">{descriptionText}</strong></>}
@@ -607,7 +707,7 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
                   value={manualBarcode}
                   onChange={(e) => setManualBarcode(e.target.value)}
                   placeholder="Enter barcode or SKU"
-                  className="flex-1 min-h-12 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 font-mono text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="flex-1 min-h-12 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 font-mono text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                   aria-label="Barcode or SKU"
                   autoComplete="off"
                 />
@@ -624,6 +724,16 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
         </div>
       </div>
 
+      {/* Success toast */}
+      {showSuccessToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-3 px-5 py-3 rounded-2xl bg-green-600 text-white shadow-2xl text-sm font-semibold animate-toast-in pointer-events-none">
+          <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+          {batchItems.length} item{batchItems.length !== 1 ? 's' : ''} received into stock!
+        </div>
+      )}
+
       <style>{`
         @keyframes scanline {
           0%, 100% { top: 10%; }
@@ -639,6 +749,13 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
         }
         .animate-tap-focus {
           animation: tap-focus 0.7s ease-out forwards;
+        }
+        @keyframes toast-in {
+          0% { opacity: 0; transform: translateX(-50%) translateY(1rem) scale(0.95); }
+          100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        }
+        .animate-toast-in {
+          animation: toast-in 0.25s ease-out forwards;
         }
       `}</style>
     </div>

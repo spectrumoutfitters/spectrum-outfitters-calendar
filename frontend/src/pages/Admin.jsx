@@ -109,7 +109,7 @@ function SubTabBar({ tabs, activeId, onSelect }) {
             className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
               isActive
                 ? 'text-white'
-                : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
+                : 'bg-gray-100 dark:bg-neutral-950 text-gray-600 dark:text-neutral-100 hover:bg-gray-200 dark:hover:bg-neutral-700'
             }`}
             style={isActive ? { backgroundColor: GOLD } : {}}
           >
@@ -223,7 +223,7 @@ const Admin = () => {
       return (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <span className="ml-3 text-gray-600 dark:text-neutral-200">Loading...</span>
+          <span className="ml-3 text-gray-600 dark:text-neutral-100">Loading...</span>
         </div>
       );
     }
@@ -251,19 +251,19 @@ const Admin = () => {
       <div className="space-y-6 pt-4">
         {/* Quick stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
+          <div className="bg-white dark:bg-neutral-950 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
             <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">{dashboardData.clockedInEmployees}<span className="text-base font-normal text-gray-400">/{dashboardData.totalEmployees}</span></p>
             <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">Clocked In</p>
           </div>
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
+          <div className="bg-white dark:bg-neutral-950 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
             <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">{dashboardData.worklistCompleted}<span className="text-base font-normal text-gray-400">/{dashboardData.worklistTotal}</span></p>
             <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">Tasks Done</p>
           </div>
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
+          <div className="bg-white dark:bg-neutral-950 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
             <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">{dashboardData.pendingTimeOff + dashboardData.unapprovedTimeEntries}</p>
             <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">Pending Approvals</p>
           </div>
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
+          <div className="bg-white dark:bg-neutral-950 rounded-xl border border-gray-200 dark:border-neutral-700 p-4 text-center">
             <p className="text-2xl font-bold text-gray-800 dark:text-neutral-100">{dashboardData.overdueCompliance?.length || 0}</p>
             <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">Overdue Items</p>
           </div>
@@ -306,7 +306,7 @@ const Admin = () => {
         )}
 
         {/* Today's work list */}
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5">
+        <div className="bg-white dark:bg-neutral-950 rounded-xl border border-gray-200 dark:border-neutral-700 p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">📋 Today&apos;s Tasks</h3>
             <button
@@ -325,12 +325,12 @@ const Admin = () => {
                 .slice(0, 10)
                 .map((item) => (
                   <li key={item.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800">
-                    <span className="flex-shrink-0 w-5 h-5 rounded border-2 border-gray-300 dark:border-neutral-600" aria-hidden />
+                    <span className="flex-shrink-0 w-5 h-5 rounded border-2 border-gray-300 dark:border-neutral-700" aria-hidden />
                     <span className="text-sm text-gray-800 dark:text-neutral-100 flex-1 min-w-0 truncate">{item.title}</span>
                   </li>
                 ))}
               {dashboardData.worklistItems.filter((i) => i.is_completed).length > 0 && (
-                <li className="pt-2 mt-2 border-t border-gray-100 dark:border-neutral-700 text-xs text-gray-500 dark:text-neutral-300">
+                <li className="pt-2 mt-2 border-t border-gray-100 dark:border-neutral-700 text-xs text-gray-500 dark:text-neutral-100">
                   ✓ {dashboardData.worklistItems.filter((i) => i.is_completed).length} completed
                 </li>
               )}
@@ -340,7 +340,7 @@ const Admin = () => {
 
         {/* Upcoming compliance */}
         {dashboardData.upcomingCompliance?.length > 0 && (
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 p-5">
+          <div className="bg-white dark:bg-neutral-950 rounded-xl border border-gray-200 dark:border-neutral-700 p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">🏛️ Upcoming Tax Deadlines</h3>
               <button onClick={() => { selectMainTab('finance'); selectSubTab('finance', 'compliance'); }} className="text-primary hover:text-primary-dark text-sm font-medium">
@@ -349,10 +349,10 @@ const Admin = () => {
             </div>
             <div className="space-y-2">
               {dashboardData.upcomingCompliance.slice(0, 3).map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg">
+                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-neutral-950 rounded-lg">
                   <div>
                     <p className="font-medium text-gray-800 dark:text-neutral-100 text-sm">{item.obligation_name}</p>
-                    <p className="text-xs text-gray-500 dark:text-neutral-200">Due: {new Date(item.due_date).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-500 dark:text-neutral-100">Due: {new Date(item.due_date).toLocaleDateString()}</p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${item.days_until_due <= 7 ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : 'bg-primary-subtle dark:bg-primary/20 text-primary'}`}>
                     {item.days_until_due} days
@@ -434,7 +434,7 @@ const Admin = () => {
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">Admin</h1>
         <div className="flex items-center gap-3">
-          <p className="text-gray-500 dark:text-neutral-200 text-sm hidden sm:block">
+          <p className="text-gray-500 dark:text-neutral-100 text-sm hidden sm:block">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
           <AdminBroadcastNotification />

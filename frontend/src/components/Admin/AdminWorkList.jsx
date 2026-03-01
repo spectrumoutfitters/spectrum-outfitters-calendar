@@ -492,7 +492,7 @@ const AdminWorkList = () => {
               )}
             </div>
             {item.description && (
-              <p className="text-xs text-gray-500 dark:text-neutral-300 mt-0.5 truncate">{item.description}</p>
+              <p className="text-xs text-gray-500 dark:text-neutral-100 mt-0.5 truncate">{item.description}</p>
             )}
             {item.is_completed && item.completed_by_name && (
               <p className="text-[11px] text-gray-400 dark:text-neutral-400 mt-0.5">
@@ -556,7 +556,7 @@ const AdminWorkList = () => {
       <div className="flex items-center justify-center py-16">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm text-gray-500 dark:text-neutral-200">Loading work list...</p>
+          <p className="text-sm text-gray-500 dark:text-neutral-100">Loading work list...</p>
         </div>
       </div>
     );
@@ -588,7 +588,7 @@ const AdminWorkList = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Today&apos;s Work List</h2>
-          <p className="text-sm text-gray-500 dark:text-neutral-200">
+          <p className="text-sm text-gray-500 dark:text-neutral-100">
             {new Date().toLocaleDateString('en-US', {
               weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
               timeZone: 'America/Chicago'
@@ -598,7 +598,7 @@ const AdminWorkList = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={handleOpenTemplateManager}
-            className="px-3 py-1.5 text-sm text-gray-600 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"
+            className="px-3 py-1.5 text-sm text-gray-600 dark:text-neutral-100 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition"
             title="Manage recurring task templates"
           >
             <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -617,7 +617,7 @@ const AdminWorkList = () => {
       </div>
 
       {/* ── 2. Quick-Add ───────────────────────────────────── */}
-      <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 shadow-sm">
+      <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm">
         <form onSubmit={handleAddManualItem} className="flex gap-2">
           <input
             ref={addInputRef}
@@ -625,7 +625,7 @@ const AdminWorkList = () => {
             value={newItemTitle}
             onChange={(e) => setNewItemTitle(e.target.value)}
             placeholder="What do you need to do today?"
-            className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+            className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
           />
           <button
             type="submit"
@@ -638,7 +638,7 @@ const AdminWorkList = () => {
             type="button"
             onClick={() => setShowSuggestions(!showSuggestions)}
             className={`px-3 py-2.5 rounded-lg border text-sm transition shrink-0 ${
-              showSuggestions ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-white dark:bg-neutral-800 border-gray-300 dark:border-neutral-600 text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-700'
+              showSuggestions ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-white dark:bg-neutral-950 border-gray-300 dark:border-neutral-700 text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-700'
             }`}
             title="Show suggestions"
           >
@@ -649,7 +649,7 @@ const AdminWorkList = () => {
         </form>
         {showSuggestions && suggestedTasks.length > 0 && (
           <div className="mt-3 pt-3 border-t border-gray-200">
-            <p className="text-xs font-medium text-gray-500 dark:text-neutral-300 mb-2">Quick add suggestions</p>
+            <p className="text-xs font-medium text-gray-500 dark:text-neutral-100 mb-2">Quick add suggestions</p>
             <div className="flex flex-wrap gap-1.5">
               {suggestedTasks.map((s) => (
                 <button
@@ -657,7 +657,7 @@ const AdminWorkList = () => {
                   type="button"
                   onClick={() => handleAddFromSuggestion(s, false)}
                   disabled={addingSuggestionKey !== null}
-                  className="px-2.5 py-1 rounded-full text-xs font-medium bg-white dark:bg-neutral-800 text-gray-600 dark:text-neutral-200 hover:bg-primary/10 hover:text-primary border border-gray-200 dark:border-neutral-600 transition disabled:opacity-50"
+                  className="px-2.5 py-1 rounded-full text-xs font-medium bg-white dark:bg-neutral-950 text-gray-600 dark:text-neutral-100 hover:bg-primary/10 hover:text-primary border border-gray-200 dark:border-neutral-700 transition disabled:opacity-50"
                 >
                   {addingSuggestionKey === s.title ? '...' : `+ ${s.title}`}
                 </button>
@@ -668,7 +668,7 @@ const AdminWorkList = () => {
       </div>
 
       {/* ── 3. Today's Focus ───────────────────────────────── */}
-      <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
+      <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
         <div className="flex items-center gap-2 mb-2">
           <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -682,7 +682,7 @@ const AdminWorkList = () => {
           onChange={(e) => setFocusText(e.target.value)}
           onBlur={handleFocusBlur}
           placeholder="What's your #1 priority today? e.g. Get all time entries approved"
-          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
         />
       </div>
 
@@ -691,7 +691,7 @@ const AdminWorkList = () => {
         <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl p-5 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-300 dark:text-neutral-300 mb-1">Today&apos;s progress</p>
+              <p className="text-sm text-gray-300 dark:text-neutral-100 mb-1">Today&apos;s progress</p>
               <p className="text-lg font-bold text-gray-900 dark:text-neutral-100">
                 {summary.completed} <span className="font-normal text-gray-400 dark:text-neutral-400">of</span> {summary.total} <span className="font-normal text-gray-400 dark:text-neutral-400">tasks done</span>
               </p>
@@ -711,7 +711,7 @@ const AdminWorkList = () => {
 
       {/* ── 5. Goals ───────────────────────────────────────── */}
       {(goals.length > 0 || showGoalForm) && (
-        <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl overflow-hidden">
+        <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl overflow-hidden">
           <button
             onClick={() => setShowGoals(!showGoals)}
             className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-neutral-800 transition text-gray-900 dark:text-neutral-100"
@@ -741,7 +741,7 @@ const AdminWorkList = () => {
                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                     goal.period_type === 'week' ? 'bg-blue-50 text-blue-600' :
                     goal.period_type === 'month' ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300' :
-                    'bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300'
+                    'bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-100'
                   }`}>
                     {goal.period_type === 'week' ? 'This week' : goal.period_type === 'month' ? 'This month' : goal.period_type}
                   </span>
@@ -784,13 +784,13 @@ const AdminWorkList = () => {
                     value={newGoalTitle}
                     onChange={(e) => setNewGoalTitle(e.target.value)}
                     placeholder="New goal..."
-                    className="flex-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                    className="flex-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                     autoFocus
                   />
                   <select
                     value={newGoalPeriod}
                     onChange={(e) => setNewGoalPeriod(e.target.value)}
-                    className="px-2 py-1.5 text-xs border border-gray-200 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                    className="px-2 py-1.5 text-xs border border-gray-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                   >
                     <option value="week">This week</option>
                     <option value="month">This month</option>
@@ -819,9 +819,9 @@ const AdminWorkList = () => {
       {goals.length === 0 && !showGoalForm && (
         <button
           onClick={() => { setShowGoals(true); setShowGoalForm(true); }}
-          className="w-full bg-neutral-50 dark:bg-neutral-900 border border-dashed border-gray-300 dark:border-neutral-700 rounded-xl p-4 text-center hover:border-primary/40 hover:bg-primary/5 dark:hover:bg-primary/10 transition text-gray-700 dark:text-neutral-200"
+          className="w-full bg-neutral-50 dark:bg-neutral-950 border border-dashed border-gray-300 dark:border-neutral-700 rounded-xl p-4 text-center hover:border-primary/40 hover:bg-primary/5 dark:hover:bg-primary/10 transition text-gray-700 dark:text-neutral-100"
         >
-          <p className="text-sm text-gray-500 dark:text-neutral-300">Set goals to stay focused on what matters</p>
+          <p className="text-sm text-gray-500 dark:text-neutral-100">Set goals to stay focused on what matters</p>
           <p className="text-xs text-primary mt-1 font-medium">+ Add your first goal</p>
         </button>
       )}
@@ -832,7 +832,7 @@ const AdminWorkList = () => {
           <button
             onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
             className={`px-3 py-1.5 text-sm rounded-lg border transition ${
-              selectMode ? 'bg-primary/10 border-primary/30 text-primary font-medium' : 'bg-white dark:bg-neutral-800 border-gray-200 dark:border-neutral-600 text-gray-600 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700'
+              selectMode ? 'bg-primary/10 border-primary/30 text-primary font-medium' : 'bg-white dark:bg-neutral-950 border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-neutral-100 hover:bg-gray-50 dark:hover:bg-neutral-700'
             }`}
           >
             {selectMode ? 'Exit select' : 'Select items'}
@@ -840,7 +840,7 @@ const AdminWorkList = () => {
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`px-3 py-1.5 text-sm rounded-lg border transition ${
-              hasActiveFilters ? 'bg-primary/10 border-primary/30 text-primary font-medium' : 'bg-white dark:bg-neutral-800 border-gray-200 dark:border-neutral-600 text-gray-600 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700'
+              hasActiveFilters ? 'bg-primary/10 border-primary/30 text-primary font-medium' : 'bg-white dark:bg-neutral-950 border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-neutral-100 hover:bg-gray-50 dark:hover:bg-neutral-700'
             }`}
           >
             <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -857,7 +857,7 @@ const AdminWorkList = () => {
       {/* ── 7. Bulk Actions Bar ────────────────────────────── */}
       {selectMode && selectedItems.size > 0 && (
         <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 dark:border-primary/30 rounded-xl p-3 flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">
+          <span className="text-sm font-medium text-gray-700 dark:text-neutral-100">
             {selectedItems.size} selected
           </span>
           <div className="flex items-center gap-2 flex-wrap">
@@ -867,15 +867,15 @@ const AdminWorkList = () => {
             <div className="relative">
               <button
                 onClick={() => setBulkAction(bulkAction === 'update' ? null : 'update')}
-                className="px-3 py-1.5 bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-200 dark:hover:bg-neutral-600 transition text-sm"
+                className="px-3 py-1.5 bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100 rounded-lg hover:bg-gray-200 dark:hover:bg-neutral-600 transition text-sm"
               >
                 Update
               </button>
               {bulkAction === 'update' && (
-                <div className="absolute right-0 mt-1 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg shadow-lg dark:shadow-neutral-950/50 p-3 z-10 min-w-[180px] space-y-2">
+                <div className="absolute right-0 mt-1 bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg shadow-lg dark:shadow-neutral-950/50 p-3 z-10 min-w-[180px] space-y-2">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1">Priority</label>
-                    <select onChange={(e) => handleBulkUpdate(e.target.value || undefined, undefined)} className="w-full px-2 py-1 border border-gray-300 dark:border-neutral-600 rounded text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-neutral-100 mb-1">Priority</label>
+                    <select onChange={(e) => handleBulkUpdate(e.target.value || undefined, undefined)} className="w-full px-2 py-1 border border-gray-300 dark:border-neutral-700 rounded text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100">
                       <option value="">No change</option>
                       <option value="urgent">Urgent</option>
                       <option value="high">High</option>
@@ -884,8 +884,8 @@ const AdminWorkList = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1">Category</label>
-                    <select onChange={(e) => handleBulkUpdate(undefined, e.target.value || undefined)} className="w-full px-2 py-1 border border-gray-300 dark:border-neutral-600 rounded text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-neutral-100 mb-1">Category</label>
+                    <select onChange={(e) => handleBulkUpdate(undefined, e.target.value || undefined)} className="w-full px-2 py-1 border border-gray-300 dark:border-neutral-700 rounded text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100">
                       <option value="">No change</option>
                       <option value="time_approval">Time</option>
                       <option value="task_review">Tasks</option>
@@ -912,7 +912,7 @@ const AdminWorkList = () => {
         <div className="bg-neutral-50 border border-gray-200 rounded-lg p-3 flex flex-wrap gap-3">
           <div>
             <label className="block text-[10px] font-medium text-gray-500 dark:text-neutral-400 mb-0.5 uppercase tracking-wider">Priority</label>
-            <select value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })} className="px-2.5 py-1 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100">
+            <select value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })} className="px-2.5 py-1 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100">
               <option value="all">All</option>
               <option value="urgent">Urgent</option>
               <option value="high">High</option>
@@ -922,7 +922,7 @@ const AdminWorkList = () => {
           </div>
           <div>
             <label className="block text-[10px] font-medium text-gray-500 dark:text-neutral-400 mb-0.5 uppercase tracking-wider">Category</label>
-            <select value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} className="px-2.5 py-1 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100">
+            <select value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} className="px-2.5 py-1 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100">
               <option value="all">All</option>
               <option value="time_approval">Time</option>
               <option value="task_review">Tasks</option>
@@ -933,7 +933,7 @@ const AdminWorkList = () => {
           </div>
           <div>
             <label className="block text-[10px] font-medium text-gray-500 dark:text-neutral-400 mb-0.5 uppercase tracking-wider">Status</label>
-            <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="px-2.5 py-1 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100">
+            <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="px-2.5 py-1 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100">
               <option value="all">All</option>
               <option value="pending">Pending</option>
               <option value="completed">Completed</option>
@@ -981,7 +981,7 @@ const AdminWorkList = () => {
           );
         })
       ) : (
-        <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-8 text-center">
+        <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-8 text-center">
           <p className="text-gray-400 text-sm">No tasks match the current filters.</p>
           {hasActiveFilters && (
             <button onClick={() => setFilters({ priority: 'all', category: 'all', status: 'all' })} className="mt-2 text-xs text-primary hover:underline">
@@ -1011,10 +1011,10 @@ const AdminWorkList = () => {
           onClick={() => setShowTemplateManager(false)}
         >
           <div
-            className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-xl shadow-xl dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 max-w-3xl w-full max-h-[95dvh] sm:max-h-[90vh] flex flex-col overflow-hidden flex-1 sm:flex-initial min-h-0"
+            className="bg-white dark:bg-neutral-950 rounded-t-2xl sm:rounded-xl shadow-xl dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 max-w-3xl w-full max-h-[95dvh] sm:max-h-[90vh] flex flex-col overflow-hidden flex-1 sm:flex-initial min-h-0"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex-shrink-0 bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-700 px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center min-h-[3rem]">
+            <div className="flex-shrink-0 bg-white dark:bg-neutral-950 border-b border-gray-200 dark:border-neutral-700 px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center min-h-[3rem]">
               <h2 className="text-lg font-bold text-gray-800 dark:text-neutral-100">Manage Templates</h2>
               <button type="button" onClick={() => setShowTemplateManager(false)} className="min-h-[2.75rem] min-w-[2.75rem] flex items-center justify-center text-gray-400 dark:text-neutral-400 hover:text-gray-600 dark:hover:text-neutral-200 text-xl font-bold rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800" aria-label="Close">
                 &times;
@@ -1025,11 +1025,11 @@ const AdminWorkList = () => {
               <div>
                 <h3 className="text-base font-semibold mb-3 text-gray-900 dark:text-neutral-100">Current Templates</h3>
                 {templates.length === 0 ? (
-                  <p className="text-gray-500 dark:text-neutral-300 text-sm">No templates yet. Add one below to auto-generate tasks.</p>
+                  <p className="text-gray-500 dark:text-neutral-100 text-sm">No templates yet. Add one below to auto-generate tasks.</p>
                 ) : (
                   <div className="space-y-2">
                     {templates.map((template) => (
-                      <div key={template.id} className={`p-3 rounded-lg border text-sm ${template.enabled ? 'bg-white dark:bg-neutral-800 border-gray-200 dark:border-neutral-700' : 'bg-gray-50 dark:bg-neutral-800/60 border-gray-200 dark:border-neutral-700 opacity-60'}`}>
+                      <div key={template.id} className={`p-3 rounded-lg border text-sm ${template.enabled ? 'bg-white dark:bg-neutral-950 border-gray-200 dark:border-neutral-700' : 'bg-gray-50 dark:bg-neutral-950/60 border-gray-200 dark:border-neutral-700 opacity-60'}`}>
                         {editingTemplate?.id === template.id ? (
                           <div className="space-y-2">
                             <input type="text" value={editingTemplate.title} onChange={(e) => setEditingTemplate({ ...editingTemplate, title: e.target.value })} className="w-full px-3 py-1.5 border rounded-lg text-sm" placeholder="Title" />
@@ -1054,7 +1054,7 @@ const AdminWorkList = () => {
                             </div>
                             <div className="flex gap-2">
                               <button onClick={() => handleUpdateTemplate(template.id, editingTemplate)} className="px-3 py-1.5 bg-primary text-white rounded-lg text-sm">Save</button>
-                              <button onClick={() => setEditingTemplate(null)} className="px-3 py-1.5 bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 rounded-lg text-sm">Cancel</button>
+                              <button onClick={() => setEditingTemplate(null)} className="px-3 py-1.5 bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100 rounded-lg text-sm">Cancel</button>
                             </div>
                           </div>
                         ) : (
@@ -1071,7 +1071,7 @@ const AdminWorkList = () => {
                                   {template.recurrence === 'weekly' && ` (${getDayName(template.day_of_week)})`}
                                   {template.recurrence === 'monthly' && ` (Day ${template.day_of_month})`}
                                 </span>
-                                {!template.enabled && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 dark:bg-neutral-600 text-gray-600 dark:text-neutral-300">Off</span>}
+                                {!template.enabled && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 dark:bg-neutral-600 text-gray-600 dark:text-neutral-100">Off</span>}
                               </div>
                               {template.description && <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">{template.description}</p>}
                             </div>
@@ -1079,7 +1079,7 @@ const AdminWorkList = () => {
                               <button onClick={() => handleUpdateTemplate(template.id, { enabled: !template.enabled })} className={`px-2 py-1 rounded text-xs transition ${template.enabled ? 'text-yellow-700 hover:bg-yellow-50' : 'text-green-700 hover:bg-green-50'}`}>
                                 {template.enabled ? 'Disable' : 'Enable'}
                               </button>
-                              <button onClick={() => setEditingTemplate({ ...template })} className="px-2 py-1 text-gray-600 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded text-xs">Edit</button>
+                              <button onClick={() => setEditingTemplate({ ...template })} className="px-2 py-1 text-gray-600 dark:text-neutral-100 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded text-xs">Edit</button>
                               <button onClick={() => handleDeleteTemplate(template.id)} className="px-2 py-1 text-red-500 hover:bg-red-50 rounded text-xs">Del</button>
                             </div>
                           </div>
@@ -1094,14 +1094,14 @@ const AdminWorkList = () => {
                 <h3 className="text-base font-semibold mb-3 text-gray-900 dark:text-neutral-100">Add New Template</h3>
                 <form onSubmit={handleCreateTemplate} className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input type="text" value={newTemplate.title} onChange={(e) => setNewTemplate({ ...newTemplate, title: e.target.value })} className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100" placeholder="Task title *" required />
-                    <select value={newTemplate.recurrence} onChange={(e) => setNewTemplate({ ...newTemplate, recurrence: e.target.value })} className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100">
+                    <input type="text" value={newTemplate.title} onChange={(e) => setNewTemplate({ ...newTemplate, title: e.target.value })} className="px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100" placeholder="Task title *" required />
+                    <select value={newTemplate.recurrence} onChange={(e) => setNewTemplate({ ...newTemplate, recurrence: e.target.value })} className="px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100">
                       <option value="daily">Daily</option>
                       <option value="weekly">Weekly</option>
                       <option value="monthly">Monthly</option>
                     </select>
                   </div>
-                  <textarea value={newTemplate.description} onChange={(e) => setNewTemplate({ ...newTemplate, description: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400" placeholder="Description (optional)" rows={2} />
+                  <textarea value={newTemplate.description} onChange={(e) => setNewTemplate({ ...newTemplate, description: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400" placeholder="Description (optional)" rows={2} />
                   <div className="flex gap-3 flex-wrap">
                     {newTemplate.recurrence === 'weekly' && (
                       <select value={newTemplate.day_of_week} onChange={(e) => setNewTemplate({ ...newTemplate, day_of_week: parseInt(e.target.value) })} className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
@@ -1113,8 +1113,8 @@ const AdminWorkList = () => {
                         {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d} value={d}>Day {d}</option>)}
                       </select>
                     )}
-                    <input type="text" value={newTemplate.link_target} onChange={(e) => setNewTemplate({ ...newTemplate, link_target: e.target.value })} className="flex-1 px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400" placeholder="Link target (e.g. /admin?tab=time)" />
-                    <input type="number" value={newTemplate.sort_order} onChange={(e) => setNewTemplate({ ...newTemplate, sort_order: parseInt(e.target.value) || 0 })} className="w-20 px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100" placeholder="Order" />
+                    <input type="text" value={newTemplate.link_target} onChange={(e) => setNewTemplate({ ...newTemplate, link_target: e.target.value })} className="flex-1 px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400" placeholder="Link target (e.g. /admin?tab=time)" />
+                    <input type="number" value={newTemplate.sort_order} onChange={(e) => setNewTemplate({ ...newTemplate, sort_order: parseInt(e.target.value) || 0 })} className="w-20 px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100" placeholder="Order" />
                   </div>
                   <button type="submit" disabled={!newTemplate.title.trim()} className="min-h-[2.75rem] px-5 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50">
                     Create Template

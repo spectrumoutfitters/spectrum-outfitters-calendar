@@ -622,7 +622,7 @@ const EmployeeSchedule = () => {
 
     const calName = (entry.source_calendar_id && calendarNames[entry.source_calendar_id]) ? String(calendarNames[entry.source_calendar_id]).toLowerCase() : '';
     if (calName && (calName.includes('outfitter events') || calName === 'outfitter events')) return 'bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100';
-    if (calName && (calName.includes('outfitter projects') || calName.includes('outfitters projects') || calName === 'outfitter projects')) return 'bg-neutral-900 text-amber-400 dark:bg-neutral-800 dark:text-amber-300 border border-amber-500/50';
+    if (calName && (calName.includes('outfitter projects') || calName.includes('outfitters projects') || calName === 'outfitter projects')) return 'bg-neutral-900 text-amber-400 dark:bg-neutral-950 dark:text-amber-300 border border-amber-500/50';
 
     const userPalette = [
       'bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-100',
@@ -736,11 +736,11 @@ const EmployeeSchedule = () => {
       </div>
 
       {/* Calendar Navigation */}
-      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 p-4 flex flex-wrap gap-3 items-center justify-between">
+      <div className="bg-white dark:bg-neutral-950 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-4 flex flex-wrap gap-3 items-center justify-between">
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigateMonth(-1)}
-            className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200"
+            className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-100"
           >
             ← Previous
           </button>
@@ -749,21 +749,21 @@ const EmployeeSchedule = () => {
           </span>
           <button
             onClick={() => navigateMonth(1)}
-            className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200"
+            className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-100"
           >
             Next →
           </button>
         </div>
         <button
           onClick={() => setCurrentDate(new Date())}
-          className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200"
+          className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-100"
         >
           Today
         </button>
       </div>
 
       {/* Legend — collapsed on mobile by default, expanded on sm+ */}
-      <details open={legendExpanded} className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 overflow-hidden group">
+      <details open={legendExpanded} className="bg-white dark:bg-neutral-950 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 overflow-hidden group">
         <summary
           className="list-none cursor-pointer p-3 sm:p-4 flex items-center justify-between gap-2 min-h-12"
           onClick={(e) => { e.preventDefault(); setLegendExpanded((v) => !v); }}
@@ -771,7 +771,7 @@ const EmployeeSchedule = () => {
           <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100">Legend</h3>
           <span className="text-neutral-500 dark:text-neutral-400 sm:hidden select-none">{legendExpanded ? 'Tap to collapse' : 'Tap to expand'}</span>
         </summary>
-        <div className="px-3 pb-3 sm:px-4 sm:pb-4 pt-0 sm:pt-0 flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-gray-700 dark:text-neutral-300">
+        <div className="px-3 pb-3 sm:px-4 sm:pb-4 pt-0 sm:pt-0 flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-gray-700 dark:text-neutral-100">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-purple-200 dark:bg-purple-800 rounded shrink-0"></div>
             <span>Shop Closed</span>
@@ -781,7 +781,7 @@ const EmployeeSchedule = () => {
             <span>Outfitter Events</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-neutral-900 dark:bg-neutral-800 border border-amber-500/50 rounded shrink-0"></div>
+            <div className="w-4 h-4 bg-neutral-900 dark:bg-neutral-950 border border-amber-500/50 rounded shrink-0"></div>
             <span>Outfitter Projects</span>
           </div>
           <div className="flex items-center gap-2">
@@ -799,10 +799,10 @@ const EmployeeSchedule = () => {
       {loading ? (
         <div className="text-center py-8 text-gray-600 dark:text-neutral-400">Loading schedule...</div>
       ) : (
-        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 overflow-hidden min-w-0 pb-20 sm:pb-4">
-          <div className="grid grid-cols-7 border-b border-neutral-200 dark:border-neutral-800">
+        <div className="bg-white dark:bg-neutral-950 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 overflow-hidden min-w-0 pb-20 sm:pb-4">
+          <div className="grid grid-cols-7 border-b border-neutral-200 dark:border-neutral-700">
             {dayNames.map(day => (
-              <div key={day} className="p-2 sm:p-3 text-center text-sm font-semibold bg-neutral-50 dark:bg-neutral-800/50 text-gray-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-700 last:border-r-0">
+              <div key={day} className="p-2 sm:p-3 text-center text-sm font-semibold bg-neutral-50 dark:bg-neutral-950/50 text-gray-700 dark:text-neutral-100 border-r border-neutral-200 dark:border-neutral-700 last:border-r-0">
                 {day}
               </div>
             ))}
@@ -819,13 +819,13 @@ const EmployeeSchedule = () => {
               return (
                 <div
                   key={index}
-                  className={`min-h-[116px] sm:min-h-[120px] border-r border-b border-neutral-200 dark:border-neutral-800 p-1 sm:p-2 min-w-0 ${
-                    !isCurrentMonth ? 'bg-neutral-50 dark:bg-neutral-800/30' : 'bg-white dark:bg-neutral-900'
+                  className={`min-h-[116px] sm:min-h-[120px] border-r border-b border-neutral-200 dark:border-neutral-700 p-1 sm:p-2 min-w-0 ${
+                    !isCurrentMonth ? 'bg-neutral-50 dark:bg-neutral-950/30' : 'bg-white dark:bg-neutral-950'
                   } ${isToday ? 'ring-2 ring-inset ring-primary dark:ring-amber-500' : ''}`}
                 >
                   {date && (
                     <>
-                      <div className={`text-sm font-semibold mb-1 ${isToday ? 'text-primary dark:text-amber-400' : 'text-gray-700 dark:text-neutral-300'}`}>
+                      <div className={`text-sm font-semibold mb-1 ${isToday ? 'text-primary dark:text-amber-400' : 'text-gray-700 dark:text-neutral-100'}`}>
                         {date.getDate()}
                       </div>
                       <div className="space-y-1.5">
@@ -895,7 +895,7 @@ const EmployeeSchedule = () => {
                   resetViewModalStreetView();
                   setViewingEntry(null);
                 }}
-                className="w-full min-h-[3rem] px-4 py-2.5 border border-neutral-300 dark:border-neutral-600 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-700 text-gray-900 dark:text-neutral-100 font-medium transition"
+                className="w-full min-h-[3rem] px-4 py-2.5 border border-neutral-300 dark:border-neutral-700 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-700 text-gray-900 dark:text-neutral-100 font-medium transition"
               >
                 Close
               </button>
@@ -930,7 +930,7 @@ const EmployeeSchedule = () => {
                           type="button"
                           onClick={() => handleViewModalShowStreetView(getEventAddress(viewingEntry))}
                           disabled={viewModalStreetViewLoading}
-                          className="min-h-12 flex items-center justify-center sm:justify-start sm:min-h-0 px-4 py-3 sm:px-0 sm:py-0 rounded-lg sm:rounded-none bg-neutral-100 dark:bg-neutral-800 sm:bg-transparent dark:sm:bg-transparent text-primary dark:text-amber-400 hover:underline font-medium text-left border-0 cursor-pointer w-full sm:w-auto disabled:opacity-60"
+                          className="min-h-12 flex items-center justify-center sm:justify-start sm:min-h-0 px-4 py-3 sm:px-0 sm:py-0 rounded-lg sm:rounded-none bg-neutral-100 dark:bg-neutral-950 sm:bg-transparent dark:sm:bg-transparent text-primary dark:text-amber-400 hover:underline font-medium text-left border-0 cursor-pointer w-full sm:w-auto disabled:opacity-60"
                         >
                           {viewModalStreetViewLoading ? 'Loading…' : 'Show Street View'}
                         </button>
@@ -940,14 +940,14 @@ const EmployeeSchedule = () => {
                             const addr = getEventAddress(viewingEntry);
                             if (addr) window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`, '_blank');
                           }}
-                          className="min-h-12 flex items-center justify-center sm:justify-start sm:min-h-0 px-4 py-3 sm:px-0 sm:py-0 rounded-lg sm:rounded-none bg-neutral-100 dark:bg-neutral-800 sm:bg-transparent dark:sm:bg-transparent text-primary dark:text-amber-400 hover:underline font-medium text-left border-0 cursor-pointer w-full sm:w-auto"
+                          className="min-h-12 flex items-center justify-center sm:justify-start sm:min-h-0 px-4 py-3 sm:px-0 sm:py-0 rounded-lg sm:rounded-none bg-neutral-100 dark:bg-neutral-950 sm:bg-transparent dark:sm:bg-transparent text-primary dark:text-amber-400 hover:underline font-medium text-left border-0 cursor-pointer w-full sm:w-auto"
                         >
                           Get Directions
                         </button>
                       </div>
                     )}
                     {viewModalShowStreetView && viewModalStreetViewCoords && (
-                      <div className="rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-600 bg-neutral-100 dark:bg-neutral-800 mt-2">
+                      <div className="rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-950 mt-2">
                         {(viewModalStreetViewUseInteractive || viewModalStreetViewLoading) ? (
                           <div className="relative">
                             <div
@@ -1060,7 +1060,7 @@ const EmployeeSchedule = () => {
             onChange={(e) => setEventFormData({ ...eventFormData, reason: e.target.value })}
             placeholder="Add title"
             required
-            className="w-full min-h-[3rem] px-0 py-2 text-lg font-medium border-0 border-b border-neutral-200 dark:border-neutral-600 bg-transparent text-gray-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-0 focus:border-neutral-400 dark:focus:border-neutral-500 transition-colors"
+            className="w-full min-h-[3rem] px-0 py-2 text-lg font-medium border-0 border-b border-neutral-200 dark:border-neutral-700 bg-transparent text-gray-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-0 focus:border-neutral-400 dark:focus:border-neutral-500 transition-colors"
           />
 
           {/* Event type tabs — clearer contrast in dark mode */}
@@ -1073,7 +1073,7 @@ const EmployeeSchedule = () => {
                 className={`min-h-9 px-3 rounded-lg text-sm font-medium transition border ${
                   eventFormData.type === value
                     ? 'bg-primary text-white dark:bg-amber-500 dark:text-neutral-900 border-primary dark:border-amber-500'
-                    : 'bg-neutral-100 dark:bg-neutral-700 border-neutral-200 dark:border-neutral-600 text-gray-700 dark:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-600'
+                    : 'bg-neutral-100 dark:bg-neutral-700 border-neutral-200 dark:border-neutral-700 text-gray-700 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-600'
                 }`}
               >
                 {label}
@@ -1093,7 +1093,7 @@ const EmployeeSchedule = () => {
                   value={eventFormData.start_date}
                   onChange={(e) => setEventFormData({ ...eventFormData, start_date: e.target.value, end_date: eventFormData.end_date < e.target.value ? e.target.value : eventFormData.end_date })}
                   required
-                  className="h-10 px-3 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none focus:border-transparent"
+                  className="h-10 px-3 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none focus:border-transparent"
                 />
                 <span className="text-neutral-500 dark:text-neutral-400 text-sm">to</span>
                 <input
@@ -1102,7 +1102,7 @@ const EmployeeSchedule = () => {
                   onChange={(e) => setEventFormData({ ...eventFormData, end_date: e.target.value })}
                   required
                   min={eventFormData.start_date || undefined}
-                  className="h-10 px-3 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none focus:border-transparent"
+                  className="h-10 px-3 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none focus:border-transparent"
                 />
               </div>
               <p className="text-xs text-neutral-500 dark:text-neutral-400">Does not repeat</p>
@@ -1158,7 +1158,7 @@ const EmployeeSchedule = () => {
               />
               {locationSuggestionsOpen && (locationSuggestions.length > 0 || locationSuggestionsLoading || (!locationSuggestionsLoading && eventFormData.location?.trim().length >= 2)) && (
                 <ul
-                  className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 shadow-lg py-1"
+                  className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 shadow-lg py-1"
                   role="listbox"
                 >
                   {locationSuggestionsLoading && locationSuggestions.length === 0 && (
@@ -1232,7 +1232,7 @@ const EmployeeSchedule = () => {
                 </div>
               )}
               {showStreetView && locationCoords && (
-                <div className="rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-600 bg-neutral-100 dark:bg-neutral-800">
+                <div className="rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-950">
                   {(streetViewUseInteractive || streetViewInteractiveLoading) ? (
                     <div className="relative">
                       <div
@@ -1304,7 +1304,7 @@ const EmployeeSchedule = () => {
                     id="add-event-calendar"
                     value={isAdmin ? (eventFormData.target_user_id || (user?.id ? `user:${user.id}` : '')) : 'me'}
                     onChange={(e) => isAdmin && setEventFormData({ ...eventFormData, target_user_id: e.target.value })}
-                    className="w-full min-h-10 pl-3 pr-8 py-2 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none appearance-none cursor-pointer bg-[length:1.25rem] bg-[right_0.5rem_center] bg-no-repeat"
+                    className="w-full min-h-10 pl-3 pr-8 py-2 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none appearance-none cursor-pointer bg-[length:1.25rem] bg-[right_0.5rem_center] bg-no-repeat"
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                   >
                     {isAdmin ? (
@@ -1343,7 +1343,7 @@ const EmployeeSchedule = () => {
                     id="add-event-availability"
                     value={eventFormData.availability}
                     onChange={(e) => setEventFormData({ ...eventFormData, availability: e.target.value })}
-                    className="w-full min-h-10 pl-3 pr-8 py-2 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none appearance-none cursor-pointer bg-[length:1.25rem] bg-[right_0.5rem_center] bg-no-repeat"
+                    className="w-full min-h-10 pl-3 pr-8 py-2 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none appearance-none cursor-pointer bg-[length:1.25rem] bg-[right_0.5rem_center] bg-no-repeat"
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                   >
                     <option value="busy">Busy</option>
@@ -1362,7 +1362,7 @@ const EmployeeSchedule = () => {
                     id="add-event-visibility"
                     value={eventFormData.visibility}
                     onChange={(e) => setEventFormData({ ...eventFormData, visibility: e.target.value })}
-                    className="w-full min-h-10 pl-3 pr-8 py-2 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none appearance-none cursor-pointer bg-[length:1.25rem] bg-[right_0.5rem_center] bg-no-repeat"
+                    className="w-full min-h-10 pl-3 pr-8 py-2 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none appearance-none cursor-pointer bg-[length:1.25rem] bg-[right_0.5rem_center] bg-no-repeat"
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                   >
                     <option value="default">Default visibility</option>
@@ -1382,7 +1382,7 @@ const EmployeeSchedule = () => {
                     id="add-event-reminder"
                     value={eventFormData.reminder}
                     onChange={(e) => setEventFormData({ ...eventFormData, reminder: e.target.value })}
-                    className="w-full min-h-10 pl-3 pr-8 py-2 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none appearance-none cursor-pointer bg-[length:1.25rem] bg-[right_0.5rem_center] bg-no-repeat"
+                    className="w-full min-h-10 pl-3 pr-8 py-2 rounded-lg border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-primary dark:focus:ring-amber-500 focus:outline-none appearance-none cursor-pointer bg-[length:1.25rem] bg-[right_0.5rem_center] bg-no-repeat"
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                   >
                     <option value="none">None</option>
@@ -1416,7 +1416,7 @@ const EmployeeSchedule = () => {
                 setShowRequestModal(false);
                 setFormData({ start_date: '', end_date: '', type: 'time_off_request', reason: '', notes: '' });
               }}
-              className="min-h-[3rem] flex-1 px-4 py-2.5 border border-neutral-300 dark:border-neutral-600 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-700 text-gray-700 dark:text-neutral-200 font-medium transition"
+              className="min-h-[3rem] flex-1 px-4 py-2.5 border border-neutral-300 dark:border-neutral-700 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-700 text-gray-700 dark:text-neutral-100 font-medium transition"
             >
               Cancel
             </button>
@@ -1433,34 +1433,34 @@ const EmployeeSchedule = () => {
       >
         <form id="request-timeoff-form" onSubmit={handleRequestSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Start Date *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Start Date *</label>
             <input
               type="date"
               value={formData.start_date}
               onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
               required
               min={new Date().toISOString().split('T')[0]}
-              className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
+              className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">End Date *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">End Date *</label>
             <input
               type="date"
               value={formData.end_date}
               onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
               required
               min={formData.start_date || new Date().toISOString().split('T')[0]}
-              className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
+              className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Type *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Type *</label>
             <select
               value={formData.type}
               onChange={(e) => setFormData({ ...formData, type: e.target.value })}
               required
-              className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
+              className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
             >
               <option value="time_off_request">Time Off Request</option>
               <option value="out_of_office">Out of Office</option>
@@ -1473,24 +1473,24 @@ const EmployeeSchedule = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Reason *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Reason *</label>
             <input
               type="text"
               value={formData.reason}
               onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
               required
               placeholder="e.g., Vacation, Sick Day, Personal"
-              className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-primary focus:outline-none"
+              className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-primary focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Additional Notes</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Additional Notes</label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
               placeholder="Any additional information..."
-              className="w-full min-h-[4rem] px-4 py-3 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-primary focus:outline-none resize-y"
+              className="w-full min-h-[4rem] px-4 py-3 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-primary focus:outline-none resize-y"
             />
           </div>
         </form>

@@ -10,7 +10,7 @@ const TaskCard = ({ task, onClick, dragHandleProps }) => {
           onClick();
         }
       }}
-      className="bg-white dark:bg-neutral-800 rounded-lg shadow-md dark:shadow-none dark:border dark:border-neutral-700 cursor-pointer hover:shadow-lg dark:hover:border-neutral-600 transition border-l-4 relative"
+      className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-none dark:border dark:border-neutral-700 cursor-pointer hover:shadow-lg dark:hover:border-neutral-600 transition border-l-4 relative"
       style={{ 
         borderLeftColor: task.priority === 'urgent' ? '#EF4444' :
                         task.priority === 'high' ? '#F59E0B' :
@@ -22,7 +22,7 @@ const TaskCard = ({ task, onClick, dragHandleProps }) => {
       {dragHandleProps && (
         <div
           {...dragHandleProps}
-          className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-md text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200 bg-gray-100 dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 transition-colors border border-transparent dark:border-neutral-600"
+          className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-md text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200 bg-gray-100 dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 transition-colors border border-transparent dark:border-neutral-700"
           onClick={(e) => e.stopPropagation()}
           aria-label="Drag to reorder"
         >
@@ -51,7 +51,7 @@ const TaskCard = ({ task, onClick, dragHandleProps }) => {
       </div>
       
       {task.description && (
-        <p className="text-sm text-gray-600 dark:text-neutral-300 mb-2 line-clamp-2">{task.description}</p>
+        <p className="text-sm text-gray-600 dark:text-neutral-100 mb-2 line-clamp-2">{task.description}</p>
       )}
 
       <div className="flex items-center justify-between text-xs text-gray-500 dark:text-neutral-400">

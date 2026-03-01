@@ -71,12 +71,12 @@ const Sidebar = ({ isOpen, onClose }) => {
     <>
       {/* Mobile sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full w-[min(18rem,100vw)] max-w-[288px] bg-neutral-50 dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 z-50 transform transition-transform duration-300 ease-out lg:hidden ${
+        className={`fixed top-0 left-0 h-full w-[min(18rem,100vw)] max-w-[288px] bg-neutral-50 dark:bg-neutral-950 border-r border-neutral-200 dark:border-neutral-700 z-50 transform transition-transform duration-300 ease-out lg:hidden ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{ boxShadow: isOpen ? '4px 0 24px rgba(0,0,0,0.12)' : 'none' }}
       >
-        <div className="p-4 sm:p-5 border-b border-neutral-100 dark:border-neutral-800 flex justify-between items-center min-h-[3.25rem]">
+        <div className="p-4 sm:p-5 border-b border-neutral-100 dark:border-neutral-700 flex justify-between items-center min-h-[3.25rem]">
           <Link to="/dashboard" onClick={handleLinkClick} className="flex items-center min-w-0">
             <Logo size="md" showText={false} />
           </Link>
@@ -105,7 +105,7 @@ const Sidebar = ({ isOpen, onClose }) => {
               );
             })}
             {isAdmin && (
-              <li className="pt-3 mt-3 border-t border-neutral-100 dark:border-neutral-800">
+              <li className="pt-3 mt-3 border-t border-neutral-100 dark:border-neutral-700">
                 <a
                   href={import.meta.env.VITE_DASHBOARD_ASSISTANT_DOWNLOAD_URL || '/downloads/dashboard-assistant'}
                   download="SpectrumOutfittersAssistant-Setup.exe"
@@ -124,8 +124,8 @@ const Sidebar = ({ isOpen, onClose }) => {
       </aside>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block w-64 min-h-[calc(100vh-65px)] bg-neutral-50 dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 shrink-0">
-        <div className="p-6 border-b border-neutral-100 dark:border-neutral-800">
+      <aside className="hidden lg:block w-64 min-h-[calc(100vh-65px)] bg-neutral-50 dark:bg-neutral-950 border-r border-neutral-200 dark:border-neutral-700 shrink-0">
+        <div className="p-6 border-b border-neutral-100 dark:border-neutral-700">
           <Link to="/dashboard" className="flex justify-center items-center w-full">
             <Logo size="lg" showText={false} />
           </Link>
@@ -145,7 +145,7 @@ const Sidebar = ({ isOpen, onClose }) => {
               );
             })}
             {isAdmin && (
-              <li className="pt-3 mt-3 border-t border-neutral-100 dark:border-neutral-800">
+              <li className="pt-3 mt-3 border-t border-neutral-100 dark:border-neutral-700">
                 <a
                   href={import.meta.env.VITE_DASHBOARD_ASSISTANT_DOWNLOAD_URL || '/downloads/dashboard-assistant'}
                   download="SpectrumOutfittersAssistant-Setup.exe"

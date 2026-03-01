@@ -82,7 +82,7 @@ const TimeApproval = () => {
             className={`px-4 py-2 rounded-lg transition ${
               filter === 'pending'
                 ? 'bg-yellow-500 text-white font-semibold'
-                : 'bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 hover:bg-gray-300 dark:hover:bg-neutral-600'
+                : 'bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100 hover:bg-gray-300 dark:hover:bg-neutral-600'
             }`}
           >
             Pending ({pendingCount})
@@ -92,7 +92,7 @@ const TimeApproval = () => {
             className={`px-4 py-2 rounded-lg transition ${
               filter === 'approved'
                 ? 'bg-green-500 text-white font-semibold'
-                : 'bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 hover:bg-gray-300 dark:hover:bg-neutral-600'
+                : 'bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100 hover:bg-gray-300 dark:hover:bg-neutral-600'
             }`}
           >
             Approved ({approvedCount})
@@ -102,7 +102,7 @@ const TimeApproval = () => {
             className={`px-4 py-2 rounded-lg transition ${
               filter === 'rejected'
                 ? 'bg-red-500 text-white font-semibold'
-                : 'bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 hover:bg-gray-300 dark:hover:bg-neutral-600'
+                : 'bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100 hover:bg-gray-300 dark:hover:bg-neutral-600'
             }`}
           >
             Rejected ({rejectedCount})
@@ -112,7 +112,7 @@ const TimeApproval = () => {
             className={`px-4 py-2 rounded-lg transition ${
               filter === 'all'
                 ? 'bg-primary text-white font-semibold'
-                : 'bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 hover:bg-gray-300 dark:hover:bg-neutral-600'
+                : 'bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100 hover:bg-gray-300 dark:hover:bg-neutral-600'
             }`}
           >
             All
@@ -121,8 +121,8 @@ const TimeApproval = () => {
       </div>
 
       {requests.length === 0 ? (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-8 text-center">
-          <p className="text-gray-500 dark:text-neutral-300 text-lg">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-8 text-center">
+          <p className="text-gray-500 dark:text-neutral-100 text-lg">
             {filter === 'pending' 
               ? 'No pending time off requests' 
               : filter === 'approved'
@@ -141,7 +141,7 @@ const TimeApproval = () => {
             return (
               <div
                 key={request.id}
-                className={`bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6 border-l-4 ${
+                className={`bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6 border-l-4 ${
                   request.status === 'approved' ? 'border-green-500' :
                   request.status === 'rejected' ? 'border-red-500' :
                   'border-yellow-500'
@@ -164,39 +164,39 @@ const TimeApproval = () => {
                     
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                       <div>
-                        <p className="text-sm text-gray-600 dark:text-neutral-200">Start Date</p>
+                        <p className="text-sm text-gray-600 dark:text-neutral-100">Start Date</p>
                         <p className="font-semibold">{formatDate(request.start_date)}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-600 dark:text-neutral-200">End Date</p>
+                        <p className="text-sm text-gray-600 dark:text-neutral-100">End Date</p>
                         <p className="font-semibold">{formatDate(request.end_date)}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-600 dark:text-neutral-200">Duration</p>
+                        <p className="text-sm text-gray-600 dark:text-neutral-100">Duration</p>
                         <p className="font-semibold">{days} {days === 1 ? 'day' : 'days'}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-600 dark:text-neutral-200">Requested</p>
+                        <p className="text-sm text-gray-600 dark:text-neutral-100">Requested</p>
                         <p className="font-semibold">{formatDate(request.created_at)}</p>
                       </div>
                     </div>
 
                     {request.reason && (
                       <div className="mt-4">
-                        <p className="text-sm text-gray-600 dark:text-neutral-200">Reason</p>
+                        <p className="text-sm text-gray-600 dark:text-neutral-100">Reason</p>
                         <p className="font-medium">{request.reason}</p>
                       </div>
                     )}
 
                     {request.notes && (
                       <div className="mt-2">
-                        <p className="text-sm text-gray-600 dark:text-neutral-200">Notes</p>
-                        <p className="text-gray-700 dark:text-neutral-200">{request.notes}</p>
+                        <p className="text-sm text-gray-600 dark:text-neutral-100">Notes</p>
+                        <p className="text-gray-700 dark:text-neutral-100">{request.notes}</p>
                       </div>
                     )}
 
                     {request.approved_by_name && (
-                      <div className="mt-4 text-sm text-gray-600 dark:text-neutral-200">
+                      <div className="mt-4 text-sm text-gray-600 dark:text-neutral-100">
                         {request.status === 'approved' ? 'Approved' : 'Rejected'} by {request.approved_by_name} on {formatDate(request.approved_at)}
                       </div>
                     )}

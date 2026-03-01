@@ -177,7 +177,7 @@ const SecuritySessions = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard label="Active Sessions" value={stats.activeSessions} color="bg-green-50 text-green-700 border-green-200" />
           <StatCard label="Logins Today" value={stats.loginsToday} color="bg-blue-50 text-blue-700 border-blue-200" />
-          <StatCard label="Failed (24h)" value={stats.failedLast24h} color={stats.failedLast24h > 0 ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800' : 'bg-gray-50 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border-gray-200 dark:border-neutral-700'} />
+          <StatCard label="Failed (24h)" value={stats.failedLast24h} color={stats.failedLast24h > 0 ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800' : 'bg-gray-50 dark:bg-neutral-950 text-gray-700 dark:text-neutral-100 border-gray-200 dark:border-neutral-700'} />
           <StatCard label="Unique IPs Today" value={stats.uniqueIPsToday} color="bg-purple-50 text-purple-700 border-purple-200" />
         </div>
       )}
@@ -193,7 +193,7 @@ const SecuritySessions = () => {
             key={tab.id}
             onClick={() => { setView(tab.id); if (tab.id === 'events') loadLoginEvents(0); }}
             className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${
-              view === tab.id ? 'bg-white dark:bg-neutral-900 border border-b-0 border-gray-200 dark:border-neutral-700 text-primary' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'
+              view === tab.id ? 'bg-white dark:bg-neutral-950 border border-b-0 border-gray-200 dark:border-neutral-700 text-primary' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'
             }`}
           >
             {tab.label}
@@ -203,14 +203,14 @@ const SecuritySessions = () => {
 
       {/* Active Sessions */}
       {view === 'overview' && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-semibold text-gray-800">Currently Active Sessions</h3>
             <button onClick={loadActiveSessions} className="text-xs text-primary hover:underline">Refresh</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-neutral-800">
+              <thead className="bg-gray-50 dark:bg-neutral-950">
                 <tr>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">User</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Role</th>
@@ -231,7 +231,7 @@ const SecuritySessions = () => {
                       <div className="text-xs text-gray-500">@{s.username}</div>
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.role === 'admin' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200'}`}>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.role === 'admin' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100'}`}>
                         {s.role}
                       </span>
                     </td>
@@ -255,7 +255,7 @@ const SecuritySessions = () => {
 
       {/* Login History */}
       {view === 'events' && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center gap-3 justify-between">
             <h3 className="font-semibold text-gray-800">Login Event History</h3>
             <div className="flex items-center gap-2 flex-wrap">
@@ -284,7 +284,7 @@ const SecuritySessions = () => {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-neutral-800">
+              <thead className="bg-gray-50 dark:bg-neutral-950">
                 <tr>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Time</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600">Event</th>
@@ -308,7 +308,7 @@ const SecuritySessions = () => {
                   <tr key={`${ev.event_type || 'login'}-${ev.id}`} className="border-t border-gray-50 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
                     <td className="py-3 px-4 text-gray-600 whitespace-nowrap">{formatTime(ev.occurred_at)}</td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${ev.event_type === 'logout' ? 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'}`}>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${ev.event_type === 'logout' ? 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'}`}>
                         {ev.event_type === 'logout' ? 'Logout' : 'Login'}
                       </span>
                     </td>
@@ -317,7 +317,7 @@ const SecuritySessions = () => {
                       {ev.reason && <div className="text-xs text-gray-400">{ev.reason}</div>}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${ev.success ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : ev.event_type === 'logout' ? 'bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'}`}>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${ev.success ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : ev.event_type === 'logout' ? 'bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-100' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'}`}>
                         {ev.event_type === 'logout' ? '—' : (ev.success ? 'Success' : 'Failed')}
                       </span>
                     </td>
@@ -369,7 +369,7 @@ const SecuritySessions = () => {
 
       {/* On-Prem Configuration */}
       {view === 'config' && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6 max-w-2xl">
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6 max-w-2xl">
           <h3 className="font-semibold text-gray-800 mb-4">On-Premises Verification Settings</h3>
           <p className="text-sm text-gray-500 mb-6">
             Configure which IP addresses and geographic zones count as "on-prem" for login scoring.

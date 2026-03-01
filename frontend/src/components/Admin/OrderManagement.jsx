@@ -200,9 +200,9 @@ const OrderManagement = () => {
       </div>
 
       {/* Orders List */}
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden overflow-x-auto">
+      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 overflow-hidden overflow-x-auto">
         <table className="w-full min-w-[600px]">
-          <thead className="bg-gray-50 dark:bg-neutral-800">
+          <thead className="bg-gray-50 dark:bg-neutral-950">
             <tr>
               <th className="px-4 py-3 text-left text-sm font-medium">Order #</th>
               <th className="px-4 py-3 text-left text-sm font-medium">Customer</th>
@@ -264,7 +264,7 @@ const OrderManagement = () => {
       {/* Order Detail Modal */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-lg dark:border dark:border-neutral-700 p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-neutral-950 rounded-lg dark:border dark:border-neutral-700 p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-4">
               <h2 className="text-2xl font-bold">Order #{selectedOrder.id}</h2>
               <button
@@ -314,7 +314,7 @@ const OrderManagement = () => {
 
             <div className="mb-4">
               <p className="text-sm font-medium text-gray-700 mb-2">Order Items</p>
-              <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-4">
+              <div className="bg-gray-50 dark:bg-neutral-950 rounded-lg p-4">
                 {selectedOrder.items && selectedOrder.items.map((item, index) => (
                   <div key={index} className="flex justify-between py-2 border-b last:border-b-0">
                     <div>
@@ -340,7 +340,7 @@ const OrderManagement = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Order Items</label>
                   <div className="space-y-2">
                     {(editData.items || []).map((item, index) => (
-                      <div key={index} className="flex gap-2 items-center p-2 bg-gray-50 dark:bg-neutral-800 rounded">
+                      <div key={index} className="flex gap-2 items-center p-2 bg-gray-50 dark:bg-neutral-950 rounded">
                         <select
                           value={item.product_id || ''}
                           onChange={(e) => updateOrderItem(index, 'product_id', e.target.value)}
@@ -435,7 +435,7 @@ const OrderManagement = () => {
                   <button
                     onClick={cancelEdit}
                     disabled={saving}
-                    className="px-4 py-2 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition disabled:opacity-50"
+                    className="px-4 py-2 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-100 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -469,7 +469,7 @@ const OrderManagement = () => {
                   </button>
                   <button
                     onClick={() => setSelectedOrder(null)}
-                    className="px-4 py-2 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition"
+                    className="px-4 py-2 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-100 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition"
                   >
                     Close
                   </button>

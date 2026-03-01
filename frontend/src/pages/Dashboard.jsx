@@ -31,7 +31,7 @@ const urgencyStyles = {
   critical: 'border-l-4 border-l-red-500 bg-red-50/90 dark:bg-red-950/40 dark:border-l-red-400',
   high: 'border-l-4 border-l-amber-500 bg-amber-50/80 dark:bg-amber-950/40 dark:border-l-amber-400',
   medium: 'border-l-4 border-l-primary bg-primary-subtle dark:bg-primary/20 dark:border-l-primary',
-  low: 'border-l-4 border-l-neutral-300 bg-neutral-50/80 dark:bg-neutral-800/80 dark:border-l-neutral-500',
+  low: 'border-l-4 border-l-neutral-300 bg-neutral-50/80 dark:bg-neutral-950/80 dark:border-l-neutral-500',
   none: 'border-l border-l-transparent'
 };
 
@@ -360,7 +360,7 @@ const Dashboard = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-gray-800 dark:text-neutral-100 md:text-2xl">Admin Dashboard</h1>
-            <p className="text-sm font-medium text-gray-700 dark:text-neutral-200 mt-0.5">
+            <p className="text-sm font-medium text-gray-700 dark:text-neutral-100 mt-0.5">
               {user?.full_name || user?.username || 'Signed in'}
             </p>
             <p className="text-xs text-gray-500 dark:text-neutral-400">Admin account</p>
@@ -372,9 +372,9 @@ const Dashboard = () => {
         </div>
 
         {/* ── Today Revenue ───────────────────────────────────── */}
-        <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 flex items-center gap-4">
+        <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 flex items-center gap-4">
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-gray-500 dark:text-neutral-300 uppercase tracking-wider font-medium mb-1">Today's Revenue</p>
+            <p className="text-[10px] text-gray-500 dark:text-neutral-100 uppercase tracking-wider font-medium mb-1">Today's Revenue</p>
             {todayRevenueLoading ? (
               <div className="flex items-center gap-3">
                 <div className="h-8 w-32 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
@@ -448,7 +448,7 @@ const Dashboard = () => {
         {/* ── Financial + Team (two columns) ─────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Financial Overview */}
-          <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-5">
+          <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Financial Overview</h2>
               <button onClick={() => navigate('/admin?tab=compliance')} className="text-xs text-primary hover:underline">View P&amp;L</button>
@@ -457,15 +457,15 @@ const Dashboard = () => {
               <>
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div>
-                    <p className="text-[10px] text-gray-500 dark:text-neutral-200 uppercase">Revenue</p>
+                    <p className="text-[10px] text-gray-500 dark:text-neutral-100 uppercase">Revenue</p>
                     <p className="text-lg font-bold text-green-600 dark:text-green-400">{fmt$(revenue)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-500 dark:text-neutral-200 uppercase">Costs</p>
+                    <p className="text-[10px] text-gray-500 dark:text-neutral-100 uppercase">Costs</p>
                     <p className="text-lg font-bold text-red-600 dark:text-red-400">{fmt$(payrollCost + otherExpenses)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-500 dark:text-neutral-200 uppercase">Net Profit</p>
+                    <p className="text-[10px] text-gray-500 dark:text-neutral-100 uppercase">Net Profit</p>
                     <p className={`text-lg font-bold ${netProfit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{fmt$(netProfit)}</p>
                     <p className={`text-[10px] ${netProfit >= 0 ? 'text-green-500 dark:text-green-400/90' : 'text-red-500 dark:text-red-400/90'}`}>{profitMargin.toFixed(0)}% margin</p>
                   </div>
@@ -497,12 +497,12 @@ const Dashboard = () => {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-gray-400 dark:text-neutral-200 text-center py-4">No financial data for this week</p>
+              <p className="text-sm text-gray-400 dark:text-neutral-100 text-center py-4">No financial data for this week</p>
             )}
           </div>
 
           {/* Team Status */}
-          <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-5">
+          <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Team Status</h2>
               <button onClick={() => navigate('/admin?tab=status')} className="text-xs text-primary hover:underline">View all</button>
@@ -518,20 +518,20 @@ const Dashboard = () => {
                     }`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 dark:text-neutral-100 truncate">{emp.full_name || emp.username}</p>
-                      <p className="text-[10px] text-gray-400 dark:text-neutral-200">
+                      <p className="text-[10px] text-gray-400 dark:text-neutral-100">
                         {emp.status === 'clocked_in' ? `Working ${emp.hours_today ? emp.hours_today.toFixed(1) + 'h' : ''}` :
                          emp.status === 'on_lunch' ? 'On lunch' :
                          'Not clocked in'}
                       </p>
                     </div>
                     {emp.status === 'clocked_in' && emp.hours_today != null && (
-                      <span className="text-xs font-medium text-gray-600 dark:text-neutral-200">{emp.hours_today.toFixed(1)}h</span>
+                      <span className="text-xs font-medium text-gray-600 dark:text-neutral-100">{emp.hours_today.toFixed(1)}h</span>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 dark:text-neutral-200 text-center py-4">No employee data</p>
+              <p className="text-sm text-gray-400 dark:text-neutral-100 text-center py-4">No employee data</p>
             )}
           </div>
         </div>
@@ -539,7 +539,7 @@ const Dashboard = () => {
         {/* ── Schedule + Compliance (two columns) ────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Upcoming Schedule */}
-          <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-5">
+          <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Upcoming Schedule</h2>
               <button onClick={() => navigate('/schedule')} className="text-xs text-primary hover:underline">View all</button>
@@ -557,7 +557,7 @@ const Dashboard = () => {
                       onClick={() => navigate(`/schedule?view=${event.id}`)}
                       className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-left transition cursor-pointer border-0"
                     >
-                      <span className="text-xs font-semibold text-gray-600 dark:text-neutral-200 w-20 flex-shrink-0">{dayLabel}</span>
+                      <span className="text-xs font-semibold text-gray-600 dark:text-neutral-100 w-20 flex-shrink-0">{dayLabel}</span>
                       <span className="text-sm text-gray-800 dark:text-neutral-100 truncate flex-1">
                         {label}{who ? ` · ${who}` : ''}
                       </span>
@@ -567,12 +567,12 @@ const Dashboard = () => {
                 })}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 dark:text-neutral-200 text-center py-4">No upcoming events</p>
+              <p className="text-sm text-gray-400 dark:text-neutral-100 text-center py-4">No upcoming events</p>
             )}
           </div>
 
           {/* Compliance + Task Distribution */}
-          <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-5">
+          <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Compliance & Tasks</h2>
               <button onClick={() => navigate('/admin?tab=compliance')} className="text-xs text-primary hover:underline">View all</button>
@@ -584,7 +584,7 @@ const Dashboard = () => {
                   <div className="mb-2">
                     <span className="text-xs font-bold text-red-600 dark:text-red-400">{adminData.complianceOverdue.length} Overdue</span>
                     {adminData.complianceOverdue.slice(0, 2).map((c, i) => (
-                      <p key={i} className="text-[11px] text-gray-600 dark:text-neutral-200 truncate">{c.obligation_name || c.name}</p>
+                      <p key={i} className="text-[11px] text-gray-600 dark:text-neutral-100 truncate">{c.obligation_name || c.name}</p>
                     ))}
                   </div>
                 )}
@@ -592,7 +592,7 @@ const Dashboard = () => {
                   <div className="mb-2">
                     <span className="text-xs font-bold text-amber-600 dark:text-amber-400">{adminData.complianceDueSoon.length} Due Soon</span>
                     {adminData.complianceDueSoon.slice(0, 2).map((c, i) => (
-                      <p key={i} className="text-[11px] text-gray-600 dark:text-neutral-200 truncate">{c.obligation_name || c.name}</p>
+                      <p key={i} className="text-[11px] text-gray-600 dark:text-neutral-100 truncate">{c.obligation_name || c.name}</p>
                     ))}
                   </div>
                 )}
@@ -621,11 +621,11 @@ const Dashboard = () => {
 
         {/* ── Admin Worklist Quick View ───────────────────────── */}
         {worklistSummary && (
-          <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-5">
+          <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Admin Work List</h2>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-500 dark:text-neutral-200">{worklistSummary.completed}/{worklistSummary.total} done</span>
+                <span className="text-xs text-gray-500 dark:text-neutral-100">{worklistSummary.completed}/{worklistSummary.total} done</span>
                 <button onClick={() => navigate('/admin?tab=worklist')} className="text-xs text-primary hover:underline">Open</button>
               </div>
             </div>
@@ -638,7 +638,7 @@ const Dashboard = () => {
             {worklistItems.length > 0 && (
               <div className="space-y-1">
                 {worklistItems.map(item => (
-                  <div key={item.id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-200 py-1">
+                  <div key={item.id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-100 py-1">
                     <div className="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0" />
                     <span className="truncate">{item.title}</span>
                   </div>
@@ -672,7 +672,7 @@ const Dashboard = () => {
             <button
               key={item.label}
               onClick={() => navigate(item.path)}
-              className="flex flex-col items-center gap-1 p-3 bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl hover:border-primary/30 hover:bg-primary/5 transition text-center"
+              className="flex flex-col items-center gap-1 p-3 bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl hover:border-primary/30 hover:bg-primary/5 transition text-center"
             >
               <span className="text-xl">{item.icon}</span>
               <span className="text-xs font-medium text-gray-600 dark:text-neutral-100">{item.label}</span>
@@ -700,7 +700,7 @@ const Dashboard = () => {
       </div>
 
       {/* Clock In/Out */}
-      <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 md:p-5">
+      <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 md:p-5">
         <ClockInOut />
       </div>
 
@@ -727,7 +727,7 @@ const Dashboard = () => {
 
       {/* Upcoming Events */}
       {upcomingEvents.length > 0 && (
-        <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 md:p-5">
+        <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 md:p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Upcoming Events</h2>
             <button onClick={() => navigate('/schedule')} className="text-xs text-primary hover:underline">View Schedule</button>
@@ -745,7 +745,7 @@ const Dashboard = () => {
                   className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-left transition cursor-pointer border-0"
                 >
                   <span className="text-xs font-semibold text-gray-600 dark:text-neutral-400 w-20 flex-shrink-0">{dayLabel}</span>
-                  <span className="text-sm text-gray-800 dark:text-neutral-200 truncate flex-1">{label}{who ? ` · ${who}` : ''}</span>
+                  <span className="text-sm text-gray-800 dark:text-neutral-100 truncate flex-1">{label}{who ? ` · ${who}` : ''}</span>
                 </button>
               );
             })}
@@ -779,11 +779,11 @@ const Dashboard = () => {
 const MetricCard = ({ label, value, valueColor, sub, subColor, onClick }) => (
   <button
     onClick={onClick}
-    className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 text-left hover:border-primary/30 hover:bg-primary/5 transition w-full"
+    className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 text-left hover:border-primary/30 hover:bg-primary/5 transition w-full"
   >
-    <p className="text-[10px] text-gray-500 dark:text-neutral-300 uppercase tracking-wider font-medium">{label}</p>
+    <p className="text-[10px] text-gray-500 dark:text-neutral-100 uppercase tracking-wider font-medium">{label}</p>
     <p className={`text-2xl font-bold mt-1 ${valueColor || 'text-gray-800 dark:text-neutral-100'}`}>{value}</p>
-    {sub && <p className={`text-[11px] mt-0.5 ${subColor || 'text-gray-400 dark:text-neutral-200'}`}>{sub}</p>}
+    {sub && <p className={`text-[11px] mt-0.5 ${subColor || 'text-gray-400 dark:text-neutral-100'}`}>{sub}</p>}
   </button>
 );
 
@@ -804,12 +804,12 @@ const MyListSection = ({
   const done = items.filter(i => i.is_completed);
 
   return (
-    <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 md:p-5">
+    <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 md:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">My List</h2>
           {summary && summary.total > 0 && !showArchived && (
-            <span className="text-[10px] text-gray-400 dark:text-neutral-200">{summary.completed}/{summary.total}</span>
+            <span className="text-[10px] text-gray-400 dark:text-neutral-100">{summary.completed}/{summary.total}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -835,7 +835,7 @@ const MyListSection = ({
               value={newItem}
               onChange={(e) => setNewItem(e.target.value)}
               placeholder="Add a task..."
-              className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+              className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
             />
             <button type="submit" disabled={!newItem.trim() || adding} className="px-3 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50 shrink-0">
               {adding ? '...' : 'Add'}
@@ -849,13 +849,13 @@ const MyListSection = ({
                 <div key={item.id} className="flex items-center gap-2.5 py-1.5 group">
                   <button
                     onClick={() => onToggle(item.id)}
-                    className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-gray-300 dark:border-neutral-500 hover:border-primary flex items-center justify-center transition dark:bg-neutral-800"
+                    className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-gray-300 dark:border-neutral-500 hover:border-primary flex items-center justify-center transition dark:bg-neutral-950"
                   />
                   <span className="text-sm text-gray-700 dark:text-neutral-100 truncate flex-1">{item.title}</span>
                 </div>
               ))}
               {pending.length > 5 && (
-                <button onClick={onViewAll} className="text-xs text-gray-400 dark:text-neutral-200 hover:text-primary">+ {pending.length - 5} more</button>
+                <button onClick={onViewAll} className="text-xs text-gray-400 dark:text-neutral-100 hover:text-primary">+ {pending.length - 5} more</button>
               )}
             </div>
           )}
@@ -869,13 +869,13 @@ const MyListSection = ({
                   >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                   </button>
-                  <span className="text-sm text-gray-400 dark:text-neutral-300 line-through truncate flex-1">{item.title}</span>
+                  <span className="text-sm text-gray-400 dark:text-neutral-100 line-through truncate flex-1">{item.title}</span>
                 </div>
               ))}
             </div>
           )}
           {items.length === 0 && (
-            <p className="text-xs text-gray-400 dark:text-neutral-200 text-center py-2">No items yet. Add one above. Completed items are archived after 24 hours.</p>
+            <p className="text-xs text-gray-400 dark:text-neutral-100 text-center py-2">No items yet. Add one above. Completed items are archived after 24 hours.</p>
           )}
         </>
       )}
@@ -885,7 +885,7 @@ const MyListSection = ({
         <div className="space-y-1">
           <p className="text-xs text-gray-500 dark:text-neutral-400 mb-2">Uncheck an item to bring it back to your list.</p>
           {archivedItems.length === 0 ? (
-            <p className="text-xs text-gray-400 dark:text-neutral-200 text-center py-2">No archived items.</p>
+            <p className="text-xs text-gray-400 dark:text-neutral-100 text-center py-2">No archived items.</p>
           ) : (
             archivedItems.map(item => (
               <div key={item.id} className="flex items-center gap-2.5 py-1.5">
@@ -896,7 +896,7 @@ const MyListSection = ({
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                 </button>
-                <span className="text-sm text-gray-500 dark:text-neutral-300 line-through truncate flex-1">{item.title}</span>
+                <span className="text-sm text-gray-500 dark:text-neutral-100 line-through truncate flex-1">{item.title}</span>
               </div>
             ))
           )}
@@ -912,16 +912,16 @@ const TasksSection = ({ tasks, taskFilter, setTaskFilter, taskLimit, setTaskLimi
   const hasMore = filtered.length > taskLimit;
 
   return (
-    <div className="bg-neutral-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 md:p-5">
+    <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 md:p-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
         <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Tasks Overview</h2>
         <div className="flex items-center gap-2">
-          <div className="flex gap-0.5 bg-gray-100 dark:bg-neutral-800 rounded-lg p-0.5">
+          <div className="flex gap-0.5 bg-gray-100 dark:bg-neutral-950 rounded-lg p-0.5">
             {['all', 'in_progress', 'review', 'todo', 'completed'].map(key => (
               <button
                 key={key}
                 onClick={() => { setTaskFilter(key); setTaskLimit(8); }}
-                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition ${taskFilter === key ? 'bg-primary text-white shadow-sm' : 'text-gray-500 dark:text-neutral-200 hover:text-gray-700 dark:hover:text-neutral-100'}`}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition ${taskFilter === key ? 'bg-primary text-white shadow-sm' : 'text-gray-500 dark:text-neutral-100 hover:text-gray-700 dark:hover:text-neutral-100'}`}
               >
                 {key === 'all' ? 'All' : key === 'in_progress' ? 'Active' : key === 'review' ? 'Review' : key === 'todo' ? 'To Do' : 'Done'}
               </button>
@@ -932,7 +932,7 @@ const TasksSection = ({ tasks, taskFilter, setTaskFilter, taskLimit, setTaskLimi
       </div>
 
       {displayed.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-neutral-200 text-center py-6">No tasks</p>
+        <p className="text-sm text-gray-400 dark:text-neutral-100 text-center py-6">No tasks</p>
       ) : (
         <div className="space-y-1.5">
           {displayed.map(task => {
@@ -948,12 +948,12 @@ const TasksSection = ({ tasks, taskFilter, setTaskFilter, taskLimit, setTaskLimi
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-gray-800 dark:text-neutral-100 truncate">{task.title}</span>
-                    {task.category && <span className="text-[10px] text-gray-400 dark:text-neutral-300 flex-shrink-0">{task.category}</span>}
+                    {task.category && <span className="text-[10px] text-gray-400 dark:text-neutral-100 flex-shrink-0">{task.category}</span>}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[11px] text-gray-500 dark:text-neutral-200">{task.assigned_to_name || 'Unassigned'}</span>
+                    <span className="text-[11px] text-gray-500 dark:text-neutral-100">{task.assigned_to_name || 'Unassigned'}</span>
                     {task.due_date && (
-                      <span className={`text-[11px] ${new Date(task.due_date) < new Date() && task.status !== 'completed' ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-400 dark:text-neutral-200'}`}>
+                      <span className={`text-[11px] ${new Date(task.due_date) < new Date() && task.status !== 'completed' ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-400 dark:text-neutral-100'}`}>
                         Due {formatDate(task.due_date)}
                       </span>
                     )}
@@ -963,13 +963,13 @@ const TasksSection = ({ tasks, taskFilter, setTaskFilter, taskLimit, setTaskLimi
                   <div className="w-16 h-1.5 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${progress === 100 ? 'bg-green-500' : 'bg-primary'}`} style={{ width: `${progress}%` }} />
                   </div>
-                  <span className="text-[10px] text-gray-500 dark:text-neutral-200 w-7 text-right">{progress}%</span>
+                  <span className="text-[10px] text-gray-500 dark:text-neutral-100 w-7 text-right">{progress}%</span>
                 </div>
               </div>
             );
           })}
           {hasMore && (
-            <button onClick={() => setTaskLimit(taskLimit + 8)} className="w-full py-2 text-xs text-gray-500 dark:text-neutral-200 hover:text-gray-700 dark:hover:text-neutral-100 hover:bg-gray-50 dark:hover:bg-neutral-800 rounded-lg transition">
+            <button onClick={() => setTaskLimit(taskLimit + 8)} className="w-full py-2 text-xs text-gray-500 dark:text-neutral-100 hover:text-gray-700 dark:hover:text-neutral-100 hover:bg-gray-50 dark:hover:bg-neutral-800 rounded-lg transition">
               Show more ({filtered.length - taskLimit} remaining)
             </button>
           )}

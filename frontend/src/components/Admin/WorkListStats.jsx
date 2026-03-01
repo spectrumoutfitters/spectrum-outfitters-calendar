@@ -60,7 +60,7 @@ const WorkListStats = () => {
       </div>
 
       {/* Date Range Filter */}
-      <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-4">
+      <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg p-4">
         <div className="flex flex-wrap gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
@@ -85,19 +85,19 @@ const WorkListStats = () => {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
+        <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-2">Total Items</h3>
           <p className="text-3xl font-bold text-gray-900">{stats.totalItems || 0}</p>
         </div>
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
+        <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-2">Completed</h3>
           <p className="text-3xl font-bold text-green-600">{stats.completedItems || 0}</p>
         </div>
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
+        <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-2">Completion Rate</h3>
           <p className="text-3xl font-bold text-blue-600">{stats.completionRate || 0}%</p>
         </div>
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
+        <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-2">Avg Time</h3>
           <p className="text-3xl font-bold text-purple-600">
             {stats.averageTimeMinutes ? `${Math.round(stats.averageTimeMinutes)}m` : '-'}
@@ -107,7 +107,7 @@ const WorkListStats = () => {
 
       {/* Category Breakdown */}
       {stats.categoryBreakdown && stats.categoryBreakdown.length > 0 && (
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
+        <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Category Breakdown</h3>
           <div className="space-y-3">
             {stats.categoryBreakdown.map((cat) => {
@@ -137,7 +137,7 @@ const WorkListStats = () => {
 
       {/* Priority Breakdown */}
       {stats.priorityBreakdown && stats.priorityBreakdown.length > 0 && (
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
+        <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Priority Breakdown</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {stats.priorityBreakdown.map((pri) => {
@@ -157,11 +157,11 @@ const WorkListStats = () => {
 
       {/* Most Time-Consuming Items */}
       {stats.timeConsumingItems && stats.timeConsumingItems.length > 0 && (
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
+        <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Most Time-Consuming Items</h3>
           <div className="space-y-2">
             {stats.timeConsumingItems.map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg">
+              <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-950 rounded-lg">
                 <div>
                   <p className="font-medium text-gray-800">{item.title}</p>
                   <p className="text-sm text-gray-600">

@@ -69,14 +69,14 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-100 dark:bg-neutral-950 px-4 py-8 sm:py-12 safe-area-pb relative">
-      <div className="absolute top-4 right-4 flex items-center gap-2 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl px-2 py-1.5 shadow-sm">
-        <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300 sm:inline">
+      <div className="absolute top-4 right-4 flex items-center gap-2 bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-700 rounded-xl px-2 py-1.5 shadow-sm">
+        <span className="text-xs font-medium text-neutral-600 dark:text-neutral-100 sm:inline">
           {theme === 'dark' ? 'Dark' : 'Light'}
         </span>
         <ThemeToggle variant="standalone" />
       </div>
       <div className="w-full max-w-[400px] mx-auto">
-        <div className="bg-white dark:bg-neutral-900 rounded-2xl sm:rounded-3xl shadow-sm border border-neutral-200 dark:border-neutral-800 p-6 sm:p-8 md:p-10">
+        <div className="bg-white dark:bg-neutral-950 rounded-2xl sm:rounded-3xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 sm:p-8 md:p-10">
           <div className="text-center mb-6 sm:mb-8">
             <div className="flex justify-center mb-4 sm:mb-6">
               <Logo size="xl" />
@@ -92,7 +92,7 @@ const Login = () => {
             )}
 
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+              <label htmlFor="username" className="block text-sm font-medium text-neutral-700 dark:text-neutral-100 mb-1.5">
                 Username
               </label>
               <input
@@ -107,7 +107,7 @@ const Login = () => {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+              <label htmlFor="password" className="block text-sm font-medium text-neutral-700 dark:text-neutral-100 mb-1.5">
                 Password
               </label>
               <input
@@ -129,7 +129,7 @@ const Login = () => {
             </button>
           </form>
 
-          <div className="mt-6 sm:mt-8 pt-6 border-t border-neutral-100 dark:border-neutral-800">
+          <div className="mt-6 sm:mt-8 pt-6 border-t border-neutral-100 dark:border-neutral-700">
             <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-2">Daily affirmation</p>
             <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">{dailyAffirmation}</p>
           </div>

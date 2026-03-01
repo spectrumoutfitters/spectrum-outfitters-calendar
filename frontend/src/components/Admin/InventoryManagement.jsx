@@ -42,7 +42,7 @@ const getTileColorClass = (item) => {
   if (needsReturn) return 'border-2 border-orange-500 bg-orange-100 dark:bg-orange-900/30 dark:border-orange-600';
   const q = item?.quantity ?? 0;
   const min = item?.min_quantity;
-  if (min == null || min === '') return 'border-gray-200 dark:border-neutral-600';
+  if (min == null || min === '') return 'border-gray-200 dark:border-neutral-700';
   if (q <= 0) return 'border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-700';
   if (q < min) return 'border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700';
   return 'border-green-300 bg-green-50 dark:bg-green-900/20 dark:border-green-700';
@@ -744,13 +744,13 @@ const InventoryManagement = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Inventory</h2>
-          <p className="text-sm text-gray-600 dark:text-neutral-200 mt-1">Manage shop supplies, barcodes, categories, prices, and quantities.</p>
+          <p className="text-sm text-gray-600 dark:text-neutral-100 mt-1">Manage shop supplies, barcodes, categories, prices, and quantities.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setScannerOpen(true)}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 border-primary bg-white dark:bg-neutral-800 text-primary font-semibold hover:bg-primary hover:text-white dark:hover:bg-primary/20 dark:hover:text-white transition"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 border-primary bg-white dark:bg-neutral-950 text-primary font-semibold hover:bg-primary hover:text-white dark:hover:bg-primary/20 dark:hover:text-white transition"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13v7a2 2 0 01-2 2H7a2 2 0 01-2-2v-7" /></svg>
             Scan barcode
@@ -773,12 +773,12 @@ const InventoryManagement = () => {
             {itemsNeedingReturn.map((it) => (
               <li
                 key={it.id}
-                className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 rounded-lg bg-white dark:bg-neutral-900 border border-amber-200 dark:border-amber-800"
+                className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 rounded-lg bg-white dark:bg-neutral-950 border border-amber-200 dark:border-amber-800"
               >
                 <div className="min-w-0">
                   <span className="font-medium text-gray-900 dark:text-neutral-100">{it.name}</span>
                   {it.return_supplier && (
-                    <span className="text-sm text-gray-600 dark:text-neutral-300 ml-2">→ {it.return_supplier}</span>
+                    <span className="text-sm text-gray-600 dark:text-neutral-100 ml-2">→ {it.return_supplier}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -793,7 +793,7 @@ const InventoryManagement = () => {
                   <button
                     type="button"
                     onClick={() => openEdit(it)}
-                    className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200 text-sm font-medium"
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-100 text-sm font-medium"
                   >
                     Edit
                   </button>
@@ -804,9 +804,9 @@ const InventoryManagement = () => {
         </div>
       )}
 
-      <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
+      <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-2">📤 Scan-outs (not on a task)</h3>
-        <p className="text-sm text-gray-600 dark:text-neutral-200 mb-4">Items employees used and scanned out without linking to a task. They provided a reason; you can mark as seen when reviewed.</p>
+        <p className="text-sm text-gray-600 dark:text-neutral-100 mb-4">Items employees used and scanned out without linking to a task. They provided a reason; you can mark as seen when reviewed.</p>
         {adHocScanOutsLoading ? (
           <p className="text-gray-500 dark:text-neutral-400 py-4">Loading…</p>
         ) : adHocScanOuts.length === 0 ? (
@@ -815,7 +815,7 @@ const InventoryManagement = () => {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-600 dark:text-neutral-300 border-b dark:border-neutral-700">
+                <tr className="text-left text-gray-600 dark:text-neutral-100 border-b dark:border-neutral-700">
                   <th className="py-2 pr-3">Item</th>
                   <th className="py-2 pr-3">Qty used</th>
                   <th className="py-2 pr-3">Used by</th>
@@ -828,10 +828,10 @@ const InventoryManagement = () => {
                 {adHocScanOuts.map((s) => (
                   <tr key={s.id} className="border-b last:border-b-0 align-top">
                     <td className="py-3 pr-3 font-medium text-gray-900 dark:text-neutral-100">{s.item_name}</td>
-                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-200">{s.quantity_used} {s.item_unit || 'each'}</td>
-                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-200">{s.used_by_name ?? '—'}</td>
-                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-200 max-w-[200px]" title={s.reason_text}>{s.reason_text || '—'}</td>
-                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-200 whitespace-nowrap">{s.created_at ? new Date(s.created_at).toLocaleString() : '—'}</td>
+                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-100">{s.quantity_used} {s.item_unit || 'each'}</td>
+                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-100">{s.used_by_name ?? '—'}</td>
+                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-100 max-w-[200px]" title={s.reason_text}>{s.reason_text || '—'}</td>
+                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-100 whitespace-nowrap">{s.created_at ? new Date(s.created_at).toLocaleString() : '—'}</td>
                     <td className="py-3 pr-2 text-right">
                       <button
                         type="button"
@@ -850,9 +850,9 @@ const InventoryManagement = () => {
         )}
       </div>
 
-      <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
+      <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-2">🆕 New item requests</h3>
-        <p className="text-sm text-gray-600 dark:text-neutral-200 mb-4">Workers can request items the shop doesn&apos;t have yet. Mark as addressed when you&apos;ve added the item or ordered it, or dismiss if not needed.</p>
+        <p className="text-sm text-gray-600 dark:text-neutral-100 mb-4">Workers can request items the shop doesn&apos;t have yet. Mark as addressed when you&apos;ve added the item or ordered it, or dismiss if not needed.</p>
         {newItemRequestsLoading ? (
           <p className="text-gray-500 dark:text-neutral-400 py-4">Loading new item requests…</p>
         ) : newItemRequests.length === 0 ? (
@@ -861,7 +861,7 @@ const InventoryManagement = () => {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-600 dark:text-neutral-300 border-b dark:border-neutral-700">
+                <tr className="text-left text-gray-600 dark:text-neutral-100 border-b dark:border-neutral-700">
                   <th className="py-2 pr-3">Item name</th>
                   <th className="py-2 pr-3">Requested by</th>
                   <th className="py-2 pr-3">Date</th>
@@ -874,10 +874,10 @@ const InventoryManagement = () => {
                 {newItemRequests.map((r) => (
                   <tr key={r.id} className="border-b last:border-b-0 align-top">
                     <td className="py-3 pr-3 font-medium text-gray-900 dark:text-neutral-100">{r.item_name}</td>
-                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-200">{r.requested_by_name ?? '—'}</td>
-                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-200 whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</td>
-                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-200 max-w-[200px] truncate" title={r.notes}>{r.notes || '—'}</td>
-                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-200 font-mono">{r.barcode || '—'}</td>
+                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-100">{r.requested_by_name ?? '—'}</td>
+                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-100 whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</td>
+                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-100 max-w-[200px] truncate" title={r.notes}>{r.notes || '—'}</td>
+                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-100 font-mono">{r.barcode || '—'}</td>
                     <td className="py-3 pr-2 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -892,7 +892,7 @@ const InventoryManagement = () => {
                           type="button"
                           onClick={() => handleNewItemRequestStatus(r.id, 'dismissed')}
                           disabled={newItemRequestPatchingId === r.id}
-                          className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-50"
+                          className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-neutral-100 text-sm font-medium hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-50"
                         >
                           Dismiss
                         </button>
@@ -906,9 +906,9 @@ const InventoryManagement = () => {
         )}
       </div>
 
-      <div ref={refillSectionRef} className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
+      <div ref={refillSectionRef} className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-2">📦 Reorder requests</h3>
-        <p className="text-sm text-gray-600 dark:text-neutral-200 mb-4">When the shop asks to reorder, the request stays here until you mark it ordered. Optionally fill out where you ordered from, price, and when it will arrive (none required).</p>
+        <p className="text-sm text-gray-600 dark:text-neutral-100 mb-4">When the shop asks to reorder, the request stays here until you mark it ordered. Optionally fill out where you ordered from, price, and when it will arrive (none required).</p>
         {refillLoading ? (
           <p className="text-gray-500 dark:text-neutral-400 py-4">Loading reorder requests…</p>
         ) : refillRequests.length === 0 ? (
@@ -917,7 +917,7 @@ const InventoryManagement = () => {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-600 dark:text-neutral-300 border-b dark:border-neutral-700">
+                <tr className="text-left text-gray-600 dark:text-neutral-100 border-b dark:border-neutral-700">
                   <th className="py-2 pr-3">Item</th>
                   <th className="py-2 pr-3">Requested by</th>
                   <th className="py-2 pr-3">Date</th>
@@ -934,13 +934,13 @@ const InventoryManagement = () => {
                 {refillRequests.map((r) => (
                   <tr key={r.id} className="border-b last:border-b-0 align-top">
                     <td className="py-3 pr-3 font-medium text-gray-900 dark:text-neutral-100">{r.item_name}</td>
-                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-200">{r.requested_by_name}</td>
-                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-200 whitespace-nowrap">{r.requested_at ? new Date(r.requested_at).toLocaleString() : '—'}</td>
+                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-100">{r.requested_by_name}</td>
+                    <td className="py-3 pr-3 text-gray-700 dark:text-neutral-100 whitespace-nowrap">{r.requested_at ? new Date(r.requested_at).toLocaleString() : '—'}</td>
                     <td className="py-3 pr-3">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                         r.status === 'pending' ? 'bg-amber-100 text-amber-800' :
                         r.status === 'ordered' ? 'bg-primary-subtle text-primary' :
-                        r.status === 'received' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' : 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200'
+                        r.status === 'received' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' : 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100'
                       }`}>
                         {r.status}
                       </span>
@@ -950,7 +950,7 @@ const InventoryManagement = () => {
                         type="date"
                         value={refillEdit[r.id]?.expected_arrival_date ?? r.expected_arrival_date ?? ''}
                         onChange={(e) => setRefillEdit((prev) => ({ ...prev, [r.id]: { ...prev[r.id], expected_arrival_date: e.target.value } }))}
-                        className="px-2 py-1 rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 w-full max-w-[140px]"
+                        className="px-2 py-1 rounded border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 w-full max-w-[140px]"
                         placeholder="When it will arrive"
                       />
                     </td>
@@ -959,7 +959,7 @@ const InventoryManagement = () => {
                         type="text"
                         value={refillEdit[r.id]?.ordered_from ?? r.ordered_from ?? ''}
                         onChange={(e) => setRefillEdit((prev) => ({ ...prev, [r.id]: { ...prev[r.id], ordered_from: e.target.value } }))}
-                        className="px-2 py-1 rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 w-full max-w-[140px]"
+                        className="px-2 py-1 rounded border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 w-full max-w-[140px]"
                         placeholder="Store / vendor"
                       />
                     </td>
@@ -970,7 +970,7 @@ const InventoryManagement = () => {
                         min="0"
                         value={refillEdit[r.id]?.order_quantity ?? r.order_quantity ?? ''}
                         onChange={(e) => setRefillEdit((prev) => ({ ...prev, [r.id]: { ...prev[r.id], order_quantity: e.target.value } }))}
-                        className="px-2 py-1 rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 w-full max-w-[70px]"
+                        className="px-2 py-1 rounded border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 w-full max-w-[70px]"
                         placeholder="Qty"
                       />
                     </td>
@@ -981,7 +981,7 @@ const InventoryManagement = () => {
                         min="0"
                         value={refillEdit[r.id]?.order_price ?? r.order_price ?? ''}
                         onChange={(e) => setRefillEdit((prev) => ({ ...prev, [r.id]: { ...prev[r.id], order_price: e.target.value } }))}
-                        className="px-2 py-1 rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 w-full max-w-[80px]"
+                        className="px-2 py-1 rounded border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 w-full max-w-[80px]"
                         placeholder="Price"
                       />
                     </td>
@@ -995,7 +995,7 @@ const InventoryManagement = () => {
                             placeholder="Qty"
                             value={refillReceiveQty[r.id] ?? ''}
                             onChange={(e) => setRefillReceiveQty((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                            className="px-2 py-1 rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 w-16"
+                            className="px-2 py-1 rounded border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 w-16"
                           />
                           <button
                             type="button"
@@ -1041,9 +1041,9 @@ const InventoryManagement = () => {
         )}
       </div>
 
-      <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
+      <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-2">📈 Refill history &amp; forecasting</h3>
-        <p className="text-sm text-gray-600 dark:text-neutral-200 mb-4">Items refilled most often — use this to forecast what to keep in stock or order ahead.</p>
+        <p className="text-sm text-gray-600 dark:text-neutral-100 mb-4">Items refilled most often — use this to forecast what to keep in stock or order ahead.</p>
         {refillStatsLoading ? (
           <p className="text-gray-500 dark:text-neutral-400 py-4">Loading…</p>
         ) : refillStats.length === 0 ? (
@@ -1052,7 +1052,7 @@ const InventoryManagement = () => {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-600 dark:text-neutral-300 border-b dark:border-neutral-700">
+                <tr className="text-left text-gray-600 dark:text-neutral-100 border-b dark:border-neutral-700">
                   <th className="py-2 pr-3">Item</th>
                   <th className="py-2 pr-3">Times refilled</th>
                   <th className="py-2 pr-3">Last received</th>
@@ -1062,8 +1062,8 @@ const InventoryManagement = () => {
                 {refillStats.map((s) => (
                   <tr key={s.item_id} className="border-b last:border-b-0">
                     <td className="py-2 pr-3 font-medium text-gray-900 dark:text-neutral-100">{s.item_name}</td>
-                    <td className="py-2 pr-3 text-gray-700 dark:text-neutral-200">{s.refill_count}</td>
-                    <td className="py-2 pr-3 text-gray-700 dark:text-neutral-200 whitespace-nowrap">{s.last_received_at ? new Date(s.last_received_at).toLocaleDateString() : '—'}</td>
+                    <td className="py-2 pr-3 text-gray-700 dark:text-neutral-100">{s.refill_count}</td>
+                    <td className="py-2 pr-3 text-gray-700 dark:text-neutral-100 whitespace-nowrap">{s.last_received_at ? new Date(s.last_received_at).toLocaleDateString() : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1072,23 +1072,23 @@ const InventoryManagement = () => {
         )}
       </div>
 
-      <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
+      <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Search</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Search</label>
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
               placeholder="Name or barcode…"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Category</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Category</label>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
             >
               <option value="">All</option>
               {categories.map((c) => (
@@ -1159,10 +1159,10 @@ const InventoryManagement = () => {
                             return (
                               <div
                                 key={it.id}
-                                className={`bg-white dark:bg-neutral-900 border-2 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50 hover:shadow-md transition-shadow flex flex-col ${getTileColorClass(it)}`}
+                                className={`bg-white dark:bg-neutral-950 border-2 dark:border-neutral-700 rounded-xl p-4 shadow-sm dark:shadow-neutral-950/50 hover:shadow-md transition-shadow flex flex-col ${getTileColorClass(it)}`}
                               >
                                 <div className="flex gap-3">
-                                  <div className="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-gray-100 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 flex items-center justify-center">
+                                  <div className="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-gray-100 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 flex items-center justify-center">
                                     {it.image_url ? (
                                       <img src={it.image_url} alt="" className="w-full h-full object-contain" />
                                     ) : (
@@ -1174,7 +1174,7 @@ const InventoryManagement = () => {
                                     <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
                                       {it.category_name || (it.category_id ? categoriesById.get(String(it.category_id))?.name : '') || '—'}
                                     </p>
-                                    <p className="text-sm text-gray-700 dark:text-neutral-200 mt-1">
+                                    <p className="text-sm text-gray-700 dark:text-neutral-100 mt-1">
                                       <span className="font-medium">{formatQuantityWithSize(it)}</span>
                                       {it.min_quantity != null && it.min_quantity !== '' && (
                                         <span className="text-xs text-gray-500 dark:text-neutral-400 ml-1">(min: {Number(it.min_quantity)})</span>
@@ -1187,19 +1187,19 @@ const InventoryManagement = () => {
                                       <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium bg-primary-subtle dark:bg-primary/20 text-primary dark:text-primary-light border border-primary/30 dark:border-primary/50">On order</span>
                                     )}
                                     {it.keep_in_stock === 0 && (
-                                      <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300">One-time part</span>
+                                      <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-100">One-time part</span>
                                     )}
                                     {it.price !== null && it.price !== undefined && (
                                       <p className="text-sm text-green-600 dark:text-green-400 font-medium">${Number(it.price).toFixed(2)}</p>
                                     )}
                                     {it.returned_at && (
-                                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200">Returned</span>
+                                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100">Returned</span>
                                     )}
                                     {Boolean(it.needs_return) && !it.returned_at && (
                                       <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200">Needs return</span>
                                     )}
                                     {it.return_supplier && (it.needs_return || it.returned_at) && (
-                                      <p className="text-xs text-gray-600 dark:text-neutral-300 mt-0.5">From: {it.return_supplier}</p>
+                                      <p className="text-xs text-gray-600 dark:text-neutral-100 mt-0.5">From: {it.return_supplier}</p>
                                     )}
                                     {it.last_counted_by_name && (
                                       <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">Last counted by {it.last_counted_by_name}</p>
@@ -1208,8 +1208,8 @@ const InventoryManagement = () => {
                                 </div>
                                 {itemOrders.length > 0 && (
                                   <div className="mt-3 pt-3 border-t border-gray-100 dark:border-neutral-700">
-                                    <p className="text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1">Order history</p>
-                                    <ul className="text-xs text-gray-600 dark:text-neutral-300 space-y-1">
+                                    <p className="text-xs font-medium text-gray-600 dark:text-neutral-100 mb-1">Order history</p>
+                                    <ul className="text-xs text-gray-600 dark:text-neutral-100 space-y-1">
                                       {itemOrders.slice(0, 5).map((r) => (
                                         <li key={r.id}>
                                           {r.ordered_from || 'Order'} — {formatOrderPrice(r)}
@@ -1240,7 +1240,7 @@ const InventoryManagement = () => {
                                     placeholder="Qty"
                                     value={addQuantityInputs[it.id] ?? ''}
                                     onChange={(e) => setAddQuantityInputs((prev) => ({ ...prev, [it.id]: e.target.value }))}
-                                    className="w-16 px-2 py-1.5 rounded border border-gray-300 dark:border-neutral-600 text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+                                    className="w-16 px-2 py-1.5 rounded border border-gray-300 dark:border-neutral-700 text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
                                   />
                                   <button
                                     type="button"
@@ -1266,7 +1266,7 @@ const InventoryManagement = () => {
                                   <button
                                     type="button"
                                     onClick={() => openEdit(it)}
-                                    className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200 text-sm font-medium"
+                                    className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-100 text-sm font-medium"
                                   >
                                     Edit
                                   </button>
@@ -1289,15 +1289,15 @@ const InventoryManagement = () => {
       {showModal && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:p-4 safe-area-inset" style={{ paddingLeft: 'max(0.5rem, env(safe-area-inset-left))', paddingRight: 'max(0.5rem, env(safe-area-inset-right))', paddingTop: 'max(0.5rem, env(safe-area-inset-top))', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
           <div className="absolute inset-0 bg-black/40" onClick={closeModal} aria-hidden="true" />
-          <div className="relative w-full max-w-2xl max-h-[95dvh] sm:max-h-[90vh] bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl dark:shadow-neutral-950/50 border border-gray-200 dark:border-neutral-700 flex flex-col overflow-hidden flex-1 sm:flex-initial min-h-0">
+          <div className="relative w-full max-w-2xl max-h-[95dvh] sm:max-h-[90vh] bg-white dark:bg-neutral-950 rounded-t-2xl sm:rounded-2xl shadow-xl dark:shadow-neutral-950/50 border border-gray-200 dark:border-neutral-700 flex flex-col overflow-hidden flex-1 sm:flex-initial min-h-0">
             <div className="flex items-start justify-between gap-3 flex-shrink-0 px-4 py-3 sm:p-5 md:p-6 border-b border-gray-200 dark:border-neutral-700 min-h-[3rem]">
               <div className="min-w-0 flex-1">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-neutral-100">
                   {editing ? 'Edit item' : 'Add item'}
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-neutral-200 mt-0.5 sm:mt-1 line-clamp-2">Add or edit item price below; workers only see quantity. Quantity in form uses the item unit.</p>
+                <p className="text-sm text-gray-600 dark:text-neutral-100 mt-0.5 sm:mt-1 line-clamp-2">Add or edit item price below; workers only see quantity. Quantity in form uses the item unit.</p>
               </div>
-              <button type="button" onClick={closeModal} className="flex-shrink-0 min-h-[2.75rem] min-w-[2.75rem] flex items-center justify-center p-2 rounded-lg text-gray-600 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-800" aria-label="Close">
+              <button type="button" onClick={closeModal} className="flex-shrink-0 min-h-[2.75rem] min-w-[2.75rem] flex items-center justify-center p-2 rounded-lg text-gray-600 dark:text-neutral-100 hover:bg-gray-100 dark:hover:bg-neutral-800" aria-label="Close">
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -1313,17 +1313,17 @@ const InventoryManagement = () => {
 
             <form className="mt-3 sm:mt-4 grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleSave} id="inventory-item-form">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Name</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Name</label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
                   placeholder="e.g. 5 qt oil jug, Fabuloso cleaner, drain plug washers"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Barcode {!editing && <span className="text-red-500 dark:text-red-400">*</span>}
                 </label>
                 <div className="flex gap-2">
@@ -1331,7 +1331,7 @@ const InventoryManagement = () => {
                     value={form.barcode}
                     onChange={(e) => setForm((p) => ({ ...p, barcode: e.target.value }))}
                     onClick={!editing ? () => setScannerOpen(true) : undefined}
-                    className={`flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary font-mono ${!editing ? 'cursor-pointer' : ''}`}
+                    className={`flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary font-mono ${!editing ? 'cursor-pointer' : ''}`}
                     placeholder={editing ? 'Scan or type (optional)' : 'Tap to scan or type barcode (required)'}
                     title={!editing ? 'Tap to open barcode scanner' : undefined}
                   />
@@ -1340,7 +1340,7 @@ const InventoryManagement = () => {
                       type="button"
                       onClick={handleLookupBarcode}
                       disabled={lookupDescLoading || !(form.barcode || '').trim()}
-                      className="flex-shrink-0 min-h-12 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700 text-sm font-medium disabled:opacity-50 disabled:pointer-events-none"
+                      className="flex-shrink-0 min-h-12 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-700 dark:text-neutral-100 hover:bg-gray-50 dark:hover:bg-neutral-700 text-sm font-medium disabled:opacity-50 disabled:pointer-events-none"
                       title="Look up product name and details by barcode"
                     >
                       {lookupDescLoading ? 'Looking up…' : 'Look up'}
@@ -1356,7 +1356,7 @@ const InventoryManagement = () => {
                   <div className="mt-2">
                     <label className="block text-xs font-medium text-gray-500 dark:text-neutral-400 mb-1">All barcodes for this item</label>
                     <select
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 font-mono text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 font-mono text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                       value={form.barcode}
                       onChange={(e) => setForm((p) => ({ ...p, barcode: e.target.value }))}
                       aria-label="Select a barcode to view or edit"
@@ -1372,7 +1372,7 @@ const InventoryManagement = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                   Category {suggestLoading && <span className="text-xs text-gray-500 dark:text-neutral-400">(suggesting…)</span>}
                 </label>
                 <select
@@ -1381,7 +1381,7 @@ const InventoryManagement = () => {
                     setCategoryTouched(true);
                     setForm((p) => ({ ...p, category_id: e.target.value }));
                   }}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
                 >
                   <option value="">(Auto)</option>
                   {categories.map((c) => (
@@ -1393,32 +1393,32 @@ const InventoryManagement = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Unit</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Unit</label>
                 <input
                   value={form.unit}
                   onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
                   placeholder="each, bottles, oz, quarts, cans…"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Size per unit (optional, for fluids)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Size per unit (optional, for fluids)</label>
                 <input
                   value={form.size_per_unit}
                   onChange={(e) => setForm((p) => ({ ...p, size_per_unit: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
                   placeholder="e.g. 32 oz, 1 gal — shows equivalent (e.g. 0.5 bottles = 16 oz)"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Min quantity (target level for tile color)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Min quantity (target level for tile color)</label>
                 <input
                   type="number"
                   min="0"
                   step="any"
                   value={form.min_quantity}
                   onChange={(e) => setForm((p) => ({ ...p, min_quantity: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
                   placeholder="e.g. 2 — leave blank for no color"
                 />
               </div>
@@ -1430,33 +1430,33 @@ const InventoryManagement = () => {
                   onChange={(e) => setForm((p) => ({ ...p, keep_in_stock: e.target.checked }))}
                   className="rounded border-gray-300 text-primary focus:ring-primary"
                 />
-                <label htmlFor="form_keep_in_stock" className="text-sm font-medium text-gray-700 dark:text-neutral-200">Always keep in inventory (uncheck for one-time parts)</label>
+                <label htmlFor="form_keep_in_stock" className="text-sm font-medium text-gray-700 dark:text-neutral-100">Always keep in inventory (uncheck for one-time parts)</label>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Item price (add or edit)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Item price (add or edit)</label>
                 <input
                   value={form.price}
                   onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
                   placeholder="e.g. 19.99 — optional"
                   inputMode="decimal"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Image URL (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Image URL (optional)</label>
                 <div className="flex gap-2">
                   <input
                     value={form.image_url}
                     onChange={(e) => setForm((p) => ({ ...p, image_url: e.target.value }))}
-                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
                     placeholder="https://… product image"
                   />
                   <button
                     type="button"
                     onClick={handleFetchProductImage}
                     disabled={fetchImageLoading || !(form.barcode || '').trim()}
-                    className="shrink-0 px-3 py-2 rounded-lg border border-primary text-primary bg-white dark:bg-neutral-800 hover:bg-primary hover:text-white transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                    className="shrink-0 px-3 py-2 rounded-lg border border-primary text-primary bg-white dark:bg-neutral-950 hover:bg-primary hover:text-white transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                     title="Look up product image by barcode"
                   >
                     {fetchImageLoading ? 'Looking up…' : 'Find product image'}
@@ -1465,11 +1465,11 @@ const InventoryManagement = () => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Set quantity (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Set quantity (optional)</label>
                 <input
                   value={form.quantity}
                   onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
                   placeholder="e.g. 2.5"
                   inputMode="decimal"
                 />
@@ -1483,15 +1483,15 @@ const InventoryManagement = () => {
                   onChange={(e) => setForm((p) => ({ ...p, needs_return: e.target.checked }))}
                   className="rounded border-gray-300 text-primary focus:ring-primary"
                 />
-                <label htmlFor="needs_return" className="text-sm font-medium text-gray-700 dark:text-neutral-200">Needs to be returned</label>
+                <label htmlFor="needs_return" className="text-sm font-medium text-gray-700 dark:text-neutral-100">Needs to be returned</label>
               </div>
               {form.needs_return && (
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Bought from (supplier)</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Bought from (supplier)</label>
                   <input
                     value={form.return_supplier}
                     onChange={(e) => setForm((p) => ({ ...p, return_supplier: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
                     placeholder="e.g. AutoZone, NAPA, Amazon"
                   />
                 </div>
@@ -1501,7 +1501,7 @@ const InventoryManagement = () => {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="w-full sm:w-auto min-h-[2.75rem] px-4 py-2 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200"
+                  className="w-full sm:w-auto min-h-[2.75rem] px-4 py-2 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-100"
                 >
                   Cancel
                 </button>
@@ -1522,12 +1522,12 @@ const InventoryManagement = () => {
       {barcodeMismatchConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="admin-barcode-mismatch-title">
           <div className="absolute inset-0 bg-black/40" onClick={() => !barcodeMismatchAdding && setBarcodeMismatchConfirm(null)} aria-hidden="true" />
-          <div className="relative w-full max-w-md bg-white dark:bg-neutral-900 rounded-xl shadow-xl dark:shadow-neutral-950/50 border border-gray-200 dark:border-neutral-700 p-5">
+          <div className="relative w-full max-w-md bg-white dark:bg-neutral-950 rounded-xl shadow-xl dark:shadow-neutral-950/50 border border-gray-200 dark:border-neutral-700 p-5">
             <h2 id="admin-barcode-mismatch-title" className="text-lg font-bold text-gray-900 dark:text-neutral-100 mb-2">Barcode doesn&apos;t match</h2>
-            <p className="text-gray-600 dark:text-neutral-200 mb-1">
+            <p className="text-gray-600 dark:text-neutral-100 mb-1">
               The scanned barcode (<code className="text-sm bg-gray-100 dark:bg-neutral-700 px-1 rounded text-gray-900 dark:text-neutral-100">{barcodeMismatchConfirm.code}</code>) is not the one on file for <strong>{barcodeMismatchConfirm.itemName || 'this item'}</strong>.
             </p>
-            <p className="text-gray-600 dark:text-neutral-200 mb-4">
+            <p className="text-gray-600 dark:text-neutral-100 mb-4">
               Is it the same item? If yes, we&apos;ll add this barcode so future scans work.
             </p>
             <div className="flex justify-end gap-2">
@@ -1535,7 +1535,7 @@ const InventoryManagement = () => {
                 type="button"
                 disabled={barcodeMismatchAdding}
                 onClick={() => setBarcodeMismatchConfirm(null)}
-                className="px-4 py-2 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200 disabled:opacity-50"
+                className="px-4 py-2 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-100 disabled:opacity-50"
               >
                 No
               </button>

@@ -48,7 +48,7 @@ function ConnectedAccounts({ items, onRefresh, syncing, onSync, onDisconnect }) 
   return (
     <div className="space-y-2">
       {items.map(item => (
-        <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg">
+        <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-neutral-950 rounded-lg">
           <div>
             <p className="font-medium text-gray-800 text-sm">{item.institution_name}</p>
             <p className="text-xs text-gray-500">
@@ -103,7 +103,7 @@ function TransactionList({ transactions, onCategorize }) {
                 {txn.merchant_name || txn.name}
               </td>
               <td className="py-2 px-2">
-                <span className="text-xs bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300 px-2 py-0.5 rounded">
+                <span className="text-xs bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-100 px-2 py-0.5 rounded">
                   {txn.expense_category || txn.category || 'Uncategorized'}
                 </span>
               </td>
@@ -137,7 +137,7 @@ function RevenueTable({ daily }) {
   const totalVisible = filtered.reduce((s, d) => s + (parseFloat(d.revenue) || 0), 0);
 
   return (
-    <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+    <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-sm font-semibold text-gray-800">
           Daily Revenue ({filtered.length} days{filterYear ? ` in ${filterYear}` : ''}) — Total: {fmt$(totalVisible)}
@@ -146,7 +146,7 @@ function RevenueTable({ daily }) {
           <select
             value={filterYear}
             onChange={e => { setFilterYear(e.target.value); setShowAll(false); }}
-            className="text-xs border border-gray-300 dark:border-neutral-600 rounded px-2 py-1 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+            className="text-xs border border-gray-300 dark:border-neutral-700 rounded px-2 py-1 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
           >
             <option value="">All Years</option>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
@@ -155,7 +155,7 @@ function RevenueTable({ daily }) {
       </div>
       <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-white dark:bg-neutral-900">
+          <thead className="sticky top-0 bg-white dark:bg-neutral-950">
             <tr className="text-left text-gray-500 border-b">
               <th className="py-2 px-2">Date</th>
               <th className="py-2 px-2 text-right">Revenue</th>
@@ -351,13 +351,13 @@ export default function FinanceDashboard() {
   return (
     <div className="space-y-4">
       {/* Sub-navigation */}
-      <div className="flex gap-1 bg-gray-100 dark:bg-neutral-800 p-1 rounded-lg overflow-x-auto">
+      <div className="flex gap-1 bg-gray-100 dark:bg-neutral-950 p-1 rounded-lg overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition whitespace-nowrap ${
-              activeTab === tab.id ? 'bg-white dark:bg-neutral-700 text-gray-800 dark:text-neutral-100 shadow-sm' : 'text-gray-600 dark:text-neutral-300 hover:text-gray-800 dark:hover:text-neutral-100'
+              activeTab === tab.id ? 'bg-white dark:bg-neutral-700 text-gray-800 dark:text-neutral-100 shadow-sm' : 'text-gray-600 dark:text-neutral-100 hover:text-gray-800 dark:hover:text-neutral-100'
             }`}
           >
             {tab.label}
@@ -370,21 +370,21 @@ export default function FinanceDashboard() {
         <div className="space-y-4">
           {/* Quick stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
+            <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">Connected Banks</p>
               <p className="text-2xl font-bold text-gray-800">{plaidItems.length}</p>
             </div>
-            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
+            <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">Bank Transactions</p>
               <p className="text-2xl font-bold text-gray-800">{transactions.length}</p>
             </div>
-            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
+            <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">Business Expenses (Bank)</p>
               <p className="text-2xl font-bold text-red-600">
                 {fmt$(transactions.filter(t => t.is_business_expense).reduce((s, t) => s + Math.abs(t.amount), 0))}
               </p>
             </div>
-            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
+            <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">SM Revenue Status</p>
               <p className="text-lg font-bold text-green-600">
                 {smRevenue?.last_sync ? 'Active' : 'Not synced'}
@@ -394,7 +394,7 @@ export default function FinanceDashboard() {
 
           {/* Cash flow summary */}
           {cashFlow && cashFlow.weeks && cashFlow.weeks.length > 0 && (
-            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+            <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
               <h3 className="text-base font-semibold text-gray-800 mb-3">Weekly Cash Flow</h3>
               <div className="space-y-2">
                 {cashFlow.weeks.slice(0, 6).map((w, i) => (
@@ -415,7 +415,7 @@ export default function FinanceDashboard() {
 
           {/* Forecast preview */}
           {forecast && forecast.projected && forecast.projected.length > 0 && (
-            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+            <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-gray-800">Forecast (Next {forecast.projected.length} Weeks)</h3>
                 <button onClick={() => setActiveTab('forecast')} className="text-primary text-sm hover:underline">View details</button>
@@ -451,7 +451,7 @@ export default function FinanceDashboard() {
 
       {/* Bank Accounts tab */}
       {activeTab === 'bank' && (
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+        <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-gray-800">Connected Bank Accounts</h3>
             {plaidConfigured && <PlaidLinkButton onSuccess={() => { loadPlaidItems(); }} />}
@@ -489,7 +489,7 @@ export default function FinanceDashboard() {
 
       {/* Transactions tab */}
       {activeTab === 'transactions' && (
-        <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+        <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-gray-800">Bank Transactions</h3>
             <span className="text-xs text-gray-500">{transactions.length} transactions</span>
@@ -503,7 +503,7 @@ export default function FinanceDashboard() {
         <div className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
             {/* Shop Monkey */}
-            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+            <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">Shop Monkey Revenue</h3>
@@ -537,7 +537,7 @@ export default function FinanceDashboard() {
             </div>
 
             {/* Payment Processor (Valor Pay or Stripe) – label from configured endpoint */}
-            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+            <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">
@@ -584,13 +584,13 @@ export default function FinanceDashboard() {
           {/* Daily revenue: P&L uses one source per day (Shop Monkey > Processor > Manual). Tables show each source. */}
           {smRevenue && smRevenue.daily && smRevenue.daily.length > 0 && (
             <>
-              <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-300">Shop Monkey by day</h4>
+              <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-100">Shop Monkey by day</h4>
               <RevenueTable daily={smRevenue.daily} />
             </>
           )}
           {processorRevenue && processorRevenue.daily && processorRevenue.daily.length > 0 && (
             <>
-              <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-300 mt-4">Payment processor by day</h4>
+              <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-100 mt-4">Payment processor by day</h4>
               <RevenueTable daily={processorRevenue.daily} />
             </>
           )}
@@ -602,7 +602,7 @@ export default function FinanceDashboard() {
         <div className="space-y-4">
           {forecast && forecast.projected && forecast.projected.length > 0 ? (
             <>
-              <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+              <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
                 <h3 className="text-base font-semibold text-gray-800 mb-3">Historical (Actual)</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -629,7 +629,7 @@ export default function FinanceDashboard() {
                   </table>
                 </div>
               </div>
-              <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+              <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
                 <h3 className="text-base font-semibold text-gray-800 mb-3">Projected</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -661,7 +661,7 @@ export default function FinanceDashboard() {
               </div>
             </>
           ) : (
-            <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-8 text-center">
+            <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-8 text-center">
               <p className="text-gray-500">Not enough historical data to generate a forecast.</p>
               <p className="text-sm text-gray-400 mt-1">At least 2 weeks of revenue/expense data is needed.</p>
             </div>

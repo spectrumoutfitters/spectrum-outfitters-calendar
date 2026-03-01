@@ -59,7 +59,7 @@ const LowStockPanel = ({ onNavigateToInventory }) => {
   );
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-amber-200 dark:border-amber-700 shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-neutral-950 rounded-xl border border-amber-200 dark:border-amber-700 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700">
         <div className="flex items-center gap-2">
           <span className="text-lg">⚠️</span>

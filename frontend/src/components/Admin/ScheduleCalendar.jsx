@@ -37,9 +37,9 @@ function KanbanColumn({ dateStr, dateLabel, isToday, entries, getEntryColor, onV
   return (
     <div
       ref={setNodeRef}
-      className={`min-w-[200px] max-w-[200px] flex-shrink-0 rounded-xl border-2 p-3 min-h-[320px] ${isOver ? 'border-primary bg-primary/5 dark:bg-amber-500/10' : 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50'} ${isToday ? 'ring-2 ring-primary dark:ring-amber-500' : ''}`}
+      className={`min-w-[200px] max-w-[200px] flex-shrink-0 rounded-xl border-2 p-3 min-h-[320px] ${isOver ? 'border-primary bg-primary/5 dark:bg-amber-500/10' : 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-950/50'} ${isToday ? 'ring-2 ring-primary dark:ring-amber-500' : ''}`}
     >
-      <div className={`font-semibold text-sm mb-3 pb-2 border-b border-neutral-200 dark:border-neutral-600 ${isToday ? 'text-primary dark:text-amber-400' : 'text-gray-700 dark:text-neutral-300'}`}>
+      <div className={`font-semibold text-sm mb-3 pb-2 border-b border-neutral-200 dark:border-neutral-700 ${isToday ? 'text-primary dark:text-amber-400' : 'text-gray-700 dark:text-neutral-100'}`}>
         {dateLabel}
       </div>
       <div className="space-y-2">
@@ -326,7 +326,7 @@ const ScheduleCalendar = () => {
     if (entry.is_shop_wide) return 'bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-100';
     const calName = (entry.source_calendar_id && calendarNames[entry.source_calendar_id]) ? String(calendarNames[entry.source_calendar_id]).toLowerCase() : '';
     if (calName && (calName.includes('outfitter events') || calName === 'outfitter events')) return 'bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100';
-    if (calName && (calName.includes('outfitter projects') || calName.includes('outfitters projects') || calName === 'outfitter projects')) return 'bg-neutral-900 text-amber-400 dark:bg-neutral-800 dark:text-amber-300 border border-amber-500/50';
+    if (calName && (calName.includes('outfitter projects') || calName.includes('outfitters projects') || calName === 'outfitter projects')) return 'bg-neutral-900 text-amber-400 dark:bg-neutral-950 dark:text-amber-300 border border-amber-500/50';
     if (entry.status === 'rejected') return 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-100';
     if (entry.status === 'pending') return 'bg-yellow-200 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100';
     if (entry.status === 'approved' || entry.type === 'approved_time_off') return 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-100';
@@ -346,7 +346,7 @@ const ScheduleCalendar = () => {
     <div className="space-y-4 sm:space-y-6">
       <GoogleCalendarSettings />
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-50 dark:bg-neutral-800/50 rounded-xl border border-slate-200 dark:border-neutral-700">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-50 dark:bg-neutral-950/50 rounded-xl border border-slate-200 dark:border-neutral-700">
         <div>
           <p className="font-medium text-gray-800 dark:text-neutral-100">What workers see on Schedule</p>
           <p className="text-sm text-gray-500 dark:text-neutral-400 mt-0.5">
@@ -354,7 +354,7 @@ const ScheduleCalendar = () => {
           </p>
         </div>
         <label className="flex items-center gap-3 cursor-pointer shrink-0">
-          <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+          <span className="text-sm font-medium text-gray-700 dark:text-neutral-100">
             {employeesSeeAll ? 'Full schedule' : 'Only their events + shop closed'}
           </span>
           <button
@@ -404,13 +404,13 @@ const ScheduleCalendar = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 p-4 flex flex-wrap gap-3 items-center">
+      <div className="bg-white dark:bg-neutral-950 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-4 flex flex-wrap gap-3 items-center">
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700 dark:text-neutral-300">Employee:</label>
+          <label className="text-sm font-medium text-gray-700 dark:text-neutral-100">Employee:</label>
           <select
             value={selectedUserId}
             onChange={(e) => setSelectedUserId(e.target.value)}
-            className="min-h-[2.75rem] px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+            className="min-h-[2.75rem] px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
           >
             <option value="all">All Employees</option>
             {users.map(user => (
@@ -421,7 +421,7 @@ const ScheduleCalendar = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigateMonth(-1)}
-            className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200"
+            className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-100"
           >
             ← Previous
           </button>
@@ -430,29 +430,29 @@ const ScheduleCalendar = () => {
           </span>
           <button
             onClick={() => navigateMonth(1)}
-            className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200"
+            className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-100"
           >
             Next →
           </button>
         </div>
         <button
           onClick={() => setCurrentDate(new Date())}
-          className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200"
+          className="min-h-[3rem] px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-100"
         >
           Today
         </button>
-        <div className="flex rounded-lg border border-neutral-300 dark:border-neutral-600 overflow-hidden">
+        <div className="flex rounded-lg border border-neutral-300 dark:border-neutral-700 overflow-hidden">
           <button
             type="button"
             onClick={() => setViewMode('month')}
-            className={`min-h-[3rem] px-4 py-2 text-sm font-medium ${viewMode === 'month' ? 'bg-primary text-white dark:bg-amber-600 dark:text-white' : 'bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'}`}
+            className={`min-h-[3rem] px-4 py-2 text-sm font-medium ${viewMode === 'month' ? 'bg-primary text-white dark:bg-amber-600 dark:text-white' : 'bg-white dark:bg-neutral-950 text-neutral-700 dark:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-700'}`}
           >
             Month
           </button>
           <button
             type="button"
             onClick={() => setViewMode('kanban')}
-            className={`min-h-[3rem] px-4 py-2 text-sm font-medium ${viewMode === 'kanban' ? 'bg-primary text-white dark:bg-amber-600 dark:text-white' : 'bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'}`}
+            className={`min-h-[3rem] px-4 py-2 text-sm font-medium ${viewMode === 'kanban' ? 'bg-primary text-white dark:bg-amber-600 dark:text-white' : 'bg-white dark:bg-neutral-950 text-neutral-700 dark:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-700'}`}
           >
             Kanban
           </button>
@@ -488,10 +488,10 @@ const ScheduleCalendar = () => {
           </div>
         </DndContext>
       ) : (
-        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 overflow-hidden min-w-0">
-          <div className="grid grid-cols-7 border-b border-neutral-200 dark:border-neutral-800">
+        <div className="bg-white dark:bg-neutral-950 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 overflow-hidden min-w-0">
+          <div className="grid grid-cols-7 border-b border-neutral-200 dark:border-neutral-700">
             {dayNames.map(day => (
-              <div key={day} className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold bg-gray-50 dark:bg-neutral-800/50 text-gray-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-700 last:border-r-0">
+              <div key={day} className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold bg-gray-50 dark:bg-neutral-950/50 text-gray-700 dark:text-neutral-100 border-r border-neutral-200 dark:border-neutral-700 last:border-r-0">
                 {day}
               </div>
             ))}
@@ -505,13 +505,13 @@ const ScheduleCalendar = () => {
               return (
                 <div
                   key={index}
-                  className={`min-h-[100px] sm:min-h-[120px] border-r border-b border-neutral-200 dark:border-neutral-800 p-1.5 sm:p-2 min-w-0 ${
-                    !isCurrentMonth ? 'bg-gray-50 dark:bg-neutral-800/30' : 'bg-white dark:bg-neutral-900'
+                  className={`min-h-[100px] sm:min-h-[120px] border-r border-b border-neutral-200 dark:border-neutral-700 p-1.5 sm:p-2 min-w-0 ${
+                    !isCurrentMonth ? 'bg-gray-50 dark:bg-neutral-950/30' : 'bg-white dark:bg-neutral-950'
                   } ${isToday ? 'ring-2 ring-inset ring-primary' : ''}`}
                 >
                   {date && (
                     <>
-                      <div className={`text-sm font-medium mb-1 ${isToday ? 'text-primary' : 'text-gray-700 dark:text-neutral-300'}`}>
+                      <div className={`text-sm font-medium mb-1 ${isToday ? 'text-primary' : 'text-gray-700 dark:text-neutral-100'}`}>
                         {date.getDate()}
                       </div>
                       <div className="space-y-1">
@@ -559,7 +559,7 @@ const ScheduleCalendar = () => {
       {/* View details modal */}
       {viewingEntry && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/60 flex items-end sm:items-center justify-center z-50">
-          <div className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full sm:mx-4 max-h-[90vh] overflow-y-auto border border-t border-neutral-200 dark:border-neutral-800">
+          <div className="bg-white dark:bg-neutral-950 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full sm:mx-4 max-h-[90vh] overflow-y-auto border border-t border-neutral-200 dark:border-neutral-700">
             <div className="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">
@@ -610,7 +610,7 @@ const ScheduleCalendar = () => {
                 )}
                 {isGoogleSourced(viewingEntry) && (
                   <div>
-                    <span className="text-xs px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700">
+                    <span className="text-xs px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-950 text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700">
                       Synced from Google Calendar
                     </span>
                   </div>
@@ -623,7 +623,7 @@ const ScheduleCalendar = () => {
                   </div>
                 )}
               </dl>
-              <div className="flex flex-wrap gap-3 mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-800">
+              <div className="flex flex-wrap gap-3 mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-700">
                 <button
                   type="button"
                   onClick={() => handleEditFromView(viewingEntry)}
@@ -648,7 +648,7 @@ const ScheduleCalendar = () => {
                 <button
                   type="button"
                   onClick={() => setViewingEntry(null)}
-                  className="min-h-[3rem] px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition text-gray-700 dark:text-neutral-200"
+                  className="min-h-[3rem] px-4 py-2 border border-neutral-300 dark:border-neutral-700 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition text-gray-700 dark:text-neutral-100"
                 >
                   Close
                 </button>
@@ -661,7 +661,7 @@ const ScheduleCalendar = () => {
       {/* Add/Edit Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/60 flex items-end sm:items-center justify-center z-50">
-          <div className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full sm:mx-4 max-h-[90vh] overflow-y-auto border border-t border-neutral-200 dark:border-neutral-800">
+          <div className="bg-white dark:bg-neutral-950 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full sm:mx-4 max-h-[90vh] overflow-y-auto border border-t border-neutral-200 dark:border-neutral-700">
             <div className="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-neutral-100">
@@ -699,7 +699,7 @@ const ScheduleCalendar = () => {
                       }}
                       className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                     />
-                    <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+                    <span className="text-sm font-medium text-gray-700 dark:text-neutral-100">
                       🏪 Shop Closed (applies to all employees)
                     </span>
                   </label>
@@ -707,14 +707,14 @@ const ScheduleCalendar = () => {
 
                 {!formData.is_shop_wide && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                       Employee *
                     </label>
                     <select
                       value={formData.user_id}
                       onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
                       required={!formData.is_shop_wide}
-                      className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
+                      className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
                     >
                       <option value="">Select employee</option>
                       {users.map(user => (
@@ -725,7 +725,7 @@ const ScheduleCalendar = () => {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                     Start Date *
                   </label>
                   <input
@@ -733,12 +733,12 @@ const ScheduleCalendar = () => {
                     value={formData.start_date}
                     onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                     required
-                    className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
+                    className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                     End Date *
                   </label>
                   <input
@@ -746,18 +746,18 @@ const ScheduleCalendar = () => {
                     value={formData.end_date}
                     onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                     required
-                    className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
+                    className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                     Type
                   </label>
                   <select
                     value={formData.type}
                     onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                    className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
+                    className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:outline-none"
                   >
                     <option value="day_off">Day Off</option>
                     <option value="time_off_request">Time Off Request</option>
@@ -776,7 +776,7 @@ const ScheduleCalendar = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                     Reason
                   </label>
                   <input
@@ -784,12 +784,12 @@ const ScheduleCalendar = () => {
                     value={formData.reason}
                     onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                     placeholder="e.g., Vacation, Sick Day, Personal"
-                    className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-primary focus:outline-none"
+                    className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-primary focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                     Location
                   </label>
                   <input
@@ -797,12 +797,12 @@ const ScheduleCalendar = () => {
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     placeholder="Address or venue"
-                    className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-primary focus:outline-none"
+                    className="w-full h-12 px-4 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-primary focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">
                     Notes
                   </label>
                   <textarea
@@ -810,7 +810,7 @@ const ScheduleCalendar = () => {
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                     rows={3}
                     placeholder="Additional notes..."
-                    className="w-full min-h-[4rem] px-4 py-3 border border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-primary focus:outline-none resize-y"
+                    className="w-full min-h-[4rem] px-4 py-3 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-primary focus:outline-none resize-y"
                   />
                 </div>
 
@@ -836,7 +836,7 @@ const ScheduleCalendar = () => {
                       setShowAddModal(false);
                       resetForm();
                     }}
-                    className="min-h-[3rem] px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition text-gray-700 dark:text-neutral-200"
+                    className="min-h-[3rem] px-4 py-2 border border-neutral-300 dark:border-neutral-700 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition text-gray-700 dark:text-neutral-100"
                   >
                     Cancel
                   </button>

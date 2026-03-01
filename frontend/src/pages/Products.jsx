@@ -272,7 +272,7 @@ const Products = () => {
   };
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-600 dark:text-neutral-200">Loading products...</div>;
+    return <div className="text-center py-8 text-gray-600 dark:text-neutral-100">Loading products...</div>;
   }
 
   return (
@@ -299,7 +299,7 @@ const Products = () => {
         {products.map(product => {
           const cartItem = cart.find(item => item.product_id === product.id);
           return (
-            <div key={product.id} className="bg-white dark:bg-neutral-900 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-neutral-800">
+            <div key={product.id} className="bg-white dark:bg-neutral-950 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-neutral-700">
               {product.image_url && (
                 <img
                   src={`${getBackendUrl()}${product.image_url}`}
@@ -310,7 +310,7 @@ const Products = () => {
               <div className="p-4">
                 <h3 className="text-xl font-semibold text-gray-800 dark:text-neutral-100 mb-2">{product.name}</h3>
                 {product.description && (
-                  <p className="text-gray-600 dark:text-neutral-200 text-sm mb-3">{product.description}</p>
+                  <p className="text-gray-600 dark:text-neutral-100 text-sm mb-3">{product.description}</p>
                 )}
                 <div className="flex justify-between items-center">
                   <span className="text-2xl font-bold text-green-600 dark:text-green-400">${parseFloat(product.price).toFixed(2)}</span>
@@ -349,14 +349,14 @@ const Products = () => {
 
       {/* Shopping Cart Sidebar */}
       {cart.length > 0 && !showCheckout && (
-        <div className="fixed right-0 top-0 h-full w-80 bg-white dark:bg-neutral-900 shadow-2xl border-l border-gray-200 dark:border-neutral-800 z-50 p-6 overflow-y-auto">
+        <div className="fixed right-0 top-0 h-full w-80 bg-white dark:bg-neutral-950 shadow-2xl border-l border-gray-200 dark:border-neutral-700 z-50 p-6 overflow-y-auto">
           <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-neutral-100">Shopping Cart</h2>
           <div className="space-y-4 mb-4">
             {cart.map(item => (
-              <div key={item.product_id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded">
+              <div key={item.product_id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-950 rounded">
                 <div className="flex-1">
                   <p className="font-medium text-gray-900 dark:text-neutral-100">{item.product_name}</p>
-                  <p className="text-sm text-gray-600 dark:text-neutral-200">${item.price.toFixed(2)} x {item.quantity}</p>
+                  <p className="text-sm text-gray-600 dark:text-neutral-100">${item.price.toFixed(2)} x {item.quantity}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-green-600">${(item.price * item.quantity).toFixed(2)}</span>
@@ -388,7 +388,7 @@ const Products = () => {
       {/* Camera Modal */}
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-2 md:p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-lg border border-transparent dark:border-neutral-800 p-4 md:p-6 max-w-2xl w-full mx-2 md:mx-4">
+          <div className="bg-white dark:bg-neutral-950 rounded-lg border border-transparent dark:border-neutral-700 p-4 md:p-6 max-w-2xl w-full mx-2 md:mx-4">
             <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-gray-900 dark:text-neutral-100">Take Photo of Items</h2>
             {navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? (
               <>
@@ -406,7 +406,7 @@ const Products = () => {
                   >
                     Capture Photo
                   </button>
-                  <label className="px-6 py-3 bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-300 dark:hover:bg-neutral-600 transition font-medium cursor-pointer">
+                  <label className="px-6 py-3 bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-100 rounded-lg hover:bg-gray-300 dark:hover:bg-neutral-600 transition font-medium cursor-pointer">
                     Upload Instead
                     <input
                       type="file"
@@ -443,7 +443,7 @@ const Products = () => {
                         video.srcObject = null;
                       }
                     }}
-                    className="px-6 py-3 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition"
+                    className="px-6 py-3 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-100 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition"
                   >
                     Cancel
                   </button>
@@ -454,7 +454,7 @@ const Products = () => {
                 <p className="text-red-600 dark:text-red-400 mb-4">
                   Camera access is not available. Please ensure you're using HTTPS or localhost.
                 </p>
-                <p className="text-gray-600 dark:text-neutral-200 mb-4">
+                <p className="text-gray-600 dark:text-neutral-100 mb-4">
                   You can still place an order by uploading a photo manually.
                 </p>
                 <div className="flex gap-4">
@@ -485,7 +485,7 @@ const Products = () => {
                       setShowCamera(false);
                       setShowCheckout(false);
                     }}
-                    className="px-6 py-3 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition"
+                    className="px-6 py-3 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-100 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition"
                   >
                     Cancel
                   </button>
@@ -499,16 +499,16 @@ const Products = () => {
       {/* Zelle QR Code Modal */}
       {showZelleQR && (
         <div className="fixed inset-0 bg-black bg-opacity-75 z-[60] flex items-center justify-center p-2 md:p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-neutral-900 rounded-lg border border-transparent dark:border-neutral-800 p-4 md:p-6 max-w-lg w-full mx-2 md:mx-4 text-center my-auto">
+          <div className="bg-white dark:bg-neutral-950 rounded-lg border border-transparent dark:border-neutral-700 p-4 md:p-6 max-w-lg w-full mx-2 md:mx-4 text-center my-auto">
             <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 text-gray-900 dark:text-neutral-100">Complete Payment</h2>
             <p className="text-base md:text-lg font-semibold mb-2 text-gray-900 dark:text-neutral-100">Total: <span className="text-green-600 dark:text-green-400">${orderTotal.toFixed(2)}</span></p>
-            <p className="text-sm md:text-base text-gray-600 dark:text-neutral-200 mb-4">Scan the QR code below to send payment via Zelle</p>
+            <p className="text-sm md:text-base text-gray-600 dark:text-neutral-100 mb-4">Scan the QR code below to send payment via Zelle</p>
             {zelleQRCode && !qrCodeError ? (
               <div className="flex justify-center mb-4">
                 <img
                   src={zelleQRCode}
                   alt="Zelle QR Code"
-                  className="w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto border-4 border-gray-300 dark:border-neutral-600 rounded-lg object-contain bg-white dark:bg-neutral-800 shadow-lg"
+                  className="w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto border-4 border-gray-300 dark:border-neutral-700 rounded-lg object-contain bg-white dark:bg-neutral-950 shadow-lg"
                   style={{ minWidth: '288px', minHeight: '288px' }}
                   onError={() => {
                     setQrCodeError(true);
@@ -519,8 +519,8 @@ const Products = () => {
                 />
               </div>
             ) : (
-              <div className="w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto mb-4 border-4 border-gray-300 dark:border-neutral-600 rounded-lg flex flex-col items-center justify-center bg-gray-100 dark:bg-neutral-800 p-4" style={{ minWidth: '288px', minHeight: '288px' }}>
-                <p className="text-gray-500 dark:text-neutral-300 text-sm font-medium">Zelle QR Code</p>
+              <div className="w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto mb-4 border-4 border-gray-300 dark:border-neutral-700 rounded-lg flex flex-col items-center justify-center bg-gray-100 dark:bg-neutral-950 p-4" style={{ minWidth: '288px', minHeight: '288px' }}>
+                <p className="text-gray-500 dark:text-neutral-100 text-sm font-medium">Zelle QR Code</p>
                 <p className="text-xs text-gray-400 dark:text-neutral-400 mt-2 text-center">
                   {qrCodeError 
                     ? `Image not found at ${zelleQRCode}. Please check the file exists.`
@@ -542,7 +542,7 @@ const Products = () => {
                   setShowCheckout(false);
                   setOrderPhoto(null);
                 }}
-                className="px-6 py-3 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition"
+                className="px-6 py-3 bg-gray-300 dark:bg-neutral-600 text-gray-700 dark:text-neutral-100 rounded-lg hover:bg-gray-400 dark:hover:bg-neutral-500 transition"
               >
                 Cancel
               </button>
@@ -555,15 +555,15 @@ const Products = () => {
       {orderHistory.length > 0 && (
         <div className="mt-6 md:mt-8">
           <h2 className="text-xl md:text-2xl font-bold mb-4 text-gray-900 dark:text-neutral-100">Order History</h2>
-          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 overflow-hidden overflow-x-auto">
+          <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md border border-transparent dark:border-neutral-700 overflow-hidden overflow-x-auto">
             <table className="w-full min-w-[500px]">
-              <thead className="bg-gray-50 dark:bg-neutral-800">
+              <thead className="bg-gray-50 dark:bg-neutral-950">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-200">Order #</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-200">Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-200">Items</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-200">Total</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-200">Status</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-100">Order #</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-100">Date</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-100">Items</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-100">Total</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-neutral-100">Status</th>
                 </tr>
               </thead>
               <tbody>

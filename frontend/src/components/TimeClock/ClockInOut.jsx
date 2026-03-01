@@ -213,7 +213,7 @@ const ClockInOut = () => {
 
       {status.clockedIn && (
         <div className="mb-4">
-          <p className="text-lg text-gray-600 dark:text-neutral-200">
+          <p className="text-lg text-gray-600 dark:text-neutral-100">
             Time Elapsed: <span className="font-bold">{status.elapsedHours}</span>
           </p>
         </div>
@@ -243,24 +243,24 @@ const ClockInOut = () => {
       ) : (
         <div className="space-y-4">
           <div className="max-w-md mx-auto space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100">
               Break Minutes (optional)
             </label>
             <input
               type="number"
               value={breakMinutes}
               onChange={(e) => setBreakMinutes(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
               min="0"
               placeholder="0"
             />
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100">
               Notes (optional)
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
               rows="2"
               placeholder="Add notes..."
             />
