@@ -39,6 +39,7 @@ import financeRoutes from './routes/finance.js';
 import securityRoutes from './routes/security.js';
 import geocodeRoutes from './routes/geocode.js';
 import pushRoutes from './routes/push.js';
+import taskPhotoRoutes from './routes/taskPhotos.js';
 import paymentProcessorRoutes from './routes/paymentProcessor.js';
 import { handleStripeWebhook } from './routes/paymentProcessor.js';
 import { syncShopMonkeyRevenue } from './routes/shopmonkey.js';
@@ -633,6 +634,7 @@ app.get('/api/config/maps-key', authenticateToken, (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/tasks', taskPhotoRoutes);
 app.use('/api/time', timeRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/pdf', pdfParserRoutes);
