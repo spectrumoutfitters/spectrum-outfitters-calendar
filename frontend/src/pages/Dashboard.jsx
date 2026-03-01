@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ClockInOut from '../components/TimeClock/ClockInOut';
+import QuickClockButton from '../components/TimeEntry/QuickClockButton';
 import api from '../utils/api';
 import { formatDate, getUpcomingDayLabel, getTodayCentralTime, getLastCompletedWeekFridayHouston } from '../utils/helpers';
 import TaskModal from '../components/Tasks/TaskModal';
@@ -694,12 +695,17 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-4 md:space-y-5">
+      {/* Quick Clock In/Out */}
+      <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 md:p-5">
+        <QuickClockButton onClockAction={loadDashboardData} />
+      </div>
+
       <div>
         <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-neutral-100">{getGreeting(user)}</h1>
         <p className="text-gray-500 dark:text-neutral-400 text-sm mt-0.5">Your dashboard</p>
       </div>
 
-      {/* Clock In/Out */}
+      {/* Clock In/Out (detailed controls) */}
       <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 md:p-5">
         <ClockInOut />
       </div>

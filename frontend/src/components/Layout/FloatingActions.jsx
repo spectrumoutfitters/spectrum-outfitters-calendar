@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import ChatBubble from '../Chat/ChatBubble';
 import QuickNotificationButton from '../Notifications/QuickNotificationButton';
 import InventoryScanFab from '../Inventory/InventoryScanFab';
+import QuickClockButton from '../TimeEntry/QuickClockButton';
 
 /**
  * Single fixed container that stacks all floating action buttons (chat, notifications, inventory scan)
@@ -13,6 +14,9 @@ export default function FloatingActions() {
   const tab = new URLSearchParams(location.search).get('tab');
   const onAdminInventory = location.pathname.toLowerCase().includes('admin') && tab === 'inventory';
   const onInventory = location.pathname.toLowerCase().includes('inventory') || onAdminInventory;
+  // Show quick clock FAB on all pages except login, dispatch, and customer status
+  const path = location.pathname.toLowerCase();
+  const showClockFab = path !== '/login' && !path.startsWith('/status') && path !== '/dispatch';
 
   return (
     <div
@@ -25,6 +29,7 @@ export default function FloatingActions() {
       <ChatBubble stacked />
       <QuickNotificationButton stacked />
       {onInventory && <InventoryScanFab />}
+      {showClockFab && <QuickClockButton compact />}
     </div>
   );
 }
