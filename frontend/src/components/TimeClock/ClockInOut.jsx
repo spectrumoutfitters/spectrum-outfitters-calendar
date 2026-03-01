@@ -15,6 +15,8 @@ const ClockInOut = () => {
   const [isOnLunchBreak, setIsOnLunchBreak] = useState(false);
   const [showCleanupReminder, setShowCleanupReminder] = useState(false);
   const [cleanupReminderMessage, setCleanupReminderMessage] = useState('');
+  const [geofenceError, setGeofenceError] = useState(null);
+  const [geofenceWarning, setGeofenceWarning] = useState(null);
 
   useEffect(() => {
     loadStatus();
@@ -109,16 +111,49 @@ const ClockInOut = () => {
 
   const handleClockIn = async () => {
     setLoading(true);
+    setGeofenceError(null);
+    setGeofenceWarning(null);
+
+    // Try to get GPS coordinates (non-blocking — proceed even if denied)
+    let coords = null;
+    if (navigator.geolocation) {
+      try {
+        coords = await new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => resolve(null),
+            { timeout: 8000, maximumAge: 60000 }
+          );
+        });
+      } catch {
+        coords = null;
+      }
+    }
+
     try {
-      const response = await api.post('/time/clock-in');
+      const body = coords ? { lat: coords.lat, lng: coords.lng } : {};
+      const response = await api.post('/time/clock-in', body);
       await loadStatus();
-      
-      // Check if there was lunch overtime
-      if (response.data.lunchOvertimeMinutes !== null && response.data.lunchOvertimeMinutes !== undefined) {
+
+      // Soft geofence warning
+      if (response.data.geofenceWarning) {
+        setGeofenceWarning(response.data.geofenceWarning.message);
+      }
+
+      // Lunch overtime
+      if (response.data.lunchOvertimeMinutes != null) {
         setLunchOvertimeMinutes(response.data.lunchOvertimeMinutes);
       }
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to clock in');
+      const data = error.response?.data;
+      if (data?.code === 'GEOFENCE_VIOLATION') {
+        setGeofenceError(
+          data.error ||
+          `You must be within ${data.radiusMeters}m of the shop to clock in. You are currently ${data.distanceMeters}m away.`
+        );
+      } else {
+        alert(data?.error || 'Failed to clock in');
+      }
     } finally {
       setLoading(false);
     }
@@ -219,13 +254,27 @@ const ClockInOut = () => {
         </div>
       )}
 
+      {geofenceError && (
+        <div className="mb-4 mx-auto max-w-sm bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg px-4 py-3 text-sm text-red-700 dark:text-red-300">
+          <p className="font-semibold mb-1">Location Required</p>
+          <p>{geofenceError}</p>
+        </div>
+      )}
+
+      {geofenceWarning && (
+        <div className="mb-4 mx-auto max-w-sm bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg px-4 py-3 text-sm text-yellow-700 dark:text-yellow-300">
+          <p className="font-semibold mb-1">Location Notice</p>
+          <p>{geofenceWarning}</p>
+        </div>
+      )}
+
       {!status.clockedIn ? (
         <button
           onClick={handleClockIn}
           disabled={loading}
           className={`w-full sm:w-auto px-6 md:px-8 py-3 md:py-4 text-white rounded-lg text-base md:text-lg font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2 mx-auto active:scale-95 min-h-[44px] ${
-            isOnLunchBreak 
-              ? 'bg-orange-500 hover:bg-orange-600' 
+            isOnLunchBreak
+              ? 'bg-orange-500 hover:bg-orange-600'
               : 'bg-success hover:bg-green-600'
           }`}
         >

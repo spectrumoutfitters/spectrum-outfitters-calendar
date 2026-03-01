@@ -10,11 +10,24 @@ const router = express.Router();
 // All routes require authentication
 router.use(authenticateToken);
 
+// Haversine formula — returns distance in meters between two lat/lng points
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000; // Earth radius in meters
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // POST /api/time/clock-in - Clock in
 router.post('/clock-in', async (req, res) => {
   try {
     const userId = req.user.id;
     const io = req.app.get('io'); // Get Socket.io instance
+    const { lat, lng } = req.body;
 
     // Check if already clocked in
     const activeEntry = await db.getAsync(
@@ -24,6 +37,53 @@ router.post('/clock-in', async (req, res) => {
 
     if (activeEntry) {
       return res.status(400).json({ error: 'Already clocked in' });
+    }
+
+    // ── Geofence check ───────────────────────────────────────────────────────
+    let distanceMeters = null;
+    let locationVerified = 0;
+    let geofenceWarning = null;
+
+    if (lat != null && lng != null) {
+      // Load geofence settings from app_settings
+      const [geoLat, geoLng, geoRadius, geoEnforcement] = await Promise.all([
+        db.getAsync("SELECT value FROM app_settings WHERE key = 'geofence_lat'"),
+        db.getAsync("SELECT value FROM app_settings WHERE key = 'geofence_lng'"),
+        db.getAsync("SELECT value FROM app_settings WHERE key = 'geofence_radius_meters'"),
+        db.getAsync("SELECT value FROM app_settings WHERE key = 'geofence_enforcement'"),
+      ]);
+
+      const enforcement = geoEnforcement?.value || 'off';
+
+      if (enforcement !== 'off' && geoLat?.value && geoLng?.value) {
+        const fenceLat = parseFloat(geoLat.value);
+        const fenceLng = parseFloat(geoLng.value);
+        const radius = parseFloat(geoRadius?.value || '300');
+
+        distanceMeters = haversineMeters(
+          parseFloat(lat), parseFloat(lng),
+          fenceLat, fenceLng
+        );
+
+        if (distanceMeters <= radius) {
+          locationVerified = 1;
+        } else {
+          if (enforcement === 'hard') {
+            return res.status(403).json({
+              error: 'You must be at the shop to clock in.',
+              code: 'GEOFENCE_VIOLATION',
+              distanceMeters: Math.round(distanceMeters),
+              radiusMeters: radius
+            });
+          }
+          // soft enforcement — allow but warn
+          geofenceWarning = {
+            message: `You appear to be ${Math.round(distanceMeters)}m from the shop (limit: ${radius}m). Clock-in recorded but flagged.`,
+            distanceMeters: Math.round(distanceMeters),
+            radiusMeters: radius
+          };
+        }
+      }
     }
 
     const clockInTime = new Date().toISOString();
@@ -132,14 +192,22 @@ router.post('/clock-in', async (req, res) => {
     }
 
     const result = await db.runAsync(
-      'INSERT INTO time_entries (user_id, clock_in, week_ending_date) VALUES (?, ?, ?)',
-      [userId, clockInTime, weekEnding]
+      `INSERT INTO time_entries
+         (user_id, clock_in, week_ending_date,
+          clock_in_lat, clock_in_lng, clock_in_distance_meters, location_verified)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        userId, clockInTime, weekEnding,
+        lat ?? null, lng ?? null, distanceMeters !== null ? Math.round(distanceMeters) : null,
+        locationVerified
+      ]
     );
 
     const entry = await db.getAsync('SELECT * FROM time_entries WHERE id = ?', [result.lastID]);
-    res.status(201).json({ 
+    res.status(201).json({
       entry,
-      lunchOvertimeMinutes // Include overtime info for frontend
+      lunchOvertimeMinutes, // Include overtime info for frontend
+      geofenceWarning       // null unless soft enforcement triggered
     });
   } catch (error) {
     console.error('Clock in error:', error);

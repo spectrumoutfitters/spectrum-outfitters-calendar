@@ -105,11 +105,34 @@ const HeaderClockInOut = () => {
 
   const handleClockIn = async () => {
     setLoading(true);
+
+    // Try to get GPS (non-blocking)
+    let coords = null;
+    if (navigator.geolocation) {
+      try {
+        coords = await new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => resolve(null),
+            { timeout: 8000, maximumAge: 60000 }
+          );
+        });
+      } catch {
+        coords = null;
+      }
+    }
+
     try {
-      await api.post('/time/clock-in');
+      const body = coords ? { lat: coords.lat, lng: coords.lng } : {};
+      await api.post('/time/clock-in', body);
       await loadStatus();
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to clock in');
+      const data = error.response?.data;
+      if (data?.code === 'GEOFENCE_VIOLATION') {
+        alert(data.error || 'You must be at the shop to clock in.');
+      } else {
+        alert(data?.error || 'Failed to clock in');
+      }
     } finally {
       setLoading(false);
     }
