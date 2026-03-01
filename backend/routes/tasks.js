@@ -17,7 +17,6 @@ import {
   calculateTaskTotalDuration,
   getCurrentElapsedTime
 } from '../utils/taskTimeTracking.js';
-import { sendPushToUser } from '../utils/pushNotifications.js';
 
 /**
  * Helper function to add time tracking data to a task object
@@ -413,13 +412,6 @@ router.post('/', requireAdmin, async (req, res) => {
           'INSERT OR IGNORE INTO task_assignments (task_id, user_id, assigned_by, assigned_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
           [taskId, userId, req.user.id]
         );
-        // Send push notification to assigned user (fire-and-forget)
-        sendPushToUser(userId, {
-          title: `New Task: ${toTitleCase(sanitizeInput(title))}`,
-          body: description ? sanitizeInput(description).slice(0, 100) : 'You have been assigned a new task.',
-          url: '/tasks',
-          tag: `task-assigned-${taskId}`
-        }).catch(err => console.error('Push notification failed:', err));
       }
     }
 

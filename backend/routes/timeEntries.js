@@ -3,7 +3,6 @@ import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { calculateHours, getWeekEndingDate } from '../utils/helpers.js';
 import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
-import { sendPushToAdmins } from '../utils/pushNotifications.js';
 
 const router = express.Router();
 
@@ -174,19 +173,6 @@ router.post('/clock-in', async (req, res) => {
             console.error('Error sending lunch overtime notification:', msgError);
             // Don't fail the clock-in if notification fails
           }
-
-          // Push notification to admins for lunch overtime
-          const hours = Math.floor(lunchOvertimeMinutes / 60);
-          const minutes = lunchOvertimeMinutes % 60;
-          const timeString = hours > 0
-            ? `${hours}h ${minutes}m`
-            : `${minutes} min`;
-          sendPushToAdmins({
-            title: 'Lunch Overtime Alert',
-            body: `${user.full_name || user.username} took ${timeString} over allowed lunch break.`,
-            url: '/admin?tab=time',
-            tag: `lunch-overtime-${userId}`
-          }).catch(err => console.error('Push to admins failed:', err));
         }
       }
     }
