@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
+import api from '../../utils/api';
 
 const isSecure = () => {
   try {
@@ -38,9 +39,8 @@ const SCAN_OPTIONS = {
 };
 
 /**
- * Optional context when scan is for a specific action (add quantity, add barcode, refill receive).
- * When set, the modal shows the item description and a manual barcode/SKU entry field.
- * @typedef {{ type: 'add_quantity'|'add_barcode'|'refill_receive', item?: { name: string }, itemName?: string, qty?: number }} PendingContext
+ * Optional context when scan is for a specific action.
+ * @typedef {{ type: 'add_quantity'|'add_barcode'|'refill_receive'|'use_on_task'|'batch_receive', item?: { name: string }, itemName?: string, qty?: number, task_id?: number, task_title?: string }} PendingContext
  */
 
 const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = null }) => {
@@ -54,15 +54,52 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
   const [error, setError] = useState(null);
   const [starting, setStarting] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [focusPoint, setFocusPoint] = useState(null); // { x, y } in % for indicator, cleared after delay
+  const [focusPoint, setFocusPoint] = useState(null);
   const [manualBarcode, setManualBarcode] = useState('');
+
+  // use_on_task flow state
+  const [uotStep, setUotStep] = useState(null); // null | 'loading' | 'confirm' | 'submitting' | 'success'
+  const [uotItem, setUotItem] = useState(null);
+  const [uotQty, setUotQty] = useState('1');
+  const [uotTasks, setUotTasks] = useState([]);
+  const [uotTaskId, setUotTaskId] = useState('');
+  const [uotError, setUotError] = useState(null);
+  const [uotScannedBarcode, setUotScannedBarcode] = useState('');
+
+  // batch_receive flow state
+  const [batchItems, setBatchItems] = useState([]); // [{ item, qty, barcode }]
+  const [batchLookupLoading, setBatchLookupLoading] = useState(false);
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
+  const [batchSuccess, setBatchSuccess] = useState(false);
+  const [batchError, setBatchError] = useState(null);
+  const batchScannedRef = useRef(new Set()); // prevent double-scan
 
   onCloseRef.current = onClose;
   onDetectedRef.current = onDetected;
 
   useEffect(() => {
-    if (!isOpen) setManualBarcode('');
+    if (!isOpen) {
+      setManualBarcode('');
+      setUotStep(null);
+      setUotItem(null);
+      setUotQty('1');
+      setUotTasks([]);
+      setUotTaskId('');
+      setUotError(null);
+      setUotScannedBarcode('');
+      setBatchItems([]);
+      setBatchSuccess(false);
+      setBatchError(null);
+      batchScannedRef.current = new Set();
+    }
   }, [isOpen]);
+
+  // Pre-set task_id for use_on_task from pendingContext
+  useEffect(() => {
+    if (isOpen && pendingContext?.type === 'use_on_task' && pendingContext.task_id) {
+      setUotTaskId(String(pendingContext.task_id));
+    }
+  }, [isOpen, pendingContext?.type, pendingContext?.task_id]);
 
   const descriptionText = pendingContext
     ? pendingContext.item?.name ?? pendingContext.itemName ?? 'this item'
@@ -110,8 +147,15 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
             const text = result.getText();
             if (text) {
               playScanBeep();
-              onDetectedRef.current(text);
-              onCloseRef.current();
+              const ctx = pendingContext;
+              if (ctx?.type === 'use_on_task') {
+                handleUotScan(text);
+              } else if (ctx?.type === 'batch_receive') {
+                handleBatchScan(text);
+              } else {
+                onDetectedRef.current(text);
+                onCloseRef.current();
+              }
             }
             return;
           }
@@ -169,6 +213,102 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
       readerRef.current = null;
     };
   }, [isOpen]);
+
+  const stopCamera = () => {
+    try { controlsRef.current?.stop(); } catch (_) {}
+    try { readerRef.current?.reset(); } catch (_) {}
+    controlsRef.current = null;
+    readerRef.current = null;
+    setScanning(false);
+  };
+
+  const handleUotScan = async (barcode) => {
+    if (uotStep) return; // already processing
+    setUotStep('loading');
+    setUotScannedBarcode(barcode);
+    setUotError(null);
+    stopCamera();
+    try {
+      const [itemRes, tasksRes] = await Promise.all([
+        api.get(`/inventory/items/by-barcode/${encodeURIComponent(barcode)}`),
+        pendingContext?.task_id ? Promise.resolve(null) : api.get('/tasks'),
+      ]);
+      setUotItem(itemRes.data.item);
+      if (!pendingContext?.task_id && tasksRes) {
+        const allTasks = tasksRes.data?.tasks || [];
+        setUotTasks(allTasks.filter((t) => t.status !== 'completed' && !t.is_archived));
+      }
+      setUotStep('confirm');
+    } catch (e) {
+      setUotError(e.response?.data?.error || 'Item not found for this barcode');
+      setUotStep(null);
+    }
+  };
+
+  const handleUotSubmit = async () => {
+    if (!uotItem) return;
+    const taskId = pendingContext?.task_id || uotTaskId;
+    if (!taskId) { setUotError('Please select a task'); return; }
+    const qty = parseFloat(uotQty);
+    if (!qty || qty <= 0) { setUotError('Enter a valid quantity'); return; }
+    setUotStep('submitting');
+    setUotError(null);
+    try {
+      const res = await api.post('/inventory/use-on-task', {
+        item_id: uotItem.id,
+        task_id: Number(taskId),
+        quantity_used: qty,
+      });
+      onDetectedRef.current(res.data.item);
+      setUotStep('success');
+      setTimeout(() => onCloseRef.current(), 1200);
+    } catch (e) {
+      setUotError(e.response?.data?.error || 'Failed to use item');
+      setUotStep('confirm');
+    }
+  };
+
+  const handleBatchScan = async (barcode) => {
+    if (batchScannedRef.current.has(barcode)) return;
+    batchScannedRef.current.add(barcode);
+    setBatchLookupLoading(true);
+    setBatchError(null);
+    try {
+      const res = await api.get(`/inventory/items/by-barcode/${encodeURIComponent(barcode)}`);
+      const found = res.data.item;
+      setBatchItems((prev) => {
+        const exists = prev.find((b) => b.item.id === found.id);
+        if (exists) {
+          return prev.map((b) => b.item.id === found.id ? { ...b, qty: String(Number(b.qty) + 1) } : b);
+        }
+        return [...prev, { item: found, qty: '1', barcode }];
+      });
+    } catch (e) {
+      setBatchError(`Not found: ${barcode}`);
+      batchScannedRef.current.delete(barcode);
+    } finally {
+      setBatchLookupLoading(false);
+    }
+  };
+
+  const handleBatchSubmit = async () => {
+    if (batchItems.length === 0) return;
+    setBatchSubmitting(true);
+    setBatchError(null);
+    try {
+      const items = batchItems
+        .map((b) => ({ item_id: b.item.id, quantity: parseFloat(b.qty) || 0 }))
+        .filter((b) => b.quantity > 0);
+      const res = await api.post('/inventory/batch-receive', { items });
+      onDetectedRef.current(res.data.results);
+      setBatchSuccess(true);
+      setTimeout(() => onCloseRef.current(), 1500);
+    } catch (e) {
+      setBatchError(e.response?.data?.error || 'Batch receive failed');
+    } finally {
+      setBatchSubmitting(false);
+    }
+  };
 
   const handleTapToFocus = (e) => {
     e.preventDefault();
@@ -319,7 +459,138 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
             </p>
           </div>
 
-          {pendingContext && descriptionText && (
+          {/* use_on_task confirm UI */}
+          {pendingContext?.type === 'use_on_task' && uotStep === 'loading' && (
+            <div className="border-t border-gray-200 dark:border-neutral-700 pt-3 mt-1">
+              <p className="text-sm text-gray-600 dark:text-neutral-400">Looking up item…</p>
+            </div>
+          )}
+          {pendingContext?.type === 'use_on_task' && uotStep === 'confirm' && uotItem && (
+            <div className="border-t border-gray-200 dark:border-neutral-700 pt-3 mt-1 space-y-3">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="font-semibold text-gray-900 dark:text-neutral-100">{uotItem.name}</p>
+                <p className="text-sm text-gray-600 dark:text-neutral-400">
+                  In stock: <strong>{uotItem.quantity ?? 0}</strong> {uotItem.unit || 'each'}
+                  {uotItem.category_name && <span> · {uotItem.category_name}</span>}
+                </p>
+              </div>
+              {uotError && <p className="text-sm text-red-600">{uotError}</p>}
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-neutral-300 whitespace-nowrap">Qty used:</label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="any"
+                  value={uotQty}
+                  onChange={(e) => setUotQty(e.target.value)}
+                  className="w-24 min-h-10 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm"
+                  autoFocus
+                />
+                <span className="text-sm text-gray-500">{uotItem.unit || 'each'}</span>
+              </div>
+              {!pendingContext.task_id && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Task:</label>
+                  <select
+                    value={uotTaskId}
+                    onChange={(e) => setUotTaskId(e.target.value)}
+                    className="w-full min-h-10 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 text-sm"
+                  >
+                    <option value="">Select task…</option>
+                    {uotTasks.map((t) => (
+                      <option key={t.id} value={t.id}>{t.title}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {pendingContext.task_id && pendingContext.task_title && (
+                <p className="text-sm text-gray-600 dark:text-neutral-400">Task: <strong>{pendingContext.task_title}</strong></p>
+              )}
+              <button
+                type="button"
+                onClick={handleUotSubmit}
+                className="w-full min-h-12 rounded-lg bg-primary text-white font-medium text-sm hover:bg-primary/90"
+              >
+                Use Item on Task
+              </button>
+            </div>
+          )}
+          {pendingContext?.type === 'use_on_task' && uotStep === 'submitting' && (
+            <div className="border-t border-gray-200 dark:border-neutral-700 pt-3 mt-1">
+              <p className="text-sm text-gray-600">Recording usage…</p>
+            </div>
+          )}
+          {pendingContext?.type === 'use_on_task' && uotStep === 'success' && (
+            <div className="border-t border-green-200 pt-3 mt-1">
+              <p className="text-sm font-medium text-green-700">✓ Item used on task! Inventory updated.</p>
+            </div>
+          )}
+          {pendingContext?.type === 'use_on_task' && !uotStep && (
+            <div className="border-t border-gray-200 dark:border-neutral-700 pt-3 mt-1 space-y-2">
+              <p className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+                Scan an item to log it on a task and deduct from stock.
+              </p>
+              {uotError && <p className="text-sm text-red-600">{uotError}</p>}
+              <form onSubmit={(e) => { e.preventDefault(); if (manualBarcode.trim()) { handleUotScan(manualBarcode.trim()); setManualBarcode(''); }}} className="flex gap-2">
+                <input
+                  type="text"
+                  value={manualBarcode}
+                  onChange={(e) => setManualBarcode(e.target.value)}
+                  placeholder="Enter barcode manually"
+                  className="flex-1 min-h-10 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 font-mono text-sm"
+                  autoComplete="off"
+                />
+                <button type="submit" disabled={!manualBarcode.trim()} className="min-h-10 px-3 py-2 rounded-lg bg-primary text-white text-sm disabled:opacity-50">Search</button>
+              </form>
+            </div>
+          )}
+
+          {/* batch_receive UI */}
+          {pendingContext?.type === 'batch_receive' && (
+            <div className="border-t border-gray-200 dark:border-neutral-700 pt-3 mt-1 space-y-3">
+              <p className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+                Batch receive — scan items one by one. Scanner stays open.
+              </p>
+              {batchLookupLoading && <p className="text-xs text-gray-500">Looking up item…</p>}
+              {batchError && <p className="text-xs text-red-600">{batchError}</p>}
+              {batchItems.length > 0 && (
+                <ul className="space-y-1 max-h-40 overflow-y-auto">
+                  {batchItems.map((b) => (
+                    <li key={b.item.id} className="flex items-center gap-2 py-1.5 border-b border-gray-100 dark:border-neutral-700 last:border-0">
+                      <span className="flex-1 text-sm font-medium text-gray-900 dark:text-neutral-100 truncate">{b.item.name}</span>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        value={b.qty}
+                        onChange={(e) => setBatchItems((prev) => prev.map((x) => x.item.id === b.item.id ? { ...x, qty: e.target.value } : x))}
+                        className="w-16 px-2 py-1 border border-gray-300 dark:border-neutral-600 rounded text-sm bg-white dark:bg-neutral-800"
+                      />
+                      <span className="text-xs text-gray-500">{b.item.unit || 'ea'}</span>
+                      <button type="button" onClick={() => { setBatchItems((prev) => prev.filter((x) => x.item.id !== b.item.id)); batchScannedRef.current.delete(b.barcode); }} className="text-red-500 text-xs">✕</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {batchItems.length === 0 && !batchLookupLoading && (
+                <p className="text-xs text-gray-400">No items scanned yet.</p>
+              )}
+              {batchSuccess ? (
+                <p className="text-sm font-medium text-green-700">✓ All items received!</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleBatchSubmit}
+                  disabled={batchItems.length === 0 || batchSubmitting}
+                  className="w-full min-h-10 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {batchSubmitting ? 'Receiving…' : `Receive All (${batchItems.length} item${batchItems.length !== 1 ? 's' : ''})`}
+                </button>
+              )}
+            </div>
+          )}
+
+          {pendingContext && descriptionText && pendingContext.type !== 'use_on_task' && pendingContext.type !== 'batch_receive' && (
             <div className="border-t border-gray-200 dark:border-neutral-700 pt-3 mt-1 space-y-3">
               <p className="text-sm font-medium text-gray-700 dark:text-neutral-300">
                 {pendingContext.type === 'add_quantity' && <>Adding quantity for: <strong className="text-gray-900 dark:text-neutral-100">{descriptionText}</strong></>}

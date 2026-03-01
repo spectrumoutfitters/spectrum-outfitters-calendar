@@ -101,6 +101,9 @@ const Dashboard = () => {
   const [myListShowArchived, setMyListShowArchived] = useState(false);
   const [myListArchivedItems, setMyListArchivedItems] = useState([]);
 
+  // Low stock alert
+  const [lowStockCount, setLowStockCount] = useState(0);
+
   // Employee-specific
   const [employeeStats, setEmployeeStats] = useState({ tasksTodo: 0, tasksInProgress: 0, tasksCompleted: 0, todayHours: 0, weekHours: 0 });
 
@@ -143,7 +146,7 @@ const Dashboard = () => {
 
         const [
           tasksRes, scheduleRes, statusRes, worklistRes,
-          complianceRes, reorderRes, pnlRes, myListRes
+          complianceRes, reorderRes, lowStockRes, pnlRes, myListRes
         ] = await Promise.all([
           api.get('/tasks'),
           api.get('/schedule', { params: { start_date: todayStr, end_date: endDateStr } }).catch(() => ({ data: { entries: [] } })),
@@ -151,6 +154,7 @@ const Dashboard = () => {
           api.get('/admin/worklist/today').catch(() => ({ data: { summary: null, allItems: [] } })),
           api.get('/compliance/dashboard').catch(() => ({ data: { overdue: [], dueSoon: [], upcoming: [] } })),
           api.get('/inventory/refill-requests/count', { params: { status: 'pending' } }).catch(() => ({ data: { count: 0 } })),
+          api.get('/inventory/low-stock').catch(() => ({ data: { items: [] } })),
           api.get(`/compliance/pnl/weekly?week_ending_date=${fridayStr}`).catch(() => ({ data: null })),
           myListPromise,
         ]);
@@ -162,6 +166,7 @@ const Dashboard = () => {
         const worklist = worklistRes.data || {};
         const wlItems = worklist.allItems || worklist.items || [];
         const pnl = pnlRes.data;
+        setLowStockCount((lowStockRes.data?.items || []).length);
 
         const pendingTimeOff = (wlItems.filter(i => i.smart_key === 'pending_time_off' && !i.is_completed).length > 0)
           ? parseInt(wlItems.find(i => i.smart_key === 'pending_time_off')?.title?.match(/\d+/)?.[0] || 0) : 0;
@@ -352,6 +357,23 @@ const Dashboard = () => {
           <MetricCard label="Pending Approvals" value={pendingApprovals} sub={pendingApprovals > 0 ? 'needs attention' : 'all clear'} subColor={pendingApprovals > 0 ? 'text-amber-600' : 'text-green-600'} onClick={() => navigate('/admin?tab=worklist')} />
           <MetricCard label="Inventory" value={adminData.reorderRequests} sub={adminData.reorderRequests > 0 ? 'reorder requests' : 'no alerts'} subColor={adminData.reorderRequests > 0 ? 'text-amber-600' : 'text-green-600'} onClick={() => navigate('/admin?tab=inventory')} />
         </div>
+
+        {/* ── Low Stock Alert ─────────────────────────────────── */}
+        {lowStockCount > 0 && (
+          <div
+            className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition"
+            onClick={() => navigate('/inventory')}
+          >
+            <span className="text-xl">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-amber-800 dark:text-amber-300 text-sm">
+                {lowStockCount} item{lowStockCount !== 1 ? 's' : ''} low on stock
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">Tap to view inventory and request reorders</p>
+            </div>
+            <span className="text-amber-500 text-lg">›</span>
+          </div>
+        )}
 
         {/* ── My List ────────────────────────────────────────── */}
         <MyListSection

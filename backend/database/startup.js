@@ -9,6 +9,9 @@ import { addShopmonkeyRevenueTable } from './add_shopmonkey_revenue_table.js';
 import { addProcessorRevenueTable } from './add_processor_revenue_table.js';
 import { addSecurityTables } from './add_security_tables.js';
 import { addPushSubscriptionsTable } from './add_push_subscriptions.js';
+import { addInventoryTaskUsageTable } from './add_inventory_task_usage.js';
+import { addTaskPhotosTable } from './add_task_photos.js';
+import { addInventorySupplierColumns } from './add_inventory_supplier.js';
 
 export async function ensureUserColumns() {
   const columns = [
@@ -170,4 +173,7 @@ export async function runStartupMigrations() {
   await addSecurityTables();
   await ensureLoginEventsIsVpn();
   await addPushSubscriptionsTable();
+  await addInventoryTaskUsageTable();
+  await addTaskPhotosTable();
+  await addInventorySupplierColumns();
 }

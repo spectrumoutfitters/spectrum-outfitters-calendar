@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import TaskTimer from './TaskTimer';
+import TaskPhotos from './TaskPhotos';
 import api from '../../utils/api';
 import { formatDateTime, getPriorityColor, getCategoryColor, formatDate, toTitleCase, calculateDuration, calculateTotalDuration, calculateDurationMinutes, getDueDateColor, formatDuration } from '../../utils/helpers';
 import { useAuth } from '../../contexts/AuthContext';
 import { parseISO } from 'date-fns';
+import BarcodeScannerModal from '../Inventory/BarcodeScannerModal';
 
 
 const TaskModal = ({ task, onClose }) => {
@@ -35,10 +37,28 @@ const TaskModal = ({ task, onClose }) => {
   const [returnQty, setReturnQty] = useState('');
   const [returnLoading, setReturnLoading] = useState(false);
 
+  // Parts Used (scan-to-use)
+  const [partsUsed, setPartsUsed] = useState([]);
+  const [partsLoading, setPartsLoading] = useState(false);
+  const [showPartScanner, setShowPartScanner] = useState(false);
+
   useEffect(() => {
     loadFullTaskData();
     loadUsers();
+    loadPartsUsed();
   }, [task.id]);
+
+  const loadPartsUsed = async () => {
+    setPartsLoading(true);
+    try {
+      const res = await api.get(`/inventory/task-usage/${task.id}`);
+      setPartsUsed(res.data?.usage || []);
+    } catch (e) {
+      setPartsUsed([]);
+    } finally {
+      setPartsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (taskData.id && taskData.status !== 'completed') {
@@ -1051,6 +1071,47 @@ const TaskModal = ({ task, onClose }) => {
                     ))}
                   </ul>
                 )}
+              </div>
+
+              {/* Parts Used (scan-to-use) */}
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <label className="text-sm font-medium text-gray-700">Parts Used (scanned)</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowPartScanner(true)}
+                    className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  >
+                    + Add Part
+                  </button>
+                </div>
+                {partsLoading ? (
+                  <p className="text-sm text-gray-500">Loading…</p>
+                ) : partsUsed.length === 0 ? (
+                  <p className="text-sm text-gray-500">No parts scanned onto this task yet.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {partsUsed.map((u) => (
+                      <li key={u.id} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg border border-blue-100 text-sm">
+                        <span className="font-medium flex-1 min-w-0 truncate">{u.item_name}</span>
+                        <span className="text-xs text-gray-500">{u.quantity_used} {u.item_unit || 'ea'}</span>
+                        {u.used_by_name && <span className="text-xs text-gray-400">by {u.used_by_name}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <BarcodeScannerModal
+                  isOpen={showPartScanner}
+                  onClose={() => setShowPartScanner(false)}
+                  pendingContext={{ type: 'use_on_task', task_id: task.id, task_title: taskData.title }}
+                  onDetected={() => { loadPartsUsed(); }}
+                />
+              </div>
+
+              {/* Job Photos */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Photos</label>
+                <TaskPhotos taskId={task.id} isAdmin={isAdmin} />
               </div>
 
               {/* AI Quality Checks */}

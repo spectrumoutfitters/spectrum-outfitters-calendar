@@ -196,6 +196,10 @@ router.get('/items', async (req, res) => {
       'i.returned_at',
       'i.min_quantity',
       'i.keep_in_stock',
+      'i.supplier_name',
+      'i.supplier_contact',
+      'i.supplier_part_number',
+      'i.reorder_cost',
       'i.created_at',
       'i.updated_at'
     ];
@@ -334,6 +338,10 @@ router.get('/items/by-barcode/:barcode', async (req, res) => {
       'i.returned_at',
       'i.min_quantity',
       'i.keep_in_stock',
+      'i.supplier_name',
+      'i.supplier_contact',
+      'i.supplier_part_number',
+      'i.reorder_cost',
       'i.created_at',
       'i.updated_at'
     ];
@@ -413,7 +421,7 @@ router.post('/items', async (req, res) => {
     const created = await db.getAsync(
       `
         SELECT i.id, i.barcode, i.name, i.category_id, c.name AS category_name, i.unit, i.price, i.quantity,
-               i.weight, i.weight_unit, i.viscosity, i.image_url, i.size_per_unit, i.last_counted_at, i.last_counted_by, u.full_name AS last_counted_by_name, i.needs_return, i.return_supplier, i.return_quantity, i.returned_at, i.min_quantity, i.keep_in_stock, i.created_at, i.updated_at
+               i.weight, i.weight_unit, i.viscosity, i.image_url, i.size_per_unit, i.last_counted_at, i.last_counted_by, u.full_name AS last_counted_by_name, i.needs_return, i.return_supplier, i.return_quantity, i.returned_at, i.min_quantity, i.keep_in_stock, i.supplier_name, i.supplier_contact, i.supplier_part_number, i.reorder_cost, i.created_at, i.updated_at
         FROM inventory_items i
         LEFT JOIN inventory_categories c ON c.id = i.category_id
         LEFT JOIN users u ON u.id = i.last_counted_by
@@ -439,7 +447,7 @@ router.put('/items/:id', requireAdmin, async (req, res) => {
     const current = await db.getAsync('SELECT * FROM inventory_items WHERE id = ?', [id]);
     if (!current) return res.status(404).json({ error: 'Item not found' });
 
-    const { barcode: barcodeRaw, name, category_id, unit, price, image_url: imageUrlRaw, needs_return: needsReturnRaw, return_supplier: returnSupplier, size_per_unit: sizePerUnitRaw, min_quantity: minQtyRaw, keep_in_stock: keepInStockRaw } = req.body || {};
+    const { barcode: barcodeRaw, name, category_id, unit, price, image_url: imageUrlRaw, needs_return: needsReturnRaw, return_supplier: returnSupplier, size_per_unit: sizePerUnitRaw, min_quantity: minQtyRaw, keep_in_stock: keepInStockRaw, supplier_name: supplierNameRaw, supplier_contact: supplierContactRaw, supplier_part_number: supplierPartNumberRaw, reorder_cost: reorderCostRaw } = req.body || {};
     const barcode = barcodeRaw === undefined ? current.barcode : normalizeBarcode(barcodeRaw);
     const finalName = name === undefined ? current.name : String(name).trim();
     const finalUnit = unit === undefined ? current.unit : (String(unit).trim() || 'each');
@@ -450,6 +458,10 @@ router.put('/items/:id', requireAdmin, async (req, res) => {
     const finalSizePerUnit = sizePerUnitRaw === undefined ? (current.size_per_unit ?? null) : (sizePerUnitRaw !== null && sizePerUnitRaw !== '' && String(sizePerUnitRaw).trim() ? String(sizePerUnitRaw).trim() : null);
     const finalMinQty = minQtyRaw === undefined ? (current.min_quantity ?? null) : (minQtyRaw !== null && minQtyRaw !== '' ? Number.parseFloat(minQtyRaw) : null);
     const finalKeepInStock = keepInStockRaw === undefined ? (current.keep_in_stock ?? 1) : (keepInStockRaw === true || keepInStockRaw === 1 || keepInStockRaw === '1' ? 1 : 0);
+    const finalSupplierName = supplierNameRaw === undefined ? (current.supplier_name ?? null) : (supplierNameRaw !== null && String(supplierNameRaw).trim() ? String(supplierNameRaw).trim() : null);
+    const finalSupplierContact = supplierContactRaw === undefined ? (current.supplier_contact ?? null) : (supplierContactRaw !== null && String(supplierContactRaw).trim() ? String(supplierContactRaw).trim() : null);
+    const finalSupplierPartNumber = supplierPartNumberRaw === undefined ? (current.supplier_part_number ?? null) : (supplierPartNumberRaw !== null && String(supplierPartNumberRaw).trim() ? String(supplierPartNumberRaw).trim() : null);
+    const finalReorderCost = reorderCostRaw === undefined ? (current.reorder_cost ?? null) : (reorderCostRaw === null || reorderCostRaw === '' ? null : Number.parseFloat(reorderCostRaw));
 
     const parsedPrice = price === undefined
       ? current.price
@@ -468,10 +480,10 @@ router.put('/items/:id', requireAdmin, async (req, res) => {
     await db.runAsync(
       `
         UPDATE inventory_items
-        SET barcode = ?, name = ?, category_id = ?, unit = ?, price = ?, image_url = ?, needs_return = ?, return_supplier = ?, size_per_unit = ?, min_quantity = ?, keep_in_stock = ?, updated_at = CURRENT_TIMESTAMP
+        SET barcode = ?, name = ?, category_id = ?, unit = ?, price = ?, image_url = ?, needs_return = ?, return_supplier = ?, size_per_unit = ?, min_quantity = ?, keep_in_stock = ?, supplier_name = ?, supplier_contact = ?, supplier_part_number = ?, reorder_cost = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `,
-      [barcode, finalName, finalCategoryId, finalUnit, parsedPrice, finalImageUrl, finalNeedsReturn, finalReturnSupplier, finalSizePerUnit, finalMinQty, finalKeepInStock, id]
+      [barcode, finalName, finalCategoryId, finalUnit, parsedPrice, finalImageUrl, finalNeedsReturn, finalReturnSupplier, finalSizePerUnit, finalMinQty, finalKeepInStock, finalSupplierName, finalSupplierContact, finalSupplierPartNumber, finalReorderCost, id]
     );
 
     const wasAlreadyFlagged = (current.needs_return === 1 || current.needs_return === '1');
@@ -492,7 +504,7 @@ router.put('/items/:id', requireAdmin, async (req, res) => {
     const updated = await db.getAsync(
       `
         SELECT i.id, i.barcode, i.name, i.category_id, c.name AS category_name, i.unit, i.price, i.quantity,
-               i.weight, i.weight_unit, i.viscosity, i.image_url, i.size_per_unit, i.last_counted_at, i.last_counted_by, u.full_name AS last_counted_by_name, i.needs_return, i.return_supplier, i.return_quantity, i.returned_at, i.min_quantity, i.keep_in_stock, i.created_at, i.updated_at
+               i.weight, i.weight_unit, i.viscosity, i.image_url, i.size_per_unit, i.last_counted_at, i.last_counted_by, u.full_name AS last_counted_by_name, i.needs_return, i.return_supplier, i.return_quantity, i.returned_at, i.min_quantity, i.keep_in_stock, i.supplier_name, i.supplier_contact, i.supplier_part_number, i.reorder_cost, i.created_at, i.updated_at
         FROM inventory_items i
         LEFT JOIN inventory_categories c ON c.id = i.category_id
         LEFT JOIN users u ON u.id = i.last_counted_by
@@ -1333,6 +1345,151 @@ router.post('/refill-requests/:id/receive', async (req, res) => {
 });
 
 // ---- New item requests (workers request items we don't have) ----
+// POST /api/inventory/use-on-task — scan item onto a task, deduct stock
+router.post('/use-on-task', async (req, res) => {
+  try {
+    const { item_id, task_id, quantity_used: quantityUsedRaw, notes } = req.body || {};
+    const itemId = item_id != null ? Number(item_id) : null;
+    const taskId = task_id != null ? Number(task_id) : null;
+    if (!itemId || !Number.isFinite(itemId)) return res.status(400).json({ error: 'item_id is required' });
+    if (!taskId || !Number.isFinite(taskId)) return res.status(400).json({ error: 'task_id is required' });
+
+    const quantityUsed = Number.parseFloat(quantityUsedRaw);
+    if (!Number.isFinite(quantityUsed) || quantityUsed <= 0) {
+      return res.status(400).json({ error: 'quantity_used must be a positive number' });
+    }
+
+    const row = await db.getAsync('SELECT id, name, quantity FROM inventory_items WHERE id = ?', [itemId]);
+    if (!row) return res.status(404).json({ error: 'Item not found' });
+
+    const task = await db.getAsync('SELECT id FROM tasks WHERE id = ?', [taskId]);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    const quantityBefore = row.quantity ?? 0;
+    const quantityAfter = Math.max(0, quantityBefore - quantityUsed);
+
+    await db.runAsync(
+      'UPDATE inventory_items SET quantity = ?, last_counted_at = CURRENT_TIMESTAMP, last_counted_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [quantityAfter, req.user.id, itemId]
+    );
+
+    await db.runAsync(
+      "INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'used_on_task')",
+      [itemId, quantityBefore, quantityAfter, req.user.id]
+    ).catch(() => {});
+
+    await db.runAsync(
+      'INSERT INTO inventory_task_usage (item_id, task_id, quantity_used, used_by, notes) VALUES (?, ?, ?, ?, ?)',
+      [itemId, taskId, quantityUsed, req.user.id, notes || null]
+    );
+
+    const updatedItem = await db.getAsync(
+      `SELECT i.id, i.barcode, i.name, i.category_id, c.name AS category_name, i.unit, i.quantity,
+              i.min_quantity, i.image_url, i.updated_at
+       FROM inventory_items i
+       LEFT JOIN inventory_categories c ON c.id = i.category_id
+       WHERE i.id = ?`,
+      [itemId]
+    );
+
+    res.json({ item: updatedItem });
+  } catch (error) {
+    console.error('Use-on-task error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/inventory/task-usage/:taskId — items used on a specific task
+router.get('/task-usage/:taskId', async (req, res) => {
+  try {
+    const taskId = req.params.taskId != null ? Number(req.params.taskId) : null;
+    if (!taskId || !Number.isFinite(taskId)) return res.status(400).json({ error: 'taskId is required' });
+
+    const rows = await db.allAsync(
+      `SELECT u.id, u.item_id, u.task_id, u.quantity_used, u.notes, u.created_at,
+              i.name AS item_name, i.unit AS item_unit, i.quantity AS item_stock,
+              usr.full_name AS used_by_name
+       FROM inventory_task_usage u
+       JOIN inventory_items i ON i.id = u.item_id
+       LEFT JOIN users usr ON usr.id = u.used_by
+       WHERE u.task_id = ?
+       ORDER BY u.created_at DESC`,
+      [taskId]
+    );
+
+    res.json({ usage: rows || [] });
+  } catch (error) {
+    console.error('Task usage error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/inventory/low-stock — items at or below min_quantity (or < 3 if no min set)
+router.get('/low-stock', async (req, res) => {
+  try {
+    const rows = await db.allAsync(
+      `SELECT i.id, i.name, i.quantity, i.min_quantity, i.unit, i.barcode,
+              c.name AS category_name, i.image_url
+       FROM inventory_items i
+       LEFT JOIN inventory_categories c ON c.id = i.category_id
+       WHERE i.returned_at IS NULL
+         AND (
+           (i.min_quantity IS NOT NULL AND i.quantity <= i.min_quantity)
+           OR (i.min_quantity IS NULL AND i.quantity < 3)
+         )
+       ORDER BY
+         CASE WHEN i.quantity <= 0 THEN 0
+              WHEN i.min_quantity IS NOT NULL AND i.quantity <= i.min_quantity THEN 1
+              ELSE 2 END,
+         i.name ASC`
+    );
+    res.json({ items: rows || [] });
+  } catch (error) {
+    console.error('Low stock error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/inventory/batch-receive — bulk receive multiple items
+router.post('/batch-receive', async (req, res) => {
+  try {
+    const { items } = req.body || {};
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'items array is required' });
+    }
+
+    const results = [];
+    for (const entry of items) {
+      const itemId = entry.item_id != null ? Number(entry.item_id) : null;
+      const qty = Number.parseFloat(entry.quantity);
+      if (!itemId || !Number.isFinite(itemId) || !Number.isFinite(qty) || qty <= 0) continue;
+
+      const row = await db.getAsync('SELECT id, name, quantity FROM inventory_items WHERE id = ?', [itemId]);
+      if (!row) continue;
+
+      const quantityBefore = row.quantity ?? 0;
+      const quantityAfter = quantityBefore + qty;
+
+      await db.runAsync(
+        'UPDATE inventory_items SET quantity = ?, last_counted_at = CURRENT_TIMESTAMP, last_counted_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [quantityAfter, req.user.id, itemId]
+      );
+
+      await db.runAsync(
+        "INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'batch_receive')",
+        [itemId, quantityBefore, quantityAfter, req.user.id]
+      ).catch(() => {});
+
+      results.push({ item_id: itemId, item_name: row.name, quantity_added: qty, new_quantity: quantityAfter });
+    }
+
+    res.json({ results });
+  } catch (error) {
+    console.error('Batch receive error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // POST /api/inventory/new-item-requests — worker submits request for an item not in inventory
 router.post('/new-item-requests', async (req, res) => {
   try {
