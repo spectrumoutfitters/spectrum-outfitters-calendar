@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
+import PushNotificationSettings from '../components/Notifications/PushNotificationSettings';
 
 const Profile = () => {
   const { user, isAdmin, refreshUser } = useAuth();
@@ -196,6 +197,8 @@ const Profile = () => {
           </div>
         </div>
       </div>
+
+      <PushNotificationSettings />
 
       {isAdmin && (
         <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">

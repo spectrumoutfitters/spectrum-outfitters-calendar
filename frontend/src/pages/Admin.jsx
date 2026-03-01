@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import AdminBroadcastNotification from '../components/Notifications/AdminBroadcastNotification';
 import UserManagement from '../components/Admin/UserManagement';
 import TimeApproval from '../components/Admin/TimeApproval';
 import Reports from '../components/Admin/Reports';
@@ -542,11 +543,14 @@ const Admin = () => {
   // Dashboard view
   return (
     <div className="space-y-4 md:space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">Admin Dashboard</h1>
-        <p className="text-gray-500 dark:text-neutral-200">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-gray-500 dark:text-neutral-200 text-sm hidden sm:block">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+          <AdminBroadcastNotification />
+        </div>
       </div>
 
       {renderDashboard()}
