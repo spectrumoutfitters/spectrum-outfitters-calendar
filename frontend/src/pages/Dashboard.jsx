@@ -7,6 +7,7 @@ import api from '../utils/api';
 import { formatDate, getUpcomingDayLabel, getTodayCentralTime, getLastCompletedWeekFridayHouston } from '../utils/helpers';
 import TaskModal from '../components/Tasks/TaskModal';
 import EmployeeTaskModal from '../components/Tasks/EmployeeTaskModal';
+import EmployeeDashboard from '../components/Employee/EmployeeDashboard';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -690,92 +691,10 @@ const Dashboard = () => {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // EMPLOYEE DASHBOARD
+  // EMPLOYEE DASHBOARD — clean, focused, motivating
   // ═══════════════════════════════════════════════════════════
 
-  return (
-    <div className="space-y-4 md:space-y-5">
-      {/* Quick Clock In/Out */}
-      <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 md:p-5">
-        <QuickClockButton onClockAction={loadDashboardData} />
-      </div>
-
-      <div>
-        <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-neutral-100">{getGreeting(user)}</h1>
-        <p className="text-gray-500 dark:text-neutral-400 text-sm mt-0.5">Your dashboard</p>
-      </div>
-
-      {/* Clock In/Out (detailed controls) */}
-      <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 md:p-5">
-        <ClockInOut />
-      </div>
-
-      {/* My List */}
-      <MyListSection
-        items={myListItems}
-        summary={myListSummary}
-        newItem={newMyItem}
-        setNewItem={setNewMyItem}
-        adding={addingMyItem}
-        onAdd={handleAddMyItem}
-        onToggle={handleToggleMyItem}
-        onViewAll={() => navigate('/my-list')}
-      />
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <MetricCard label="To Do" value={employeeStats.tasksTodo} onClick={() => navigate('/tasks?status=todo')} />
-        <MetricCard label="In Progress" value={employeeStats.tasksInProgress} onClick={() => navigate('/tasks?status=in_progress')} />
-        <MetricCard label="Completed Today" value={employeeStats.tasksCompleted} onClick={() => navigate('/tasks?status=completed')} />
-        <MetricCard label="Today&apos;s Hours" value={employeeStats.todayHours.toFixed(1)} sub="hours" onClick={() => navigate('/time')} />
-        <MetricCard label="Week Hours" value={employeeStats.weekHours.toFixed(1)} sub="hours" onClick={() => navigate('/time')} />
-      </div>
-
-      {/* Upcoming Events */}
-      {upcomingEvents.length > 0 && (
-        <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4 md:p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Upcoming Events</h2>
-            <button onClick={() => navigate('/schedule')} className="text-xs text-primary hover:underline">View Schedule</button>
-          </div>
-          <div className="space-y-1.5">
-            {upcomingEvents.slice(0, 8).map(event => {
-              const dayLabel = getUpcomingDayLabel(event.start_date);
-              const label = event.is_shop_wide ? 'Shop Closed' : (event.reason || event.type || 'Event');
-              const who = event.is_shop_wide ? '' : (event.user_name || '');
-              return (
-                <button
-                  key={event.id}
-                  type="button"
-                  onClick={() => navigate(`/schedule?view=${event.id}`)}
-                  className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-left transition cursor-pointer border-0"
-                >
-                  <span className="text-xs font-semibold text-gray-600 dark:text-neutral-400 w-20 flex-shrink-0">{dayLabel}</span>
-                  <span className="text-sm text-gray-800 dark:text-neutral-100 truncate flex-1">{label}{who ? ` · ${who}` : ''}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Tasks Overview */}
-      <TasksSection
-        tasks={tasks}
-        taskFilter={taskFilter}
-        setTaskFilter={setTaskFilter}
-        taskLimit={taskLimit}
-        setTaskLimit={setTaskLimit}
-        onTaskClick={setSelectedTask}
-        navigate={navigate}
-      />
-
-      {/* Task Modals */}
-      {selectedTask && (
-        <EmployeeTaskModal task={selectedTask} onClose={() => { setSelectedTask(null); loadDashboardData(); }} />
-      )}
-    </div>
-  );
+  return <EmployeeDashboard onClockAction={loadDashboardData} />;
 };
 
 // ═══════════════════════════════════════════════════════════
