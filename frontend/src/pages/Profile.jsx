@@ -132,11 +132,11 @@ const Profile = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-800 dark:text-neutral-100">My Profile</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-neutral-100">My Profile</h1>
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Account Information</h2>
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-4 sm:p-6">
+        <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Account Information</h2>
         <div className="space-y-3">
           <div>
             <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Full Name</label>
@@ -153,8 +153,8 @@ const Profile = () => {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Preferences</h2>
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-4 sm:p-6">
+        <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Preferences</h2>
         
         {preferencesMessage.text && (
           <div className={`mb-4 p-3 rounded ${
@@ -189,7 +189,7 @@ const Profile = () => {
               <button
                 onClick={handlePreferencesChange}
                 disabled={preferencesLoading || showClockInHeader === (user?.show_clock_in_header !== false)}
-                className="px-4 py-2 bg-primary text-white text-sm rounded hover:bg-primary-dark transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="min-h-[2.5rem] px-4 py-2 bg-primary text-white text-sm rounded hover:bg-primary-dark transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {preferencesLoading ? 'Saving...' : 'Save'}
               </button>
@@ -201,8 +201,8 @@ const Profile = () => {
       <PushNotificationSettings />
 
       {isAdmin && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Change Username</h2>
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-4 sm:p-6">
+          <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Change Username</h2>
           
           {usernameMessage.text && (
             <div className={`mb-4 p-3 rounded ${
@@ -239,7 +239,7 @@ const Profile = () => {
             <button
               type="submit"
               disabled={usernameLoading || usernameData.newUsername === user?.username}
-              className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto px-6 py-2.5 bg-primary text-white rounded-lg hover:bg-primary-dark transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {usernameLoading ? 'Changing Username...' : 'Change Username'}
             </button>
@@ -247,8 +247,8 @@ const Profile = () => {
         </div>
       )}
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Change Password</h2>
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-4 sm:p-6">
+        <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Change Password</h2>
         
         {message.text && (
           <div className={`mb-4 p-3 rounded ${
@@ -306,7 +306,7 @@ const Profile = () => {
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto px-6 py-2.5 bg-primary text-white rounded-lg hover:bg-primary-dark transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Changing Password...' : 'Change Password'}
           </button>

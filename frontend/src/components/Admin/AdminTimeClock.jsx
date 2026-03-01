@@ -138,13 +138,13 @@ const AdminTimeClock = () => {
     : (selectedUser?.weekly_salary > 0 ? (selectedUser.weekly_salary / 40).toFixed(2) : (selectedUser?.hourly_rate || 0).toFixed(2));
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-800">Admin Time Clock</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-neutral-100">Admin Time Clock</h1>
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
-        <div className="flex flex-wrap gap-4 mb-6">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-4 sm:p-6">
+        <div className="flex flex-wrap gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
               Employee
             </label>
             <select
@@ -158,25 +158,25 @@ const AdminTimeClock = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
               Start Date
             </label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
               End Date
             </label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
             />
           </div>
         </div>
@@ -185,11 +185,11 @@ const AdminTimeClock = () => {
           <div className="mb-6 p-4 bg-gray-50 dark:bg-neutral-800 rounded-lg">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <p className="text-sm text-gray-600">Employee</p>
-                <p className="text-lg font-semibold">{selectedUser.full_name}</p>
+                <p className="text-sm text-gray-600 dark:text-neutral-300">Employee</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-neutral-100">{selectedUser.full_name}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Hourly Rate</p>
+                <p className="text-sm text-gray-600 dark:text-neutral-300">Hourly Rate</p>
                 <p className="text-lg font-semibold text-amber-600">
                   ${effectiveHourlyRate}
                   {selectedUser.weekly_salary > 0 && (
@@ -200,11 +200,11 @@ const AdminTimeClock = () => {
                 </p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Total Hours</p>
+                <p className="text-sm text-gray-600 dark:text-neutral-300">Total Hours</p>
                 <p className="text-lg font-semibold text-primary">{totalHours.toFixed(2)}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Total Cost</p>
+                <p className="text-sm text-gray-600 dark:text-neutral-300">Total Cost</p>
                 <p className="text-lg font-semibold text-red-600">${totalCost.toFixed(2)}</p>
               </div>
             </div>
@@ -235,13 +235,13 @@ const AdminTimeClock = () => {
                 return (
                   <div key={day.date} className="border border-gray-200 rounded-lg overflow-hidden">
                     <div className="bg-gray-50 dark:bg-neutral-800 px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-semibold">{formatDate(day.date)} <span className="text-sm text-primary font-normal">(Today)</span></h3>
-                        <div className="flex gap-6 text-sm">
-                          <span className="text-gray-600">
+                      <div className="flex flex-wrap justify-between items-center gap-1">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-neutral-100">{formatDate(day.date)} <span className="text-sm text-primary font-normal">(Today)</span></h3>
+                        <div className="flex flex-wrap gap-3 sm:gap-6 text-sm">
+                          <span className="text-gray-600 dark:text-neutral-300">
                             Hours: <span className="font-semibold text-primary">0.00</span>
                           </span>
-                          <span className="text-gray-600">
+                          <span className="text-gray-600 dark:text-neutral-300">
                             Cost: <span className="font-semibold text-success">$0.00</span>
                           </span>
                         </div>
@@ -259,13 +259,13 @@ const AdminTimeClock = () => {
                 return (
                   <div key={day.date} className="border border-gray-200 rounded-lg overflow-hidden">
                     <div className="bg-gray-50 dark:bg-neutral-800 px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-semibold">{formatDate(day.date)} <span className="text-sm text-primary font-normal">(Today)</span></h3>
-                        <div className="flex gap-6 text-sm">
-                          <span className="text-gray-600">
+                      <div className="flex flex-wrap justify-between items-center gap-1">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-neutral-100">{formatDate(day.date)} <span className="text-sm text-primary font-normal">(Today)</span></h3>
+                        <div className="flex flex-wrap gap-3 sm:gap-6 text-sm">
+                          <span className="text-gray-600 dark:text-neutral-300">
                             Hours: <span className="font-semibold text-primary">{parseFloat(day.totalHours || 0).toFixed(2)}</span>
                           </span>
-                          <span className="text-gray-600">
+                          <span className="text-gray-600 dark:text-neutral-300">
                             Cost: <span className="font-semibold text-red-600">${parseFloat(day.totalCost || 0).toFixed(2)}</span>
                           </span>
                         </div>
@@ -304,22 +304,23 @@ const AdminTimeClock = () => {
               
               return (
               <div key={day.date} className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="bg-gray-50 dark:bg-neutral-800 px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-semibold">{formatDate(day.date)}</h3>
-                    <div className="flex gap-6 text-sm">
-                      <span className="text-gray-600">
+                <div className="bg-gray-50 dark:bg-neutral-800 px-3 sm:px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
+                  <div className="flex flex-wrap justify-between items-center gap-1">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-neutral-100">{formatDate(day.date)}</h3>
+                    <div className="flex flex-wrap gap-3 sm:gap-6 text-sm">
+                      <span className="text-gray-600 dark:text-neutral-300">
                         Hours: <span className="font-semibold text-primary">{parseFloat(day.totalHours).toFixed(2)}</span>
                       </span>
-                      <span className="text-gray-600">
+                      <span className="text-gray-600 dark:text-neutral-300">
                         Cost: <span className="font-semibold text-red-600">${parseFloat(day.totalCost).toFixed(2)}</span>
                       </span>
                     </div>
                   </div>
                 </div>
-                
-                <div className="p-4">
-                  <table className="w-full">
+
+                <div className="p-2 sm:p-4">
+                  <div className="overflow-x-auto -mx-2 sm:mx-0">
+                  <table className="min-w-full">
                     <thead className="bg-gray-50 dark:bg-neutral-800">
                       <tr>
                         <th className="text-left py-2 px-4 text-sm font-medium">Clock In</th>
@@ -465,6 +466,7 @@ const AdminTimeClock = () => {
                       })}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
               );

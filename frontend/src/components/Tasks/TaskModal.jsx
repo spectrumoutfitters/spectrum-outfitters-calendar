@@ -518,14 +518,14 @@ const TaskModal = ({ task, onClose }) => {
   const usageList = taskData.inventory_usage || [];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-2 md:p-4" onClick={onClose}>
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[95vh] md:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="p-4 md:p-6">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-[9999] p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-3xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-4">
-            <h2 className="text-xl md:text-2xl font-bold break-words">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold break-words pr-2">
               {isEditing ? 'Edit Task' : taskData.title}
             </h2>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 shrink-0">
               {isAdmin && !isEditing && (
                 <>
                   {taskData.status === 'review' && (
@@ -627,7 +627,7 @@ const TaskModal = ({ task, onClose }) => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                   <select
@@ -1299,7 +1299,7 @@ const TaskModal = ({ task, onClose }) => {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700">Status</label>
                   <p className="mt-1 capitalize">{taskData.status.replace('_', ' ')}</p>

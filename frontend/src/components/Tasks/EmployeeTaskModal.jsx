@@ -243,8 +243,8 @@ const EmployeeTaskModal = ({ task, onClose }) => {
 
   if (initialLoading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-[9999] p-0 sm:p-4">
+        <div className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-2xl w-full p-6">
           <div className="text-center">Loading task details...</div>
         </div>
       </div>
@@ -252,21 +252,21 @@ const EmployeeTaskModal = ({ task, onClose }) => {
   }
 
   const modalContent = (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4" 
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-[9999] p-0 sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
         }
       }}
     >
-      <div 
-        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" 
+      <div
+        className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <div className="flex justify-between items-start mb-4">
-            <h2 className="text-2xl font-bold">{taskData.title}</h2>
+            <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-neutral-100 break-words pr-2">{taskData.title}</h2>
             <button
               onClick={onClose}
               className="text-gray-500 hover:text-gray-700 text-2xl"
@@ -679,9 +679,9 @@ const EmployeeTaskModal = ({ task, onClose }) => {
 
       {/* Pause Modal */}
       {showBreakModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-2 md:p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-4 md:p-6">
-            <h3 className="text-xl font-bold mb-4">Pause Task</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-[10000] p-0 sm:p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full p-4 sm:p-6">
+            <h3 className="text-lg sm:text-xl font-bold mb-4 text-gray-900 dark:text-neutral-100">Pause Task</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

@@ -112,12 +112,12 @@ const TimeEntries = () => {
   // If admin, show both clock in/out and admin time clock view
   if (isAdmin) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-gray-800 dark:text-neutral-100">Time Clock</h1>
-        
+      <div className="space-y-4 sm:space-y-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-neutral-100">Time Clock</h1>
+
         {/* Clock In/Out for Admin */}
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Your Time Clock</h2>
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-4 sm:p-6">
+          <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-900 dark:text-neutral-100">Your Time Clock</h2>
           <ClockInOut />
         </div>
         
@@ -132,15 +132,15 @@ const TimeEntries = () => {
   const totalHours = parseFloat(calculateTotalHours());
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-800 dark:text-neutral-100">Time Clock</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-neutral-100">Time Clock</h1>
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-4 sm:p-6">
         <ClockInOut />
       </div>
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-6">
-        <div className="flex flex-wrap gap-4 mb-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md border border-transparent dark:border-neutral-800 p-4 sm:p-6">
+        <div className="flex flex-wrap gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
               Start Date
@@ -193,13 +193,13 @@ const TimeEntries = () => {
               
               return (
                 <div key={day.date} className="border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 dark:bg-neutral-800 px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">
+                  <div className="bg-gray-50 dark:bg-neutral-800 px-3 sm:px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
+                    <div className="flex flex-wrap justify-between items-center gap-1">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-neutral-100">
                         {formatDate(day.date)}
                         {isToday && <span className="text-sm text-primary font-normal ml-2">(Today)</span>}
                       </h3>
-                      <div className="flex gap-6 text-sm">
+                      <div className="flex flex-wrap gap-3 sm:gap-6 text-sm">
                         <span className="text-gray-600 dark:text-neutral-200">
                           Hours: <span className="font-semibold text-primary">{parseFloat(day.totalHours || 0).toFixed(2)}</span>
                         </span>
@@ -207,9 +207,10 @@ const TimeEntries = () => {
                     </div>
                   </div>
                   
-                  <div className="p-4">
+                  <div className="p-2 sm:p-4">
                     {hasWorkEntries ? (
-                      <table className="w-full">
+                      <div className="overflow-x-auto -mx-2 sm:mx-0">
+                      <table className="min-w-full">
                         <thead className="bg-gray-50 dark:bg-neutral-800">
                           <tr>
                             <th className="text-left py-2 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Clock In</th>
@@ -305,6 +306,7 @@ const TimeEntries = () => {
                           })}
                         </tbody>
                       </table>
+                      </div>
                     ) : (
                       <p className="text-gray-500 dark:text-neutral-200 text-center py-4">No work entries for this day</p>
                     )}

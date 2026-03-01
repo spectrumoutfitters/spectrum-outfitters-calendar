@@ -147,14 +147,14 @@ const Analytics = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-800">Business Analytics & Insights</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-wrap justify-between items-center gap-3">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">Business Analytics & Insights</h1>
+        <div className="flex flex-wrap gap-2">
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100"
           />
           <span className="self-center text-gray-500">to</span>
           <input

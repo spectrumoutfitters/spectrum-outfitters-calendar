@@ -297,7 +297,8 @@ const UserManagement = () => {
       )}
 
       <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md dark:shadow-neutral-950/50 overflow-hidden border border-transparent dark:border-neutral-700">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="min-w-full">
           <thead className="bg-gray-50 dark:bg-neutral-800">
             <tr>
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-neutral-200">Name</th>
@@ -389,6 +390,7 @@ const UserManagement = () => {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
