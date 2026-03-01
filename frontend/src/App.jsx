@@ -17,6 +17,7 @@ import Inventory from './pages/Inventory';
 import InventoryManagement from './components/Admin/InventoryManagement';
 import MyWorkList from './pages/MyWorkList';
 import CustomerStatus from './pages/CustomerStatus';
+import DispatchBoard from './pages/DispatchBoard';
 import Layout from './components/Layout/Layout';
 import FloatingActions from './components/Layout/FloatingActions';
 import Logo from './components/Logo';
@@ -156,6 +157,16 @@ function AppRoutes() {
               <MyWorkList />
             </Layout>
           </PrivateRoute>
+        }
+      />
+      <Route
+        path="/dispatch"
+        element={
+          <AdminRoute>
+            <Layout>
+              <DispatchBoard />
+            </Layout>
+          </AdminRoute>
         }
       />
       <Route path="/status/:token" element={<CustomerStatus />} />

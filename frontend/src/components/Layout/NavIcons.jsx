@@ -71,8 +71,18 @@ export const IconAdmin = () => (
   </svg>
 );
 
+export const IconDispatch = () => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="3" y="3" width="5" height="18" rx="1" />
+    <rect x="10" y="3" width="5" height="11" rx="1" />
+    <rect x="17" y="3" width="4" height="7" rx="1" />
+    <path d="M10 18l2 2 4-4" />
+  </svg>
+);
+
 const iconMap = {
   dashboard: IconDashboard,
+  dispatch: IconDispatch,
   mylist: IconMyList,
   tasks: IconTasks,
   time: IconClock,
