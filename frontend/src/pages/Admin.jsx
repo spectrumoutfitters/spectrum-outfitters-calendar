@@ -231,9 +231,11 @@ const Admin = () => {
       const body = { target_url: shortUrlInput.trim() };
       if (shortUrlSlug.trim()) body.custom_slug = shortUrlSlug.trim();
       const res = await api.post('/links/shorten', body);
-      const path = res.data.path || `/pay/${res.data.slug}`;
+      const path = res.data.path || `/secure/${res.data.slug}`;
+      const apiFull = res.data.full_url;
       const origin = window.location.origin;
-      const fullUrl = `${origin}${path}`;
+      const base = apiFull && typeof apiFull === 'string' ? '' : origin;
+      const fullUrl = apiFull || `${base}${path}`;
       setShortUrlResult({
         ...res.data,
         fullUrl,
