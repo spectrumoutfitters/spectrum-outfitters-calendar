@@ -154,6 +154,13 @@ const Admin = () => {
   });
   const [loading, setLoading] = useState(true);
 
+  // Invoice link shortener (Admin Overview)
+  const [shortUrlInput, setShortUrlInput] = useState('');
+  const [shortUrlSlug, setShortUrlSlug] = useState('');
+  const [shortUrlResult, setShortUrlResult] = useState(null);
+  const [shortUrlLoading, setShortUrlLoading] = useState(false);
+  const [shortUrlError, setShortUrlError] = useState('');
+
   const selectMainTab = (id) => {
     setMainTab(id);
     localStorage.setItem('admin_main_tab', id);
@@ -212,6 +219,30 @@ const Admin = () => {
       console.error('Error loading dashboard:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateShortLink = async (e) => {
+    e.preventDefault();
+    if (!shortUrlInput.trim()) return;
+    setShortUrlLoading(true);
+    setShortUrlError('');
+    try {
+      const body = { target_url: shortUrlInput.trim() };
+      if (shortUrlSlug.trim()) body.custom_slug = shortUrlSlug.trim();
+      const res = await api.post('/links/shorten', body);
+      const path = res.data.path || `/pay/${res.data.slug}`;
+      const origin = window.location.origin;
+      const fullUrl = `${origin}${path}`;
+      setShortUrlResult({
+        ...res.data,
+        fullUrl,
+      });
+    } catch (err) {
+      setShortUrlError(err.response?.data?.error || 'Failed to create short link');
+      setShortUrlResult(null);
+    } finally {
+      setShortUrlLoading(false);
     }
   };
 
@@ -362,6 +393,91 @@ const Admin = () => {
             </div>
           </div>
         )}
+
+        {/* Invoice Link Shortener */}
+        <div className="bg-white dark:bg-neutral-950 rounded-xl border border-gray-200 dark:border-neutral-700 p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+            <div>
+              <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">
+                Invoice Link Shortener
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
+                Paste the full payment or invoice URL and get a short link that looks like it&apos;s from your Spectrum domain.
+              </p>
+            </div>
+          </div>
+          <form onSubmit={handleCreateShortLink} className="space-y-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-600 dark:text-neutral-300">
+                Full invoice / payment URL
+              </label>
+              <input
+                type="url"
+                value={shortUrlInput}
+                onChange={(e) => setShortUrlInput(e.target.value)}
+                placeholder="https://payments.provider.com/invoice/123..."
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-sm text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500"
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-600 dark:text-neutral-300">
+                Custom short code (optional)
+              </label>
+              <div className="flex items-center gap-1">
+                <span className="hidden md:inline text-xs text-gray-400">
+                  /pay/
+                </span>
+                <input
+                  type="text"
+                  value={shortUrlSlug}
+                  onChange={(e) => setShortUrlSlug(e.target.value)}
+                  placeholder="truck-deposit-jan24"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-sm text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500"
+                />
+              </div>
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                Letters, numbers, and dashes only. Leave blank to auto‑generate.
+              </p>
+            </div>
+            {shortUrlError && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                {shortUrlError}
+              </p>
+            )}
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+              <button
+                type="submit"
+                disabled={shortUrlLoading || !shortUrlInput.trim()}
+                className="w-full sm:w-auto px-4 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {shortUrlLoading ? 'Creating link…' : 'Create short link'}
+              </button>
+              {shortUrlResult && (
+                <div className="flex-1 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                  <input
+                    type="text"
+                    readOnly
+                    value={shortUrlResult.fullUrl}
+                    className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 text-xs text-gray-900 dark:text-neutral-100"
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator.clipboard && shortUrlResult.fullUrl) {
+                        navigator.clipboard.writeText(shortUrlResult.fullUrl).catch(() => {});
+                      }
+                    }}
+                    className="px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 text-xs font-medium text-gray-700 dark:text-neutral-100 hover:bg-gray-50 dark:hover:bg-neutral-800"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+            </div>
+          </form>
+        </div>
       </div>
     );
   };

@@ -13,6 +13,7 @@ import { addInventoryTaskUsageTable } from './add_inventory_task_usage.js';
 import { addTaskPhotosTable } from './add_task_photos.js';
 import { addInventorySupplierColumns } from './add_inventory_supplier.js';
 import { addCustomerStatusTable } from './add_customer_status.js';
+import { addShortLinksTable } from './add_short_links.js';
 
 export async function ensureUserColumns() {
   const columns = [
@@ -178,4 +179,5 @@ export async function runStartupMigrations() {
   await addTaskPhotosTable();
   await addInventorySupplierColumns();
   await addCustomerStatusTable();
+  await addShortLinksTable();
 }

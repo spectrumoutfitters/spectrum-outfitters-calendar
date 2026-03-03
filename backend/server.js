@@ -52,6 +52,7 @@ import { authenticateToken, requireAdmin } from './middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { pullChangesFromGoogle } from './utils/googleCalendarService.js';
 import { getSocketClientIP, startSession, endSession, heartbeatSession } from './utils/security.js';
+import shortLinksRoutes from './routes/shortLinks.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -668,6 +669,7 @@ app.use('/api/dashboard', dashboardRevenueRoutes);
 app.use('/api/customer-status', customerStatusRoutes);
 app.use('/api/admin/dispatch', dispatchRoutes);
 app.use('/api/employee', employeeRoutes);
+app.use(shortLinksRoutes);
 
 // Serve uploaded files
 const uploadsPath = process.env.UPLOADS_PATH || path.join(__dirname, 'uploads');

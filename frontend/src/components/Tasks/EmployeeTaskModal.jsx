@@ -4,6 +4,7 @@ import api from '../../utils/api';
 import { formatDateTime, formatDate, getDueDateColor } from '../../utils/helpers';
 import { useAuth } from '../../contexts/AuthContext';
 import TaskTimer from './TaskTimer';
+import BarcodeScannerModal from '../Inventory/BarcodeScannerModal';
 
 const EmployeeTaskModal = ({ task, onClose }) => {
   const { user } = useAuth();
@@ -19,6 +20,11 @@ const EmployeeTaskModal = ({ task, onClose }) => {
   const [breakNotes, setBreakNotes] = useState('');
   const [breakType, setBreakType] = useState('lunch'); // 'lunch' or 'other'
   const [showAddInventory, setShowAddInventory] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [addingSubtask, setAddingSubtask] = useState(false);
+  const [partsUsed, setPartsUsed] = useState([]);
+  const [partsLoading, setPartsLoading] = useState(false);
+  const [showPartScanner, setShowPartScanner] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryItems, setInventoryItems] = useState([]);
   const [inventorySearchLoading, setInventorySearchLoading] = useState(false);
@@ -29,6 +35,7 @@ const EmployeeTaskModal = ({ task, onClose }) => {
 
   useEffect(() => {
     loadFullTaskData();
+    loadPartsUsed();
   }, [task.id]);
 
   useEffect(() => {
@@ -106,6 +113,18 @@ const EmployeeTaskModal = ({ task, onClose }) => {
     }
   };
 
+  const loadPartsUsed = async () => {
+    setPartsLoading(true);
+    try {
+      const res = await api.get(`/inventory/task-usage/${task.id}`);
+      setPartsUsed(res.data?.usage || []);
+    } catch (e) {
+      setPartsUsed([]);
+    } finally {
+      setPartsLoading(false);
+    }
+  };
+
   const loadFullTaskData = async () => {
     setInitialLoading(true);
     try {
@@ -162,6 +181,25 @@ const EmployeeTaskModal = ({ task, onClose }) => {
 
   const allSubtasksCompleted = taskData.subtasks && taskData.subtasks.length > 0 && 
     taskData.subtasks.every(st => st.is_completed === 1);
+
+  const handleAddSubtask = async () => {
+    const title = newSubtaskTitle.trim();
+    if (!title) return;
+    setAddingSubtask(true);
+    try {
+      const response = await api.post(`/tasks/${task.id}/subtasks`, { title });
+      setTaskData(prev => ({
+        ...prev,
+        subtasks: [...(prev.subtasks || []), response.data.subtask]
+      }));
+      setNewSubtaskTitle('');
+    } catch (error) {
+      console.error('Error adding checklist item:', error);
+      alert(error.response?.data?.error || 'Failed to add checklist item');
+    } finally {
+      setAddingSubtask(false);
+    }
+  };
 
   const handleSubmitForReview = async () => {
     if (!torquedToSpec) {
@@ -381,64 +419,115 @@ const EmployeeTaskModal = ({ task, onClose }) => {
             <div>
               <div className="text-sm font-medium text-gray-700 mb-2">Task Checklist</div>
               {taskData.subtasks && taskData.subtasks.length > 0 ? (
-                <div className="space-y-2">
-                  {taskData.subtasks.map((subtask) => {
-                    const checkboxId = `subtask-${subtask.id}`;
-                    return (
-                      <label
-                        key={subtask.id}
-                        htmlFor={checkboxId}
-                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"
-                        onClick={(e) => {
-                          // Prevent label from triggering if clicking directly on checkbox
-                          if (e.target.tagName !== 'INPUT') {
-                            e.preventDefault();
-                            const checkbox = document.getElementById(checkboxId);
-                            if (checkbox && !checkbox.disabled) {
-                              checkbox.click();
-                            }
-                          }
-                        }}
-                      >
-                        <input
-                          id={checkboxId}
-                          type="checkbox"
-                          checked={subtask.is_completed === 1}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            console.log('CHECKBOX CHANGED!', subtask.id);
-                            handleSubtaskToggle(subtask.id, subtask.is_completed === 1);
-                          }}
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    {taskData.subtasks.map((subtask) => {
+                      const checkboxId = `subtask-${subtask.id}`;
+                      return (
+                        <label
+                          key={subtask.id}
+                          htmlFor={checkboxId}
+                          className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"
                           onClick={(e) => {
-                            e.stopPropagation();
-                            console.log('CHECKBOX CLICKED!', subtask.id);
+                            // Prevent label from triggering if clicking directly on checkbox
+                            if (e.target.tagName !== 'INPUT') {
+                              e.preventDefault();
+                              const checkbox = document.getElementById(checkboxId);
+                              if (checkbox && !checkbox.disabled) {
+                                checkbox.click();
+                              }
+                            }
                           }}
-                          className="w-5 h-5 accent-primary"
-                          style={{ cursor: 'pointer', pointerEvents: 'auto' }}
-                          disabled={false}
-                        />
-                        <span className={`flex-1 select-none ${subtask.is_completed === 1 ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                          {subtask.title}
-                        </span>
-                        {subtask.is_completed === 1 && (
-                          <div className="text-xs text-gray-500 flex-shrink-0 text-right">
-                            {subtask.completed_by_name && (
-                              <div>✓ {subtask.completed_by_name}</div>
-                            )}
-                            {subtask.completed_at && (
-                              <div className="text-gray-400">{formatDateTime(subtask.completed_at)}</div>
-                            )}
-                          </div>
-                        )}
-                      </label>
-                    );
-                  })}
+                        >
+                          <input
+                            id={checkboxId}
+                            type="checkbox"
+                            checked={subtask.is_completed === 1}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              console.log('CHECKBOX CHANGED!', subtask.id);
+                              handleSubtaskToggle(subtask.id, subtask.is_completed === 1);
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log('CHECKBOX CLICKED!', subtask.id);
+                            }}
+                            className="w-5 h-5 accent-primary"
+                            style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                            disabled={false}
+                          />
+                          <span className={`flex-1 select-none ${subtask.is_completed === 1 ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                            {subtask.title}
+                          </span>
+                          {subtask.is_completed === 1 && (
+                            <div className="text-xs text-gray-500 flex-shrink-0 text-right">
+                              {subtask.completed_by_name && (
+                                <div>✓ {subtask.completed_by_name}</div>
+                              )}
+                              {subtask.completed_at && (
+                                <div className="text-gray-400">{formatDateTime(subtask.completed_at)}</div>
+                              )}
+                            </div>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={newSubtaskTitle}
+                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddSubtask();
+                        }
+                      }}
+                      placeholder="Add checklist item..."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddSubtask}
+                      disabled={addingSubtask || !newSubtaskTitle.trim()}
+                      className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition disabled:opacity-50 text-sm font-medium min-h-[44px]"
+                    >
+                      {addingSubtask ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Add quick checklist items so you don&apos;t forget extra steps on this job.
+                  </p>
                 </div>
               ) : (
                 <div className="bg-primary-subtle border border-primary/20 rounded-lg p-4">
-                  <p className="text-neutral-800 text-sm">
-                    📋 No checklist items yet. Contact your admin to add items to this task.
+                  <p className="text-neutral-800 text-sm mb-2">
+                    📋 No checklist items yet. Add your own steps so you don&apos;t forget anything.
                   </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={newSubtaskTitle}
+                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddSubtask();
+                        }
+                      }}
+                      placeholder="Add checklist item..."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddSubtask}
+                      disabled={addingSubtask || !newSubtaskTitle.trim()}
+                      className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition disabled:opacity-50 text-sm font-medium min-h-[44px]"
+                    >
+                      {addingSubtask ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -672,6 +761,52 @@ const EmployeeTaskModal = ({ task, onClose }) => {
                   ))}
                 </ul>
               )}
+            </div>
+
+            {/* Parts Used (scanned) */}
+            <div className="mt-4">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <label className="text-sm font-medium text-gray-700">Parts Used (scanned)</label>
+                <button
+                  type="button"
+                  onClick={() => setShowPartScanner(true)}
+                  className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition w-full sm:w-auto"
+                >
+                  + Scan part
+                </button>
+              </div>
+              {partsLoading ? (
+                <p className="text-sm text-gray-500">Loading scanned parts…</p>
+              ) : partsUsed.length === 0 ? (
+                <p className="text-sm text-gray-500">No scanned parts on this task yet.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {partsUsed.map((u) => (
+                    <li
+                      key={u.id}
+                      className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg border border-blue-100 text-sm"
+                    >
+                      <span className="font-medium flex-1 min-w-0 truncate">{u.item_name}</span>
+                      <span className="text-xs text-gray-600">
+                        {u.quantity_used} {u.item_unit || 'ea'}
+                      </span>
+                      {u.used_by_name && (
+                        <span className="text-[11px] text-gray-500">
+                          by {u.used_by_name}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <BarcodeScannerModal
+                isOpen={showPartScanner}
+                onClose={() => setShowPartScanner(false)}
+                pendingContext={{ type: 'use_on_task', task_id: task.id, task_title: taskData.title }}
+                onDetected={() => {
+                  loadPartsUsed();
+                }}
+              />
             </div>
           </div>
         </div>
