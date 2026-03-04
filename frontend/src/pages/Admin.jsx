@@ -434,6 +434,22 @@ const Admin = () => {
                   type="text"
                   value={shortUrlSlug}
                   onChange={(e) => setShortUrlSlug(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === ' ') {
+                      e.preventDefault();
+                      const input = e.target;
+                      const start = input.selectionStart ?? shortUrlSlug.length;
+                      const end = input.selectionEnd ?? start;
+                      const before = shortUrlSlug.slice(0, start);
+                      const after = shortUrlSlug.slice(end);
+                      const next = before + '-' + after;
+                      setShortUrlSlug(next);
+                      requestAnimationFrame(() => {
+                        const newPos = start + 1;
+                        input.setSelectionRange(newPos, newPos);
+                      });
+                    }
+                  }}
                   placeholder="truck-deposit-jan24"
                   className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-sm text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500"
                 />
