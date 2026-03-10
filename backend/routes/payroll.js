@@ -5,29 +5,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import fs from 'fs';
-import os from 'os';
+import { getPayrollDataPath } from '../utils/payrollDataPath.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const router = express.Router();
-
-// Get payroll data path (same as Electron app when local; use PAYROLL_DATA_PATH on server)
-const getPayrollDataPath = () => {
-  if (process.env.PAYROLL_DATA_PATH) {
-    const payrollPath = path.resolve(process.env.PAYROLL_DATA_PATH);
-    if (!fs.existsSync(payrollPath)) {
-      fs.mkdirSync(payrollPath, { recursive: true });
-    }
-    return payrollPath;
-  }
-  const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
-  const payrollPath = path.join(appData, 'SpectrumOutfitters-Payroll-System', 'PayrollData');
-  if (!fs.existsSync(payrollPath)) {
-    fs.mkdirSync(payrollPath, { recursive: true });
-  }
-  return payrollPath;
-};
 
 // All routes require authentication
 router.use(authenticateToken);

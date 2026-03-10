@@ -46,6 +46,7 @@ const ProfitAndLoss = () => {
   const [showReimbModal, setShowReimbModal] = useState(false);
   const [reimbForm, setReimbForm] = useState({ source_type: '', source_id: '', received_date: new Date().toISOString().split('T')[0], amount: '', notes: '' });
   const [reimbSaving, setReimbSaving] = useState(false);
+  const [showNetOfReimbursement, setShowNetOfReimbursement] = useState(false);
 
   useEffect(() => {
     loadPnlData();
@@ -345,6 +346,12 @@ const ProfitAndLoss = () => {
   }
 
   const { revenue, payroll, expenses, summary, comparison } = pnlData;
+  const expectedReimb = payroll?.expected_reimbursement_this_week ?? summary?.expected_reimbursement_this_week ?? 0;
+  const displayPayrollTotal = showNetOfReimbursement ? (payroll?.total ?? 0) - expectedReimb : (payroll?.total ?? 0);
+  const displayTotalExpenses = showNetOfReimbursement ? (summary?.total_expenses ?? 0) - expectedReimb : (summary?.total_expenses ?? 0);
+  const displayNetProfitLoss = showNetOfReimbursement ? (summary?.net_profit_loss ?? 0) + expectedReimb : (summary?.net_profit_loss ?? 0);
+  const displayProfitMargin = summary?.total_revenue > 0 ? (displayNetProfitLoss / summary.total_revenue) * 100 : 0;
+  const displayIsProfitable = displayNetProfitLoss > 0;
 
   return (
     <div className="space-y-6">
@@ -384,23 +391,25 @@ const ProfitAndLoss = () => {
             <div>
               <div className="text-sm text-gray-600 mb-1">Total Expenses</div>
               <div className="text-3xl font-bold text-red-600">
-                {formatCurrency(summary.total_expenses)}
+                {formatCurrency(displayTotalExpenses)}
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                Payroll: {formatCurrency(summary.payroll_cost)} | Other: {formatCurrency(summary.other_expenses)}
+                Payroll: {formatCurrency(displayPayrollTotal)}
+                {showNetOfReimbursement && expectedReimb > 0 && <span className="text-gray-500"> (net of {formatCurrency(expectedReimb)} reimb.)</span>}
+                {' | Other: '}{formatCurrency(summary.other_expenses)}
               </div>
             </div>
             <div>
               <div className="text-sm text-gray-600 mb-1">Net Profit/Loss</div>
               <div className={`text-4xl font-bold ${
-                summary.is_profitable ? 'text-green-600' : 'text-red-600'
+                displayIsProfitable ? 'text-green-600' : 'text-red-600'
               }`}>
-                {formatCurrency(summary.net_profit_loss)}
+                {formatCurrency(displayNetProfitLoss)}
               </div>
               <div className={`text-sm mt-1 ${
-                summary.is_profitable ? 'text-green-700' : 'text-red-700'
+                displayIsProfitable ? 'text-green-700' : 'text-red-700'
               }`}>
-                {summary.profit_margin.toFixed(1)}% margin
+                {displayProfitMargin.toFixed(1)}% margin
               </div>
             </div>
           </div>
@@ -456,17 +465,32 @@ const ProfitAndLoss = () => {
           <div>
             <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-1">Payroll</h3>
             <div className="text-3xl font-bold text-red-600 dark:text-red-400">
-              {formatCurrency(payroll.total)}
+              {formatCurrency(displayPayrollTotal)}
             </div>
-            <div className="text-sm text-gray-600 dark:text-neutral-400">Total weekly payroll cost</div>
+            <div className="text-sm text-gray-600 dark:text-neutral-400">
+              {showNetOfReimbursement && expectedReimb > 0
+                ? `Net weekly payroll (after ${formatCurrency(expectedReimb)} expected reimbursement)`
+                : 'Total weekly payroll cost'}
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={handleAddPayrollPerson}
-            className="w-full sm:w-auto px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-sm font-medium"
-          >
-            + Add to payroll
-          </button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-900 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showNetOfReimbursement}
+                onChange={(e) => setShowNetOfReimbursement(e.target.checked)}
+                className="rounded border-gray-300 dark:border-neutral-600"
+              />
+              <span className="text-sm text-gray-700 dark:text-neutral-300">Show net of expected reimbursement</span>
+            </label>
+            <button
+              type="button"
+              onClick={handleAddPayrollPerson}
+              className="w-full sm:w-auto px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-sm font-medium"
+            >
+              + Add to payroll
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -478,15 +502,17 @@ const ProfitAndLoss = () => {
                 <div>
                   <div className="font-medium text-gray-800 dark:text-neutral-100">{emp.employee_name}</div>
                   <div className="text-xs text-gray-600 dark:text-neutral-400">
-                    {emp.weekly_salary > 0
-                      ? `Salary: ${formatCurrency(emp.weekly_salary)}`
-                      : `${emp.hours_worked?.toFixed(1) || 0} hrs × ${formatCurrency(emp.hourly_rate)}`
+                    {emp.split_only
+                      ? 'Split salary — paid via Payroll System; see Reimbursements'
+                      : emp.weekly_salary > 0
+                        ? `Salary: ${formatCurrency(emp.weekly_salary)}`
+                        : `${emp.hours_worked?.toFixed(1) || 0} hrs × ${formatCurrency(emp.hourly_rate)}`
                     }
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-semibold text-gray-800 dark:text-neutral-100">
-                    {formatCurrency(emp.cost)}
+                    {emp.split_only ? '—' : formatCurrency(emp.cost)}
                   </span>
                   {emp.payroll_people_id && (
                     <>
@@ -538,16 +564,47 @@ const ProfitAndLoss = () => {
                 const totalReceived = reimbursements.total_received_by_source[key] || 0;
                 const isMonthly = src.expected_period === 'monthly';
                 const expectedLabel = isMonthly ? `Expected per month: ${formatCurrency(src.expected_amount)}` : `Expected per week: ${formatCurrency(src.expected_amount)}`;
+                const payRecords = src.pay_records || [];
+                const totalPaid = src.total_paid_from_payroll != null ? src.total_paid_from_payroll : payRecords.reduce((s, r) => s + (r.amount || 0), 0);
+                const amountOwed = src.amount_owed_estimate != null ? src.amount_owed_estimate : 0;
                 return (
-                  <div key={key} className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700">
-                    <div>
-                      <span className="font-medium text-gray-800 dark:text-neutral-100">{src.name}</span>
-                      {src.notes && <span className="text-xs text-gray-500 dark:text-neutral-400 ml-2">({src.notes})</span>}
-                      <div className="text-xs text-gray-600 dark:text-neutral-400 mt-0.5">{expectedLabel}</div>
+                  <div key={key} className="p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <span className="font-medium text-gray-800 dark:text-neutral-100">{src.name}</span>
+                        {src.notes && <span className="text-xs text-gray-500 dark:text-neutral-400 ml-2">({src.notes})</span>}
+                        <div className="text-xs text-gray-600 dark:text-neutral-400 mt-0.5">{expectedLabel}</div>
+                      </div>
+                      <div className="text-right flex flex-wrap gap-3">
+                        {totalPaid > 0 && <span className="text-sm text-gray-600 dark:text-neutral-400">Paid via payroll: {formatCurrency(totalPaid)}</span>}
+                        <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Received from other biz: {formatCurrency(totalReceived)}</span>
+                        {amountOwed > 0 && <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">Est. owed: {formatCurrency(amountOwed)}</span>}
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Total received: {formatCurrency(totalReceived)}</span>
-                    </div>
+                    {payRecords.length > 0 && (
+                      <div className="border-t border-gray-200 dark:border-neutral-700 pt-2 mt-2">
+                        <div className="text-xs font-medium text-gray-600 dark:text-neutral-400 mb-1">Pay history (from Payroll System)</div>
+                        <div className="overflow-x-auto max-h-32 overflow-y-auto">
+                          <table className="min-w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-200 dark:border-neutral-600">
+                                <th className="text-left py-1 text-gray-500">Date</th>
+                                <th className="text-right py-1 text-gray-500">Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {[...payRecords].reverse().slice(0, 12).map((r, i) => (
+                                <tr key={i} className="border-b border-gray-100 dark:border-neutral-800">
+                                  <td className="py-1 text-gray-700 dark:text-neutral-300">{formatDate(r.pay_date)}</td>
+                                  <td className="py-1 text-right font-medium">{formatCurrency(r.amount)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {payRecords.length > 12 && <div className="text-xs text-gray-500 mt-1">Showing latest 12 of {payRecords.length} pays</div>}
+                      </div>
+                    )}
                   </div>
                 );
               })}

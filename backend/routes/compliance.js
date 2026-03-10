@@ -1153,7 +1153,64 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
     }
   }
 
-  return { payroll, totalPayroll };
+  // Users with split salary but no Calendar salary (paid via Payroll System only) — show on payroll list with cost 0
+  const usersSplitOnly = await db.allAsync(`
+    SELECT id, full_name, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period
+    FROM users
+    WHERE is_active = 1
+      AND COALESCE(split_reimbursable_amount, 0) > 0
+      AND COALESCE(weekly_salary, 0) = 0
+      AND COALESCE(hourly_rate, 0) = 0
+  `);
+  const payrollIds = new Set(payroll.map(e => (e.employee_id && `user:${e.employee_id}`) || (e.payroll_people_id && `pp:${e.payroll_people_id}`)));
+  for (const u of usersSplitOnly) {
+    if (payrollIds.has(`user:${u.id}`)) continue;
+    payroll.push({
+      employee_id: u.id,
+      payroll_people_id: null,
+      employee_name: u.full_name,
+      weekly_salary: 0,
+      hourly_rate: 0,
+      hours_worked: null,
+      cost: 0,
+      split_only: true,
+      split_reimbursable_amount: parseFloat(u.split_reimbursable_amount) || 0,
+      split_reimbursable_notes: u.split_reimbursable_notes || null,
+      split_reimbursable_period: u.split_reimbursable_period || 'weekly'
+    });
+  }
+
+  // Payroll-only people with split but no weekly salary — show on list with cost 0
+  const peopleSplitOnly = await db.allAsync(
+    'SELECT id, full_name, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM payroll_people WHERE is_active = 1 AND COALESCE(split_reimbursable_amount, 0) > 0 AND COALESCE(weekly_salary, 0) = 0'
+  );
+  for (const p of peopleSplitOnly) {
+    if (payrollIds.has(`pp:${p.id}`)) continue;
+    payroll.push({
+      employee_id: null,
+      payroll_people_id: p.id,
+      employee_name: p.full_name,
+      weekly_salary: 0,
+      hourly_rate: 0,
+      hours_worked: null,
+      cost: 0,
+      split_only: true,
+      split_reimbursable_amount: parseFloat(p.split_reimbursable_amount) || 0,
+      split_reimbursable_notes: p.split_reimbursable_notes || null,
+      split_reimbursable_period: p.split_reimbursable_period || 'weekly'
+    });
+  }
+
+  // Expected reimbursement this week (other business's share) — for optional "net" view
+  let expectedReimbursementThisWeek = 0;
+  for (const entry of payroll) {
+    const amt = parseFloat(entry.split_reimbursable_amount) || 0;
+    if (amt <= 0) continue;
+    const period = entry.split_reimbursable_period || 'weekly';
+    expectedReimbursementThisWeek += period === 'monthly' ? amt / 4.33 : amt;
+  }
+
+  return { payroll, totalPayroll, expectedReimbursementThisWeek };
 }
 
 // Helper function to calculate weekly expenses
@@ -1295,7 +1352,7 @@ router.get('/pnl/weekly', async (req, res) => {
     const totalRevenue = dailySales.reduce((sum, d) => sum + (Number(d.revenue) || 0), 0);
 
     // Calculate Payroll
-    const { payroll, totalPayroll } = await calculateWeeklyPayroll(weekStart, weekEndDate);
+    const { payroll, totalPayroll, expectedReimbursementThisWeek } = await calculateWeeklyPayroll(weekStart, weekEndDate);
 
     // Calculate Expenses
     const { expenses, byCategory, totalExpenses } = await calculateWeeklyExpenses(weekStart, weekEndDate, weekEndDate);
@@ -1358,7 +1415,8 @@ router.get('/pnl/weekly', async (req, res) => {
       },
       payroll: {
         total: totalPayroll,
-        employees: payroll
+        employees: payroll,
+        expected_reimbursement_this_week: expectedReimbursementThisWeek
       },
       expenses: {
         total: totalExpenses,
@@ -1372,6 +1430,7 @@ router.get('/pnl/weekly', async (req, res) => {
         total_revenue: totalRevenue,
         total_expenses: totalPayroll + totalExpenses + bankExpenseTotal,
         payroll_cost: totalPayroll,
+        expected_reimbursement_this_week: expectedReimbursementThisWeek,
         other_expenses: totalExpenses,
         bank_expenses: bankExpenseTotal,
         net_profit_loss: totalRevenue - totalPayroll - totalExpenses - bankExpenseTotal,

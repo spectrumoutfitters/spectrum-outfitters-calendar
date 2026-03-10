@@ -1,6 +1,9 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import db from '../database/db.js';
+import { getPayrollDataPath } from '../utils/payrollDataPath.js';
 import {
   getTodayInHouston,
   getWeekEndingFridayHouston,
@@ -358,6 +361,57 @@ router.get('/reimbursements', async (req, res) => {
       const key = `${p.source_type}:${p.source_id}`;
       totalReceivedBySource[key] = (totalReceivedBySource[key] || 0) + (parseFloat(p.amount) || 0);
     }
+
+    // Pull pay history from Payroll System for each source (match by name)
+    let payrollHistory = [];
+    try {
+      const dataPath = getPayrollDataPath();
+      const historyPath = path.join(dataPath, 'payroll-history.json');
+      if (fs.existsSync(historyPath)) {
+        const data = fs.readFileSync(historyPath, 'utf8');
+        payrollHistory = JSON.parse(data);
+      }
+    } catch (_) {}
+    const normalizeName = (n) => (n || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    const payRecordsBySource = {};
+    for (const src of sources) {
+      const srcName = normalizeName(src.name);
+      const records = (payrollHistory || []).filter((rec) => {
+        const empName = normalizeName(rec.employee?.name || rec.employeeName || rec.name || '');
+        return empName && srcName && empName === srcName;
+      });
+      const payRecords = records.map((r) => {
+        const payDate = r.payDate || r.date || r.processedDate || '';
+        const amount = parseFloat(r.grossPay ?? r.netPay ?? r.amount ?? 0);
+        return { pay_date: payDate, amount };
+      }).sort((a, b) => (a.pay_date || '').localeCompare(b.pay_date || ''));
+      const totalPaidFromPayroll = payRecords.reduce((sum, r) => sum + r.amount, 0);
+      let amountOwedEstimate = 0;
+      if (src.expected_amount > 0 && payRecords.length > 0) {
+        const received = totalReceivedBySource[`${src.source_type}:${src.source_id}`] || 0;
+        if (src.expected_period === 'monthly') {
+          const months = new Set(payRecords.map((r) => (r.pay_date || '').slice(0, 7)).filter(Boolean));
+          amountOwedEstimate = Math.max(0, months.size * src.expected_amount - received);
+        } else {
+          amountOwedEstimate = Math.max(0, payRecords.length * src.expected_amount - received);
+        }
+      }
+      payRecordsBySource[`${src.source_type}:${src.source_id}`] = { pay_records: payRecords, total_paid_from_payroll: totalPaidFromPayroll, amount_owed_estimate: amountOwedEstimate };
+    }
+    sources.forEach((s) => {
+      const key = `${s.source_type}:${s.source_id}`;
+      const data = payRecordsBySource[key];
+      if (data) {
+        s.pay_records = data.pay_records;
+        s.total_paid_from_payroll = data.total_paid_from_payroll;
+        s.amount_owed_estimate = data.amount_owed_estimate;
+      } else {
+        s.pay_records = [];
+        s.total_paid_from_payroll = 0;
+        s.amount_owed_estimate = 0;
+      }
+    });
+
     res.json({ sources, payments, total_received_by_source: totalReceivedBySource });
   } catch (error) {
     console.error('Get reimbursements error:', error);
