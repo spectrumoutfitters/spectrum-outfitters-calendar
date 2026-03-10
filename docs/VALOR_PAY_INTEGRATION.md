@@ -6,7 +6,7 @@ Spectrum Outfitters uses **Valor Pay** as the payment processor. When you charge
 
 - **Sync**: The app calls Valor Pay’s **Transaction List (Date Range)** API with your App ID and App Key, then aggregates approved sales by day (minus refunds) into `processor_daily_revenue` (processor = `valorpay`).
 - **Daily income rule**: For each day we use **one** source: Shop Monkey (if present) → **Valor Pay** (if present) → manual daily sales. We never add two sources for the same day.
-- **Auto-sync**: When `VALOR_APP_ID` and `VALOR_APP_KEY` are set, the backend syncs the last 7 days every 5 minutes.
+- **Auto-sync**: When `VALOR_APP_ID` and `VALOR_APP_KEY` are set (and `VALOR_PAY_DISABLED` is not set), the backend syncs the last 7 days every 5 minutes.
 
 ## Keys (from your Valor Pay keys file)
 
@@ -19,6 +19,7 @@ Configured in `backend/.env`:
 | `VALOR_EPI` | Optional endpoint ID (10-digit, often starts with 2) | Valor Portal → Merchant Management → API Keys if required |
 | `VALOR_API_BASE_URL` | Base URL for Valor API | Default: `https://securelink-staging.valorpaytech.com:4430` (use production URL when going live) |
 | `VALOR_TXN_LIST_URL` | Optional full URL for transaction list | Only set if the transaction list endpoint is different from `{base}/api/valor/transaction-list` |
+| `VALOR_PAY_DISABLED` | Turn off Valor sync (no API calls, no auto-sync) | Set to `1` or `true` to disable until you remove it |
 
 Keys contain special characters (`%`, `$`, `#`); in `.env` they are in double quotes.
 

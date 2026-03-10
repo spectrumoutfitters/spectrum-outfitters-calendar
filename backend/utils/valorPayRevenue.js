@@ -25,7 +25,13 @@ function getTxnListUrl() {
   return base.includes('?') ? `${base}&${TXN_LIST_QUERY}=` : `${base}/?${TXN_LIST_QUERY}=`;
 }
 
+function isValorPayDisabled() {
+  const v = (process.env.VALOR_PAY_DISABLED || '').toString().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
 function isConfigured() {
+  if (isValorPayDisabled()) return false;
   const appId = (process.env.VALOR_APP_ID || '').trim().replace(/^["']|["']$/g, '');
   const appKey = (process.env.VALOR_APP_KEY || '').trim().replace(/^["']|["']$/g, '');
   return !!(appId && appKey);

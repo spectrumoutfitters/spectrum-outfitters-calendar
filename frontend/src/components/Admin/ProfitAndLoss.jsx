@@ -38,11 +38,23 @@ const ProfitAndLoss = () => {
     notes: ''
   });
   const [recurringExpenses, setRecurringExpenses] = useState([]);
+  const [showPayrollModal, setShowPayrollModal] = useState(false);
+  const [editingPayrollPerson, setEditingPayrollPerson] = useState(null);
+  const [payrollForm, setPayrollForm] = useState({ full_name: '', weekly_salary: '', hourly_rate: '', notes: '', split_reimbursable_amount: '', split_reimbursable_notes: '', split_reimbursable_period: 'weekly' });
+  const [payrollSaving, setPayrollSaving] = useState(false);
+  const [reimbursements, setReimbursements] = useState({ sources: [], payments: [], total_received_by_source: {} });
+  const [showReimbModal, setShowReimbModal] = useState(false);
+  const [reimbForm, setReimbForm] = useState({ source_type: '', source_id: '', received_date: new Date().toISOString().split('T')[0], amount: '', notes: '' });
+  const [reimbSaving, setReimbSaving] = useState(false);
 
   useEffect(() => {
     loadPnlData();
     loadRecurringExpenses();
   }, [weekEndingDate]);
+
+  useEffect(() => {
+    loadReimbursements();
+  }, []);
 
   const loadPnlData = async () => {
     setLoading(true);
@@ -63,6 +75,15 @@ const ProfitAndLoss = () => {
       setRecurringExpenses(response.data.expenses || []);
     } catch (error) {
       console.error('Error loading recurring expenses:', error);
+    }
+  };
+
+  const loadReimbursements = async () => {
+    try {
+      const res = await api.get('/finance/reimbursements');
+      setReimbursements({ sources: res.data.sources || [], payments: res.data.payments || [], total_received_by_source: res.data.total_received_by_source || {} });
+    } catch (err) {
+      console.error('Error loading reimbursements:', err);
     }
   };
 
@@ -142,6 +163,123 @@ const ProfitAndLoss = () => {
       loadPnlData();
     } catch (error) {
       alert('Error deleting expense: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleAddPayrollPerson = () => {
+    setEditingPayrollPerson(null);
+    setPayrollForm({ full_name: '', weekly_salary: '', hourly_rate: '', notes: '', split_reimbursable_amount: '', split_reimbursable_notes: '', split_reimbursable_period: 'weekly' });
+    setShowPayrollModal(true);
+  };
+
+  const handleEditPayrollPerson = (emp) => {
+    if (!emp.payroll_people_id) return;
+    setEditingPayrollPerson(emp);
+    setPayrollForm({
+      full_name: emp.employee_name || '',
+      weekly_salary: emp.weekly_salary > 0 ? String(emp.weekly_salary) : '',
+      hourly_rate: emp.hourly_rate > 0 ? String(emp.hourly_rate) : '',
+      notes: '',
+      split_reimbursable_amount: emp.split_reimbursable_amount > 0 ? String(emp.split_reimbursable_amount) : '',
+      split_reimbursable_notes: emp.split_reimbursable_notes || '',
+      split_reimbursable_period: emp.split_reimbursable_period || 'weekly'
+    });
+    setShowPayrollModal(true);
+  };
+
+  const handleSavePayrollPerson = async () => {
+    const name = (payrollForm.full_name || '').trim();
+    const weekly = parseFloat(payrollForm.weekly_salary) || 0;
+    const hourly = parseFloat(payrollForm.hourly_rate) || 0;
+    if (!name) {
+      alert('Please enter a name.');
+      return;
+    }
+    if (weekly <= 0 && hourly <= 0) {
+      alert('Please enter a weekly salary or hourly rate.');
+      return;
+    }
+    const splitAmt = parseFloat(payrollForm.split_reimbursable_amount) || 0;
+    const splitNotes = (payrollForm.split_reimbursable_notes || '').trim() || undefined;
+    const splitPeriod = payrollForm.split_reimbursable_period === 'monthly' ? 'monthly' : 'weekly';
+    setPayrollSaving(true);
+    try {
+      if (editingPayrollPerson?.payroll_people_id) {
+        await api.put(`/finance/payroll-people/${editingPayrollPerson.payroll_people_id}`, {
+          full_name: name,
+          weekly_salary: weekly,
+          hourly_rate: hourly,
+          notes: (payrollForm.notes || '').trim() || undefined,
+          split_reimbursable_amount: splitAmt,
+          split_reimbursable_notes: splitNotes,
+          split_reimbursable_period: splitPeriod
+        });
+      } else {
+        await api.post('/finance/payroll-people', {
+          full_name: name,
+          weekly_salary: weekly,
+          hourly_rate: hourly,
+          notes: (payrollForm.notes || '').trim() || undefined,
+          split_reimbursable_amount: splitAmt,
+          split_reimbursable_notes: splitNotes,
+          split_reimbursable_period: splitPeriod
+        });
+      }
+      setShowPayrollModal(false);
+      loadPnlData();
+      loadReimbursements();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to save payroll person');
+    } finally {
+      setPayrollSaving(false);
+    }
+  };
+
+  const handleRemovePayrollPerson = async (emp) => {
+    if (!emp.payroll_people_id) return;
+    if (!window.confirm(`Remove ${emp.employee_name} from payroll? They will no longer appear in weekly cost.`)) return;
+    try {
+      await api.delete(`/finance/payroll-people/${emp.payroll_people_id}`);
+      loadPnlData();
+      loadReimbursements();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to remove');
+    }
+  };
+
+  const handleRecordReimbursement = () => {
+    const first = reimbursements.sources[0];
+    setReimbForm({
+      source_type: first ? first.source_type : '',
+      source_id: first ? String(first.source_id) : '',
+      received_date: new Date().toISOString().split('T')[0],
+      amount: '',
+      notes: ''
+    });
+    setShowReimbModal(true);
+  };
+
+  const handleSaveReimbursement = async () => {
+    const amt = parseFloat(reimbForm.amount);
+    if (!reimbForm.source_type || !reimbForm.source_id || !reimbForm.received_date || isNaN(amt) || amt <= 0) {
+      alert('Select a person, enter date and amount.');
+      return;
+    }
+    setReimbSaving(true);
+    try {
+      await api.post('/finance/reimbursements', {
+        source_type: reimbForm.source_type,
+        source_id: parseInt(reimbForm.source_id, 10),
+        received_date: reimbForm.received_date,
+        amount: amt,
+        notes: (reimbForm.notes || '').trim() || undefined
+      });
+      setShowReimbModal(false);
+      loadReimbursements();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to record payment');
+    } finally {
+      setReimbSaving(false);
     }
   };
 
@@ -314,37 +452,134 @@ const ProfitAndLoss = () => {
 
       {/* Payroll Section */}
       <div className="bg-white dark:bg-neutral-950 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
-        <h3 className="text-xl font-bold text-gray-800 mb-4">Payroll</h3>
-        <div className="mb-4">
-          <div className="text-3xl font-bold text-red-600">
-            {formatCurrency(payroll.total)}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-1">Payroll</h3>
+            <div className="text-3xl font-bold text-red-600 dark:text-red-400">
+              {formatCurrency(payroll.total)}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-neutral-400">Total weekly payroll cost</div>
           </div>
-          <div className="text-sm text-gray-600">Total weekly payroll cost</div>
+          <button
+            type="button"
+            onClick={handleAddPayrollPerson}
+            className="w-full sm:w-auto px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-sm font-medium"
+          >
+            + Add to payroll
+          </button>
         </div>
 
         <div className="space-y-2">
           {payroll.employees.length === 0 ? (
-            <p className="text-sm text-gray-500">No payroll data for this week</p>
+            <p className="text-sm text-gray-500 dark:text-neutral-400">No payroll data for this week. Add employees in Admin → Users (salary/hourly rate) or use “Add to payroll” for contractors.</p>
           ) : (
             payroll.employees.map((emp, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-950 rounded">
+              <div key={emp.payroll_people_id || emp.employee_id || idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-900 rounded border border-gray-200 dark:border-neutral-700">
                 <div>
-                  <div className="font-medium text-gray-800">{emp.employee_name}</div>
-                  <div className="text-xs text-gray-600">
-                    {emp.weekly_salary > 0 
+                  <div className="font-medium text-gray-800 dark:text-neutral-100">{emp.employee_name}</div>
+                  <div className="text-xs text-gray-600 dark:text-neutral-400">
+                    {emp.weekly_salary > 0
                       ? `Salary: ${formatCurrency(emp.weekly_salary)}`
                       : `${emp.hours_worked?.toFixed(1) || 0} hrs × ${formatCurrency(emp.hourly_rate)}`
                     }
                   </div>
                 </div>
-                <div className="text-lg font-semibold text-gray-800">
-                  {formatCurrency(emp.cost)}
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-semibold text-gray-800 dark:text-neutral-100">
+                    {formatCurrency(emp.cost)}
+                  </span>
+                  {emp.payroll_people_id && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleEditPayrollPerson(emp)}
+                        className="text-xs px-2 py-1 text-amber-600 dark:text-amber-400 hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePayrollPerson(emp)}
+                        className="text-xs px-2 py-1 text-red-600 dark:text-red-400 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))
           )}
         </div>
       </div>
+
+      {/* Reimbursements (split salary – when other business pays you back) */}
+      {(reimbursements.sources?.length > 0 || reimbursements.payments?.length > 0) && (
+        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+            <div>
+              <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Reimbursements (split salary)</h3>
+              <p className="text-sm text-gray-600 dark:text-neutral-400 mt-0.5">Track when the other business pays you back for their share of payroll.</p>
+            </div>
+            {reimbursements.sources?.length > 0 && (
+              <button
+                type="button"
+                onClick={handleRecordReimbursement}
+                className="w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-sm font-medium"
+              >
+                Record payment received
+              </button>
+            )}
+          </div>
+          {reimbursements.sources?.length > 0 && (
+            <div className="space-y-3 mb-4">
+              {reimbursements.sources.map((src) => {
+                const key = `${src.source_type}:${src.source_id}`;
+                const totalReceived = reimbursements.total_received_by_source[key] || 0;
+                const isMonthly = src.expected_period === 'monthly';
+                const expectedLabel = isMonthly ? `Expected per month: ${formatCurrency(src.expected_amount)}` : `Expected per week: ${formatCurrency(src.expected_amount)}`;
+                return (
+                  <div key={key} className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700">
+                    <div>
+                      <span className="font-medium text-gray-800 dark:text-neutral-100">{src.name}</span>
+                      {src.notes && <span className="text-xs text-gray-500 dark:text-neutral-400 ml-2">({src.notes})</span>}
+                      <div className="text-xs text-gray-600 dark:text-neutral-400 mt-0.5">{expectedLabel}</div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Total received: {formatCurrency(totalReceived)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {reimbursements.payments?.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-neutral-300 mb-2">Payment history</h4>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-neutral-700">
+                      <th className="text-left py-2 text-gray-600 dark:text-neutral-400">Date</th>
+                      <th className="text-left py-2 text-gray-600 dark:text-neutral-400">Amount</th>
+                      <th className="text-left py-2 text-gray-600 dark:text-neutral-400">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reimbursements.payments.slice(0, 20).map((p) => (
+                      <tr key={p.id} className="border-b border-gray-100 dark:border-neutral-800">
+                        <td className="py-2 text-gray-800 dark:text-neutral-100">{formatDate(p.received_date)}</td>
+                        <td className="py-2 font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(p.amount)}</td>
+                        <td className="py-2 text-gray-600 dark:text-neutral-400">{p.notes || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Monthly Expenses Section */}
       <div className="bg-white dark:bg-neutral-950 rounded-lg shadow dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
@@ -717,6 +952,210 @@ const ProfitAndLoss = () => {
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     {editingExpense ? 'Update' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Record reimbursement modal */}
+      {showReimbModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl dark:border dark:border-neutral-700 max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Record payment received</h3>
+                <button type="button" onClick={() => setShowReimbModal(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200" aria-label="Close">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">When the other business pays you back for their share of an employee&apos;s salary, record it here.</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Person (split salary)</label>
+                  <select
+                    value={reimbForm.source_type && reimbForm.source_id ? `${reimbForm.source_type}:${reimbForm.source_id}` : ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v) {
+                        const [st, sid] = v.split(':');
+                        setReimbForm({ ...reimbForm, source_type: st, source_id: sid });
+                      }
+                    }}
+                    className="w-full h-12 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
+                  >
+                    <option value="">Select...</option>
+                    {reimbursements.sources?.map((src) => (
+                      <option key={`${src.source_type}:${src.source_id}`} value={`${src.source_type}:${src.source_id}`}>
+                        {src.name} ({formatCurrency(src.expected_amount)}/{src.expected_period === 'monthly' ? 'mo' : 'wk'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Date received *</label>
+                  <input
+                    type="date"
+                    value={reimbForm.received_date}
+                    onChange={(e) => setReimbForm({ ...reimbForm, received_date: e.target.value })}
+                    className="w-full h-12 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Amount ($) *</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={reimbForm.amount}
+                    onChange={(e) => setReimbForm({ ...reimbForm, amount: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full h-12 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Notes (optional)</label>
+                  <input
+                    type="text"
+                    value={reimbForm.notes}
+                    onChange={(e) => setReimbForm({ ...reimbForm, notes: e.target.value })}
+                    placeholder="e.g. March 1–7"
+                    className="w-full h-12 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button type="button" onClick={() => setShowReimbModal(false)} className="px-4 py-2.5 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200">Cancel</button>
+                  <button type="button" onClick={handleSaveReimbursement} disabled={reimbSaving} className="px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50">{reimbSaving ? 'Saving…' : 'Record'}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payroll person modal (Add to payroll) */}
+      {showPayrollModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl dark:border dark:border-neutral-700 max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">
+                  {editingPayrollPerson ? 'Edit payroll person' : 'Add to payroll'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowPayrollModal(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+                  aria-label="Close"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
+                Add someone who gets paid weekly (e.g. contractor). For employees who use the app, set salary in Admin → Users.
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Name *</label>
+                  <input
+                    type="text"
+                    value={payrollForm.full_name}
+                    onChange={(e) => setPayrollForm({ ...payrollForm, full_name: e.target.value })}
+                    placeholder="Full name"
+                    className="w-full h-12 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Weekly salary ($) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={payrollForm.weekly_salary}
+                    onChange={(e) => setPayrollForm({ ...payrollForm, weekly_salary: e.target.value })}
+                    placeholder="e.g. 850"
+                    className="w-full h-12 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Hourly rate ($) — optional</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={payrollForm.hourly_rate}
+                    onChange={(e) => setPayrollForm({ ...payrollForm, hourly_rate: e.target.value })}
+                    placeholder="If no weekly salary"
+                    className="w-full h-12 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">Notes (optional)</label>
+                  <input
+                    type="text"
+                    value={payrollForm.notes}
+                    onChange={(e) => setPayrollForm({ ...payrollForm, notes: e.target.value })}
+                    placeholder="e.g. Contractor"
+                    className="w-full h-12 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500"
+                  />
+                </div>
+                <div className="border-t border-gray-200 dark:border-neutral-600 pt-4">
+                  <p className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">Split with other business (reimbursable)</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Amount reimbursed ($)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={payrollForm.split_reimbursable_amount}
+                        onChange={(e) => setPayrollForm({ ...payrollForm, split_reimbursable_amount: e.target.value })}
+                        placeholder="0"
+                        className="w-full h-12 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Per week or per month</label>
+                      <select
+                        value={payrollForm.split_reimbursable_period}
+                        onChange={(e) => setPayrollForm({ ...payrollForm, split_reimbursable_period: e.target.value })}
+                        className="w-full h-12 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
+                      >
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Reimbursed by</label>
+                      <input
+                        type="text"
+                        value={payrollForm.split_reimbursable_notes}
+                        onChange={(e) => setPayrollForm({ ...payrollForm, split_reimbursable_notes: e.target.value })}
+                        placeholder="Other business name"
+                        className="w-full h-12 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPayrollModal(false)}
+                    className="px-4 py-2.5 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSavePayrollPerson}
+                    disabled={payrollSaving}
+                    className="px-4 py-2.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {payrollSaving ? 'Saving…' : (editingPayrollPerson ? 'Update' : 'Add')}
                   </button>
                 </div>
               </div>

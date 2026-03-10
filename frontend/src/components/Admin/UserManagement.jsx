@@ -15,7 +15,10 @@ const UserManagement = () => {
     full_name: '',
     role: 'employee',
     hourly_rate: 0,
-    weekly_salary: 0
+    weekly_salary: 0,
+    split_reimbursable_amount: 0,
+    split_reimbursable_notes: '',
+    split_reimbursable_period: 'weekly'
   });
   const [loading, setLoading] = useState(true);
   const [isMasterAdmin, setIsMasterAdmin] = useState(false);
@@ -82,7 +85,10 @@ const UserManagement = () => {
         full_name: '',
         role: 'employee',
         hourly_rate: 0,
-        weekly_salary: 0
+        weekly_salary: 0,
+        split_reimbursable_amount: 0,
+        split_reimbursable_notes: '',
+        split_reimbursable_period: 'weekly'
       });
       await loadUsers();
     } catch (error) {
@@ -101,7 +107,10 @@ const UserManagement = () => {
       full_name: user.full_name,
       role: user.role,
       hourly_rate: user.hourly_rate || 0,
-      weekly_salary: user.weekly_salary || 0
+      weekly_salary: user.weekly_salary || 0,
+      split_reimbursable_amount: user.split_reimbursable_amount || 0,
+      split_reimbursable_notes: user.split_reimbursable_notes || '',
+      split_reimbursable_period: user.split_reimbursable_period || 'weekly'
     });
     setShowForm(true);
   };
@@ -271,6 +280,45 @@ const UserManagement = () => {
                   placeholder="For salaried employees"
                 />
                 <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">Hourly rate will be calculated as salary ÷ 40 hours</p>
+              </div>
+              <div className="border-t border-gray-200 dark:border-neutral-700 pt-4 mt-4">
+                <p className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">Split with other business (reimbursable)</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 dark:text-neutral-400 mb-1">Amount other business reimburses ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.split_reimbursable_amount}
+                      onChange={(e) => setFormData({ ...formData, split_reimbursable_amount: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 dark:text-neutral-400 mb-1">Per week or per month</label>
+                    <select
+                      value={formData.split_reimbursable_period}
+                      onChange={(e) => setFormData({ ...formData, split_reimbursable_period: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
+                    >
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-600 dark:text-neutral-400 mb-1">Reimbursed by (e.g. business name)</label>
+                    <input
+                      type="text"
+                      value={formData.split_reimbursable_notes}
+                      onChange={(e) => setFormData({ ...formData, split_reimbursable_notes: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
+                      placeholder="Other business name"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">When the other business pays you back, record it in Finance → P&L → Reimbursements.</p>
               </div>
             </div>
             <div className="flex gap-3 pt-4">

@@ -84,6 +84,14 @@ async function getWeeklyExpenses(weekStart, weekEnd) {
     }
   }
 
+  // Payroll-only people (contractors, etc.)
+  const payrollPeople = await db.allAsync(
+    'SELECT id, full_name, weekly_salary FROM payroll_people WHERE is_active = 1 AND weekly_salary > 0'
+  );
+  for (const p of payrollPeople) {
+    payrollTotal += parseFloat(p.weekly_salary) || 0;
+  }
+
   // Manual expenses
   const oneTime = await db.allAsync('SELECT amount FROM business_expenses WHERE frequency = ? AND expense_date >= ? AND expense_date <= ?', ['one_time', weekStart, weekEnd]);
   const weekly = await db.allAsync('SELECT amount FROM business_expenses WHERE frequency = ? AND week_ending_date = ?', ['weekly', weekEnd]);
@@ -242,5 +250,155 @@ function linearSlope(values) {
   if (denom === 0) return 0;
   return (n * sumXY - sumX * sumY) / denom;
 }
+
+// --- Payroll people (add people to payroll without full user accounts) ---
+
+router.get('/payroll-people', async (req, res) => {
+  try {
+    const rows = await db.allAsync(
+      'SELECT id, full_name, weekly_salary, hourly_rate, is_active, notes, created_at, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM payroll_people ORDER BY full_name ASC'
+    );
+    res.json({ people: rows });
+  } catch (error) {
+    console.error('Get payroll people error:', error);
+    res.status(500).json({ error: 'Failed to load payroll people' });
+  }
+});
+
+router.post('/payroll-people', async (req, res) => {
+  try {
+    const { full_name, weekly_salary, hourly_rate, notes, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period } = req.body;
+    if (!full_name || !full_name.trim()) {
+      return res.status(400).json({ error: 'Full name is required' });
+    }
+    const weekly = parseFloat(weekly_salary) || 0;
+    const hourly = parseFloat(hourly_rate) || 0;
+    if (weekly <= 0 && hourly <= 0) {
+      return res.status(400).json({ error: 'Enter either a weekly salary or hourly rate' });
+    }
+    const splitAmt = parseFloat(split_reimbursable_amount) || 0;
+    const splitPeriod = split_reimbursable_period === 'monthly' ? 'monthly' : 'weekly';
+    const result = await db.runAsync(
+      'INSERT INTO payroll_people (full_name, weekly_salary, hourly_rate, notes, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [full_name.trim(), weekly, hourly, (notes || '').trim() || null, splitAmt, (split_reimbursable_notes || '').trim() || null, splitPeriod]
+    );
+    const id = result.lastID;
+    const row = await db.getAsync('SELECT id, full_name, weekly_salary, hourly_rate, is_active, notes, created_at, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM payroll_people WHERE id = ?', [id]);
+    res.status(201).json({ person: row });
+  } catch (error) {
+    console.error('Create payroll person error:', error);
+    res.status(500).json({ error: 'Failed to add payroll person' });
+  }
+});
+
+router.put('/payroll-people/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { full_name, weekly_salary, hourly_rate, is_active, notes, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period } = req.body;
+    const existing = await db.getAsync('SELECT id FROM payroll_people WHERE id = ?', [id]);
+    if (!existing) return res.status(404).json({ error: 'Payroll person not found' });
+    const updates = [];
+    const values = [];
+    if (full_name !== undefined) { updates.push('full_name = ?'); values.push(full_name.trim()); }
+    if (weekly_salary !== undefined) { updates.push('weekly_salary = ?'); values.push(parseFloat(weekly_salary) || 0); }
+    if (hourly_rate !== undefined) { updates.push('hourly_rate = ?'); values.push(parseFloat(hourly_rate) || 0); }
+    if (is_active !== undefined) { updates.push('is_active = ?'); values.push(is_active ? 1 : 0); }
+    if (notes !== undefined) { updates.push('notes = ?'); values.push((notes || '').trim() || null); }
+    if (split_reimbursable_amount !== undefined) { updates.push('split_reimbursable_amount = ?'); values.push(parseFloat(split_reimbursable_amount) || 0); }
+    if (split_reimbursable_notes !== undefined) { updates.push('split_reimbursable_notes = ?'); values.push((split_reimbursable_notes || '').trim() || null); }
+    if (split_reimbursable_period !== undefined) { updates.push('split_reimbursable_period = ?'); values.push(split_reimbursable_period === 'monthly' ? 'monthly' : 'weekly'); }
+    if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    values.push(id);
+    await db.runAsync(`UPDATE payroll_people SET ${updates.join(', ')} WHERE id = ?`, values);
+    const row = await db.getAsync('SELECT id, full_name, weekly_salary, hourly_rate, is_active, notes, created_at, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM payroll_people WHERE id = ?', [id]);
+    res.json({ person: row });
+  } catch (error) {
+    console.error('Update payroll person error:', error);
+    res.status(500).json({ error: 'Failed to update payroll person' });
+  }
+});
+
+router.delete('/payroll-people/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const existing = await db.getAsync('SELECT id FROM payroll_people WHERE id = ?', [id]);
+    if (!existing) return res.status(404).json({ error: 'Payroll person not found' });
+    await db.runAsync('UPDATE payroll_people SET is_active = 0 WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete payroll person error:', error);
+    res.status(500).json({ error: 'Failed to remove payroll person' });
+  }
+});
+
+// --- Split salary reimbursements (other business pays this business back) ---
+
+/** GET /api/finance/reimbursements — list people with split + payments received, or filter by source */
+router.get('/reimbursements', async (req, res) => {
+  try {
+    const { source_type, source_id } = req.query;
+    let payments = await db.allAsync(
+      'SELECT id, source_type, source_id, received_date, amount, notes, created_at FROM payroll_reimbursements ORDER BY received_date DESC, id DESC'
+    );
+    if (source_type && source_id) {
+      payments = payments.filter(p => p.source_type === source_type && p.source_id === parseInt(source_id, 10));
+    }
+    const usersWithSplit = await db.allAsync(
+      "SELECT id, full_name, weekly_salary, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM users WHERE is_active = 1 AND COALESCE(split_reimbursable_amount, 0) > 0"
+    );
+    const peopleWithSplit = await db.allAsync(
+      'SELECT id, full_name, weekly_salary, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM payroll_people WHERE is_active = 1 AND COALESCE(split_reimbursable_amount, 0) > 0'
+    );
+    const sources = [
+      ...usersWithSplit.map(u => ({ source_type: 'user', source_id: u.id, name: u.full_name, expected_amount: parseFloat(u.split_reimbursable_amount) || 0, expected_period: u.split_reimbursable_period || 'weekly', notes: u.split_reimbursable_notes })),
+      ...peopleWithSplit.map(p => ({ source_type: 'payroll_person', source_id: p.id, name: p.full_name, expected_amount: parseFloat(p.split_reimbursable_amount) || 0, expected_period: p.split_reimbursable_period || 'weekly', notes: p.split_reimbursable_notes }))
+    ];
+    const totalReceivedBySource = {};
+    for (const p of payments) {
+      const key = `${p.source_type}:${p.source_id}`;
+      totalReceivedBySource[key] = (totalReceivedBySource[key] || 0) + (parseFloat(p.amount) || 0);
+    }
+    res.json({ sources, payments, total_received_by_source: totalReceivedBySource });
+  } catch (error) {
+    console.error('Get reimbursements error:', error);
+    res.status(500).json({ error: 'Failed to load reimbursements' });
+  }
+});
+
+/** POST /api/finance/reimbursements — record a reimbursement payment received */
+router.post('/reimbursements', async (req, res) => {
+  try {
+    const { source_type, source_id, received_date, amount, notes } = req.body;
+    if (!source_type || !source_id || !received_date || amount === undefined) {
+      return res.status(400).json({ error: 'source_type, source_id, received_date, and amount are required' });
+    }
+    if (source_type !== 'user' && source_type !== 'payroll_person') {
+      return res.status(400).json({ error: 'source_type must be user or payroll_person' });
+    }
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive number' });
+    }
+    const sid = parseInt(source_id, 10);
+    if (source_type === 'user') {
+      const u = await db.getAsync('SELECT id FROM users WHERE id = ?', [sid]);
+      if (!u) return res.status(404).json({ error: 'User not found' });
+    } else {
+      const p = await db.getAsync('SELECT id FROM payroll_people WHERE id = ?', [sid]);
+      if (!p) return res.status(404).json({ error: 'Payroll person not found' });
+    }
+    await db.runAsync(
+      'INSERT INTO payroll_reimbursements (source_type, source_id, received_date, amount, notes) VALUES (?, ?, ?, ?, ?)',
+      [source_type, sid, received_date, amt, (notes || '').trim() || null]
+    );
+    const row = await db.getAsync(
+      'SELECT id, source_type, source_id, received_date, amount, notes, created_at FROM payroll_reimbursements ORDER BY id DESC LIMIT 1'
+    );
+    res.status(201).json({ payment: row });
+  } catch (error) {
+    console.error('Post reimbursement error:', error);
+    res.status(500).json({ error: 'Failed to record reimbursement' });
+  }
+});
 
 export default router;

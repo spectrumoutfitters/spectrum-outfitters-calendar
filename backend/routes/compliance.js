@@ -1074,7 +1074,7 @@ function getWeekEndingFriday(date) {
 // Helper function to calculate weekly payroll
 async function calculateWeeklyPayroll(weekStart, weekEnd) {
   const employees = await db.allAsync(`
-    SELECT id, full_name, weekly_salary, hourly_rate
+    SELECT id, full_name, weekly_salary, hourly_rate, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period
     FROM users
     WHERE is_active = 1
   `);
@@ -1116,13 +1116,40 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
     if (employeeCost > 0) {
       payroll.push({
         employee_id: employee.id,
+        payroll_people_id: null,
         employee_name: employee.full_name,
         weekly_salary: employee.weekly_salary || 0,
         hourly_rate: employee.hourly_rate || 0,
         hours_worked: hoursWorked,
-        cost: employeeCost
+        cost: employeeCost,
+        split_reimbursable_amount: parseFloat(employee.split_reimbursable_amount) || 0,
+        split_reimbursable_notes: employee.split_reimbursable_notes || null,
+        split_reimbursable_period: employee.split_reimbursable_period || 'weekly'
       });
       totalPayroll += employeeCost;
+    }
+  }
+
+  // Payroll-only people (contractors, etc.) — fixed weekly salary per week
+  const payrollPeople = await db.allAsync(
+    'SELECT id, full_name, weekly_salary, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM payroll_people WHERE is_active = 1 AND weekly_salary > 0'
+  );
+  for (const p of payrollPeople) {
+    const cost = parseFloat(p.weekly_salary) || 0;
+    if (cost > 0) {
+      payroll.push({
+        employee_id: null,
+        payroll_people_id: p.id,
+        employee_name: p.full_name,
+        weekly_salary: cost,
+        hourly_rate: 0,
+        hours_worked: null,
+        cost,
+        split_reimbursable_amount: parseFloat(p.split_reimbursable_amount) || 0,
+        split_reimbursable_notes: p.split_reimbursable_notes || null,
+        split_reimbursable_period: p.split_reimbursable_period || 'weekly'
+      });
+      totalPayroll += cost;
     }
   }
 

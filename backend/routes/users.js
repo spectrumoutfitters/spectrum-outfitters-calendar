@@ -13,7 +13,7 @@ router.use(authenticateToken);
 router.get('/', requireAdmin, async (req, res) => {
   try {
     const users = await db.allAsync(
-      'SELECT id, username, email, full_name, role, hourly_rate, weekly_salary, is_active, created_at, payroll_access, is_master_admin FROM users ORDER BY created_at DESC'
+      'SELECT id, username, email, full_name, role, hourly_rate, weekly_salary, is_active, created_at, payroll_access, is_master_admin, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM users ORDER BY created_at DESC'
     );
     res.json({ users });
   } catch (error) {
@@ -140,7 +140,7 @@ router.post('/', requireAdmin, async (req, res) => {
 router.put('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, email, full_name, role, hourly_rate, weekly_salary, is_active } = req.body;
+    const { username, email, full_name, role, hourly_rate, weekly_salary, is_active, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period } = req.body;
 
     if (email && !validateEmail(email)) {
       return res.status(400).json({ error: 'Invalid email format' });
@@ -184,6 +184,19 @@ router.put('/:id', requireAdmin, async (req, res) => {
     if (is_active !== undefined) {
       updateFields.push('is_active = ?');
       updateValues.push(is_active);
+    }
+    if (split_reimbursable_amount !== undefined) {
+      updateFields.push('split_reimbursable_amount = ?');
+      updateValues.push(parseFloat(split_reimbursable_amount) || 0);
+    }
+    if (split_reimbursable_notes !== undefined) {
+      updateFields.push('split_reimbursable_notes = ?');
+      updateValues.push((split_reimbursable_notes || '').trim() || null);
+    }
+    if (split_reimbursable_period !== undefined) {
+      const period = split_reimbursable_period === 'monthly' ? 'monthly' : 'weekly';
+      updateFields.push('split_reimbursable_period = ?');
+      updateValues.push(period);
     }
 
     if (updateFields.length === 0) {

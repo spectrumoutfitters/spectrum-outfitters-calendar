@@ -48,6 +48,7 @@ import paymentProcessorRoutes from './routes/paymentProcessor.js';
 import { handleStripeWebhook } from './routes/paymentProcessor.js';
 import { syncShopMonkeyRevenue } from './routes/shopmonkey.js';
 import { syncStripeRevenue, syncValorPayRevenue, syncPaymentProcessorRevenue } from './routes/paymentProcessor.js';
+import { isConfigured as isValorConfigured } from './utils/valorPayRevenue.js';
 import { authenticateToken, requireAdmin } from './middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { pullChangesFromGoogle } from './utils/googleCalendarService.js';
@@ -802,7 +803,7 @@ function startBackgroundJobs() {
     console.log('📊 ShopMonkey revenue auto-sync enabled (every 5 minutes)');
   }
 
-  if (process.env.VALOR_APP_ID && process.env.VALOR_APP_KEY) {
+  if (isValorConfigured()) {
     let valorSyncRunning = false;
     const VALOR_SYNC_INTERVAL = 5 * 60 * 1000;
     const runValorSync = () => {

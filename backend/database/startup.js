@@ -22,7 +22,10 @@ export async function ensureUserColumns() {
     { name: 'show_clock_in_header', sql: 'ALTER TABLE users ADD COLUMN show_clock_in_header BOOLEAN DEFAULT 1' },
     { name: 'payroll_access', sql: 'ALTER TABLE users ADD COLUMN payroll_access BOOLEAN DEFAULT 0' },
     { name: 'is_master_admin', sql: 'ALTER TABLE users ADD COLUMN is_master_admin BOOLEAN DEFAULT 0' },
-    { name: 'last_login', sql: 'ALTER TABLE users ADD COLUMN last_login DATETIME' }
+    { name: 'last_login', sql: 'ALTER TABLE users ADD COLUMN last_login DATETIME' },
+    { name: 'split_reimbursable_amount', sql: 'ALTER TABLE users ADD COLUMN split_reimbursable_amount REAL DEFAULT 0' },
+    { name: 'split_reimbursable_notes', sql: 'ALTER TABLE users ADD COLUMN split_reimbursable_notes TEXT' },
+    { name: 'split_reimbursable_period', sql: "ALTER TABLE users ADD COLUMN split_reimbursable_period TEXT DEFAULT 'weekly'" }
   ];
   try {
     const info = await db.allAsync('PRAGMA table_info(users)');
@@ -127,6 +130,54 @@ export async function ensureNeelMasterAdmin() {
   } catch (_) {}
 }
 
+/** Payroll-only people (e.g. contractors) not in users table. */
+export async function ensurePayrollPeopleTable() {
+  try {
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS payroll_people (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        full_name TEXT NOT NULL,
+        weekly_salary REAL DEFAULT 0,
+        hourly_rate REAL DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_payroll_people_active ON payroll_people(is_active)').catch(() => {});
+  } catch (_) {}
+}
+
+/** Split salary reimbursable by another business + table for recording payments received. */
+export async function ensurePayrollReimbursementsSetup() {
+  try {
+    const ppInfo = await db.allAsync('PRAGMA table_info(payroll_people)');
+    const ppNames = new Set((ppInfo || []).map(c => c.name));
+    if (!ppNames.has('split_reimbursable_amount')) {
+      await db.runAsync('ALTER TABLE payroll_people ADD COLUMN split_reimbursable_amount REAL DEFAULT 0');
+    }
+    if (!ppNames.has('split_reimbursable_notes')) {
+      await db.runAsync('ALTER TABLE payroll_people ADD COLUMN split_reimbursable_notes TEXT');
+    }
+    if (!ppNames.has('split_reimbursable_period')) {
+      await db.runAsync("ALTER TABLE payroll_people ADD COLUMN split_reimbursable_period TEXT DEFAULT 'weekly'");
+    }
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS payroll_reimbursements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_type TEXT NOT NULL CHECK(source_type IN ('user', 'payroll_person')),
+        source_id INTEGER NOT NULL,
+        received_date TEXT NOT NULL,
+        amount REAL NOT NULL,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_payroll_reimb_source ON payroll_reimbursements(source_type, source_id)').catch(() => {});
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_payroll_reimb_date ON payroll_reimbursements(received_date)').catch(() => {});
+  } catch (_) {}
+}
+
 /** Add is_vpn column to login_events for VPN/proxy detection (idempotent). */
 export async function ensureLoginEventsIsVpn() {
   try {
@@ -180,4 +231,6 @@ export async function runStartupMigrations() {
   await addInventorySupplierColumns();
   await addCustomerStatusTable();
   await addShortLinksTable();
+  await ensurePayrollPeopleTable();
+  await ensurePayrollReimbursementsSetup();
 }
