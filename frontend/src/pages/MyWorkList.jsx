@@ -1,6 +1,110 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
+
+const PRIORITIES = [
+  { value: 'high', label: 'High', className: 'bg-red-100 dark:bg-red-950/50 border-red-300 dark:border-red-800 text-red-800 dark:text-red-200' },
+  { value: 'medium', label: 'Medium', className: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-200' },
+  { value: 'low', label: 'Low', className: 'bg-gray-100 dark:bg-neutral-800 border-gray-300 dark:border-neutral-700 text-gray-600 dark:text-neutral-400' },
+];
+
+function getPriorityClass(priority) {
+  const p = PRIORITIES.find((x) => x.value === (priority || 'medium'));
+  return p ? p.className : PRIORITIES[1].className;
+}
+
+function getPriorityBorderClass(priority) {
+  switch (priority || 'medium') {
+    case 'high': return 'border-l-4 border-l-red-500 dark:border-l-red-500';
+    case 'medium': return 'border-l-4 border-l-amber-500 dark:border-l-amber-500';
+    case 'low': return 'border-l-4 border-l-gray-400 dark:border-l-neutral-500';
+    default: return 'border-l-4 border-l-amber-500 dark:border-l-amber-500';
+  }
+}
+
+const SortableWorkItem = ({
+  item,
+  onToggle,
+  onDelete,
+  onPriorityChange,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`group flex items-center gap-3 bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg pl-2 pr-4 py-3 hover:border-primary/30 dark:hover:border-primary/40 transition ${getPriorityBorderClass(item.priority)}`}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="flex-shrink-0 p-1.5 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-400 cursor-grab active:cursor-grabbing touch-none"
+        title="Drag to reorder"
+        aria-label="Drag to reorder"
+      >
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 6h2v2H8V6zm0 5h2v2H8v-2zm0 5h2v2H8v-2zm5-10h2v2h-2V6zm0 5h2v2h-2v-2zm0 5h2v2h-2v-2z"/></svg>
+      </button>
+      <button
+        onClick={() => onToggle(item.id)}
+        className="flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-300 dark:border-neutral-700 hover:border-primary hover:bg-primary/5 dark:hover:bg-primary/10 flex items-center justify-center transition"
+        title="Mark complete"
+      />
+      <span className="flex-1 text-sm text-gray-800 dark:text-neutral-100 min-w-0">
+        {item.title}
+        {item.description && <span className="text-gray-400 dark:text-neutral-100 ml-1 text-xs">- {item.description}</span>}
+      </span>
+      <select
+        value={item.priority || 'medium'}
+        onChange={(e) => onPriorityChange(item.id, e.target.value)}
+        className="flex-shrink-0 text-xs rounded border border-gray-200 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-700 dark:text-neutral-200 py-1 px-2 min-w-0"
+        title="Priority"
+        aria-label="Priority"
+      >
+        {PRIORITIES.map((p) => (
+          <option key={p.value} value={p.value}>{p.label}</option>
+        ))}
+      </select>
+      <button
+        onClick={() => onDelete(item.id)}
+        className="p-1 text-gray-300 dark:text-neutral-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition flex-shrink-0"
+        title="Delete"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  );
+};
 
 const MyWorkList = () => {
   const { user } = useAuth();
@@ -10,9 +114,11 @@ const MyWorkList = () => {
   const [items, setItems] = useState([]);
   const [summary, setSummary] = useState(null);
   const [newItemTitle, setNewItemTitle] = useState('');
+  const [newItemPriority, setNewItemPriority] = useState('medium');
   const [addLoading, setAddLoading] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [archivedItems, setArchivedItems] = useState([]);
+  const [reorderLoading, setReorderLoading] = useState(false);
 
   // Focus
   const [focusText, setFocusText] = useState('');
@@ -60,7 +166,10 @@ const MyWorkList = () => {
     if (!newItemTitle.trim()) return;
     setAddLoading(true);
     try {
-      await api.post('/my-worklist/items', { title: newItemTitle.trim() });
+      await api.post('/my-worklist/items', {
+        title: newItemTitle.trim(),
+        priority: newItemPriority,
+      });
       setNewItemTitle('');
       await loadItems();
     } catch (error) {
@@ -97,6 +206,39 @@ const MyWorkList = () => {
     } catch (error) {
       console.error('Error deleting item:', error);
       alert('Failed to delete item');
+    }
+  };
+
+  const handlePriorityChange = async (itemId, priority) => {
+    try {
+      await api.put(`/my-worklist/items/${itemId}`, { priority });
+      await loadItems();
+    } catch (error) {
+      console.error('Error updating priority:', error);
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = pendingItems.findIndex((i) => i.id === active.id);
+    const newIndex = pendingItems.findIndex((i) => i.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(pendingItems, oldIndex, newIndex);
+    const orderedIds = reordered.map((i) => i.id);
+    setReorderLoading(true);
+    try {
+      const res = await api.patch('/my-worklist/items/reorder', { orderedIds });
+      setItems(res.data?.items || []);
+    } catch (error) {
+      console.error('Error reordering:', error);
+      await loadItems();
+    } finally {
+      setReorderLoading(false);
     }
   };
 
@@ -180,25 +322,38 @@ const MyWorkList = () => {
       )}
 
       {/* Quick-Add (hide when showing archived) */}
-      {!showArchived && <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
-        <form onSubmit={handleAddItem} className="flex gap-2">
-          <input
-            ref={addInputRef}
-            type="text"
-            value={newItemTitle}
-            onChange={(e) => setNewItemTitle(e.target.value)}
-            placeholder="What do you need to do today?"
-            className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
-          />
-          <button
-            type="submit"
-            disabled={!newItemTitle.trim() || addLoading}
-            className="px-4 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-          >
-            {addLoading ? '...' : 'Add'}
-          </button>
-        </form>
-      </div>}
+      {!showArchived && (
+        <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
+          <form onSubmit={handleAddItem} className="flex flex-wrap gap-2 items-center">
+            <input
+              ref={addInputRef}
+              type="text"
+              value={newItemTitle}
+              onChange={(e) => setNewItemTitle(e.target.value)}
+              placeholder="What do you need to do today?"
+              className="flex-1 min-w-[180px] px-4 py-2.5 h-12 border border-gray-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400 dark:placeholder-neutral-400 text-sm bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
+            />
+            <select
+              value={newItemPriority}
+              onChange={(e) => setNewItemPriority(e.target.value)}
+              className="px-3 py-2.5 h-12 border border-gray-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-950 text-gray-700 dark:text-neutral-200 text-sm"
+              aria-label="Priority"
+            >
+              {PRIORITIES.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              disabled={!newItemTitle.trim() || addLoading}
+              className="px-4 py-2.5 h-12 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              {addLoading ? '...' : 'Add'}
+            </button>
+          </form>
+          <p className="text-xs text-gray-400 dark:text-neutral-400 mt-1.5">New tasks are saved in Title Case. Drag rows to reorder by priority.</p>
+        </div>
+      )}
 
       {/* Focus (hide when showing archived) */}
       {!showArchived && <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
@@ -242,31 +397,25 @@ const MyWorkList = () => {
         </div>
       )}
 
-      {/* Pending Items (hide when showing archived) */}
+      {/* Pending Items (hide when showing archived) - sortable by drag */}
       {!showArchived && pendingItems.length > 0 && (
         <div className="space-y-1">
-          {pendingItems.map(item => (
-            <div key={item.id} className="group flex items-center gap-3 bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg px-4 py-3 hover:border-primary/30 dark:hover:border-primary/40 transition">
-              <button
-                onClick={() => handleToggleItem(item.id)}
-                className="flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-300 dark:border-neutral-700 hover:border-primary hover:bg-primary/5 dark:hover:bg-primary/10 flex items-center justify-center transition"
-                title="Mark complete"
-              />
-              <span className="flex-1 text-sm text-gray-800 dark:text-neutral-100 min-w-0">
-                {item.title}
-                {item.description && <span className="text-gray-400 dark:text-neutral-100 ml-1 text-xs">- {item.description}</span>}
-              </span>
-              <button
-                onClick={() => handleDeleteItem(item.id)}
-                className="p-1 text-gray-300 dark:text-neutral-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition flex-shrink-0"
-                title="Delete"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          ))}
+          {reorderLoading && (
+            <p className="text-xs text-gray-500 dark:text-neutral-400 px-1">Updating order…</p>
+          )}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={pendingItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+              {pendingItems.map((item) => (
+                <SortableWorkItem
+                  key={item.id}
+                  item={item}
+                  onToggle={handleToggleItem}
+                  onDelete={handleDeleteItem}
+                  onPriorityChange={handlePriorityChange}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         </div>
       )}
 
@@ -275,7 +424,7 @@ const MyWorkList = () => {
         <div className="space-y-1">
           <p className="text-xs text-gray-400 dark:text-neutral-400 font-medium px-1 mb-1">Completed ({completedItems.length})</p>
           {completedItems.map(item => (
-            <div key={item.id} className="group flex items-center gap-3 bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg px-4 py-3 opacity-60">
+            <div key={item.id} className={`group flex items-center gap-3 bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg pl-2 pr-4 py-3 opacity-60 ${getPriorityBorderClass(item.priority)}`}>
               <button
                 onClick={() => handleToggleItem(item.id)}
                 className="flex-shrink-0 w-6 h-6 rounded-full bg-green-500 border-2 border-green-500 text-white flex items-center justify-center transition"

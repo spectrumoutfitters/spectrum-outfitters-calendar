@@ -11,6 +11,11 @@ function getTodayInCentral() {
   return getTodayInHouston();
 }
 
+function toTitleCase(str) {
+  if (!str || typeof str !== 'string') return str;
+  return str.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 async function ensureTable() {
   await db.runAsync(`
     CREATE TABLE IF NOT EXISTS user_worklist_items (
@@ -23,11 +28,17 @@ async function ensureTable() {
       completed_at DATETIME,
       archived_at DATETIME,
       sort_order INTEGER DEFAULT 0,
+      priority TEXT DEFAULT 'medium',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
   try {
     await db.runAsync(`ALTER TABLE user_worklist_items ADD COLUMN archived_at DATETIME`);
+  } catch (e) {
+    if (!/duplicate column name/i.test(e.message)) throw e;
+  }
+  try {
+    await db.runAsync(`ALTER TABLE user_worklist_items ADD COLUMN priority TEXT DEFAULT 'medium'`);
   } catch (e) {
     if (!/duplicate column name/i.test(e.message)) throw e;
   }
@@ -92,7 +103,9 @@ router.get('/today', async (req, res) => {
     const items = await db.allAsync(
       `SELECT * FROM user_worklist_items
        WHERE user_id = ? AND (archived_at IS NULL OR archived_at = '')
-       ORDER BY is_completed ASC, sort_order ASC, id ASC`,
+       ORDER BY is_completed ASC,
+                CASE COALESCE(priority, 'medium') WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 2 END,
+                sort_order ASC, id ASC`,
       [userId]
     );
 
@@ -119,8 +132,11 @@ router.get('/today', async (req, res) => {
 router.post('/items', async (req, res) => {
   try {
     await ensureTable();
-    const { title, description } = req.body;
+    let { title, description, priority } = req.body;
     if (!title) return res.status(400).json({ error: 'Title is required' });
+
+    title = toTitleCase(String(title));
+    if (!['high', 'medium', 'low'].includes(priority)) priority = 'medium';
 
     const today = getTodayInCentral();
     const userId = req.user.id;
@@ -132,9 +148,9 @@ router.post('/items', async (req, res) => {
     const sortOrder = (maxOrder?.max || 0) + 1;
 
     const result = await db.runAsync(
-      `INSERT INTO user_worklist_items (user_id, item_date, title, description, sort_order)
-       VALUES (?, ?, ?, ?, ?)`,
-      [userId, today, title, description || null, sortOrder]
+      `INSERT INTO user_worklist_items (user_id, item_date, title, description, sort_order, priority)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [userId, today, title, description || null, sortOrder, priority]
     );
 
     const item = await db.getAsync('SELECT * FROM user_worklist_items WHERE id = ?', [result.lastID]);
@@ -171,6 +187,77 @@ router.post('/items/:id/toggle', async (req, res) => {
     res.json({ item: updated });
   } catch (error) {
     console.error('Toggle my worklist item error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PATCH /api/my-worklist/items/reorder - Reorder items (orderedIds: [id, ...]); must be before /:id
+router.patch('/items/reorder', async (req, res) => {
+  try {
+    await ensureTable();
+    const { orderedIds } = req.body;
+    const userId = req.user.id;
+
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds array is required' });
+    }
+
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.runAsync(
+        'UPDATE user_worklist_items SET sort_order = ? WHERE id = ? AND user_id = ?',
+        [i, orderedIds[i], userId]
+      );
+    }
+    const items = await db.allAsync(
+      `SELECT * FROM user_worklist_items
+       WHERE user_id = ? AND (archived_at IS NULL OR archived_at = '')
+       ORDER BY is_completed ASC,
+                CASE COALESCE(priority, 'medium') WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 2 END,
+                sort_order ASC, id ASC`,
+      [userId]
+    );
+    res.json({ items });
+  } catch (error) {
+    console.error('Reorder my worklist error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PUT /api/my-worklist/items/:id - Update item (priority, title)
+router.put('/items/:id', async (req, res) => {
+  try {
+    await ensureTable();
+    const { id } = req.params;
+    const userId = req.user.id;
+    let { priority, title } = req.body;
+
+    const item = await db.getAsync(
+      'SELECT * FROM user_worklist_items WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    const updates = [];
+    const values = [];
+    if (priority !== undefined && ['high', 'medium', 'low'].includes(priority)) {
+      updates.push('priority = ?');
+      values.push(priority);
+    }
+    if (title !== undefined && String(title).trim()) {
+      updates.push('title = ?');
+      values.push(toTitleCase(String(title).trim()));
+    }
+    if (updates.length === 0) return res.json({ item });
+
+    values.push(id);
+    await db.runAsync(
+      `UPDATE user_worklist_items SET ${updates.join(', ')} WHERE id = ?`,
+      values
+    );
+    const updated = await db.getAsync('SELECT * FROM user_worklist_items WHERE id = ?', [id]);
+    res.json({ item: updated });
+  } catch (error) {
+    console.error('Update my worklist item error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
