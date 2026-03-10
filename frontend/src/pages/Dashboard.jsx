@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ClockInOut from '../components/TimeClock/ClockInOut';
@@ -134,6 +134,25 @@ const Dashboard = () => {
     const interval = setInterval(loadDashboardData, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Refetch my list when user returns to the dashboard tab so changes from /my-list are visible
+  const refetchMyList = useCallback(async () => {
+    try {
+      const res = await api.get('/my-worklist/today');
+      setMyListItems(res.data?.items || []);
+      setMyListSummary(res.data?.summary || null);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refetchMyList();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refetchMyList]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -712,6 +731,16 @@ const MetricCard = ({ label, value, valueColor, sub, subColor, onClick }) => (
   </button>
 );
 
+// My List priority left-border (matches My Work List page)
+const getMyListPriorityBorder = (priority) => {
+  switch (priority || 'medium') {
+    case 'high': return 'border-l-4 border-l-red-500 dark:border-l-red-500 pl-2';
+    case 'medium': return 'border-l-4 border-l-amber-500 dark:border-l-amber-500 pl-2';
+    case 'low': return 'border-l-4 border-l-gray-400 dark:border-l-neutral-500 pl-2';
+    default: return 'border-l-4 border-l-amber-500 dark:border-l-amber-500 pl-2';
+  }
+};
+
 const MyListSection = ({
   items,
   summary,
@@ -767,16 +796,19 @@ const MyListSection = ({
             </button>
           </form>
 
-          {/* Active items */}
+          {/* Active items — order reflects priority (API returns sorted); color = priority */}
           {pending.length > 0 && (
             <div className="space-y-1 mb-2">
               {pending.slice(0, 5).map(item => (
-                <div key={item.id} className="flex items-center gap-2.5 py-1.5 group">
+                <div key={item.id} className={`flex items-center gap-2.5 py-1.5 group rounded-r ${getMyListPriorityBorder(item.priority)}`}>
                   <button
                     onClick={() => onToggle(item.id)}
                     className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-gray-300 dark:border-neutral-500 hover:border-primary flex items-center justify-center transition dark:bg-neutral-950"
                   />
                   <span className="text-sm text-gray-700 dark:text-neutral-100 truncate flex-1">{item.title}</span>
+                  {item.priority && item.priority !== 'medium' && (
+                    <span className="text-[10px] text-gray-400 dark:text-neutral-500 uppercase flex-shrink-0">{item.priority}</span>
+                  )}
                 </div>
               ))}
               {pending.length > 5 && (
@@ -787,7 +819,7 @@ const MyListSection = ({
           {done.length > 0 && (
             <div className="space-y-1 opacity-75">
               {done.slice(0, 3).map(item => (
-                <div key={item.id} className="flex items-center gap-2.5 py-1">
+                <div key={item.id} className={`flex items-center gap-2.5 py-1 rounded-r ${getMyListPriorityBorder(item.priority)}`}>
                   <button
                     onClick={() => onToggle(item.id)}
                     className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500 border-2 border-green-500 text-white flex items-center justify-center"
