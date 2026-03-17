@@ -1384,10 +1384,18 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
         `UPDATE inventory_items SET quantity = ?, last_counted_at = CURRENT_TIMESTAMP, last_counted_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [after, req.user.id, u.item_id]
       );
-      await db.runAsync(
-        `INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'task_approved')`,
-        [u.item_id, before, after, req.user.id]
-      ).catch(() => {});
+      try {
+        await db.runAsync(
+          `INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason, task_id, notes)
+           VALUES (?, ?, ?, ?, 'task_approved', ?, ?)`,
+          [u.item_id, before, after, req.user.id, id, 'Approved task inventory decrement']
+        );
+      } catch (_) {
+        await db.runAsync(
+          `INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'task_approved')`,
+          [u.item_id, before, after, req.user.id]
+        ).catch(() => {});
+      }
     }
 
     const updatedTask = await db.getAsync(`

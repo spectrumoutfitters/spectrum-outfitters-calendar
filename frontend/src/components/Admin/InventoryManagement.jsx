@@ -99,12 +99,28 @@ const InventoryManagement = () => {
     min_quantity: '',
     keep_in_stock: true,
     needs_return: false,
-    return_supplier: ''
+    return_supplier: '',
+    // New inventory helpers
+    location: '',
+    location_notes: '',
+    preferred_vendor: '',
+    supplier_name: '',
+    supplier_contact: '',
+    supplier_part_number: '',
+    reorder_cost: '',
+    amazon_asin: '',
+    amazon_url: '',
   });
   const [categoryTouched, setCategoryTouched] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [fetchImageLoading, setFetchImageLoading] = useState(false);
   const [lookupDescLoading, setLookupDescLoading] = useState(false);
+
+  // Deals (per-item, loaded when editing)
+  const [dealRows, setDealRows] = useState([]);
+  const [dealMeta, setDealMeta] = useState(null);
+  const [dealLoading, setDealLoading] = useState(false);
+  const [dealRefreshing, setDealRefreshing] = useState(false);
 
   const [searchParams] = useSearchParams();
   const showRefills = searchParams.get('refills') === '1';
@@ -573,9 +589,76 @@ const InventoryManagement = () => {
     return () => { cancelled = true; };
   }, [showModal, editing?.id]);
 
+  const amazonLinkForCurrentForm = useMemo(() => {
+    const url = (form.amazon_url || '').trim();
+    if (url) return url;
+    const asin = (form.amazon_asin || '').trim();
+    if (!asin) return null;
+    return `https://www.amazon.com/gp/aws/cart/add.html?ASIN.1=${encodeURIComponent(asin)}&Quantity.1=1`;
+  }, [form.amazon_asin, form.amazon_url]);
+
+  useEffect(() => {
+    if (!showModal || !editing?.id) {
+      setDealRows([]);
+      setDealMeta(null);
+      return;
+    }
+    let cancelled = false;
+    setDealLoading(true);
+    api.get(`/inventory/items/${editing.id}/deals`)
+      .then((res) => {
+        if (cancelled) return;
+        setDealRows(res.data?.deals || []);
+        setDealMeta(res.data?.meta || null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDealRows([]);
+        setDealMeta(null);
+      })
+      .finally(() => { if (!cancelled) setDealLoading(false); });
+    return () => { cancelled = true; };
+  }, [showModal, editing?.id]);
+
+  const refreshDeals = async () => {
+    if (!editing?.id) return;
+    setDealRefreshing(true);
+    try {
+      const res = await api.post(`/inventory/items/${editing.id}/deals/refresh`);
+      setDealRows(res.data?.deals || []);
+      setDealMeta(res.data?.meta || null);
+    } catch {
+      // ignore
+    } finally {
+      setDealRefreshing(false);
+    }
+  };
+
   const openAdd = () => {
     setEditing(null);
-    setForm({ barcode: '', name: '', category_id: '', unit: 'each', price: '', quantity: '', image_url: '', size_per_unit: '', min_quantity: '', keep_in_stock: true, needs_return: false, return_supplier: '' });
+    setForm({
+      barcode: '',
+      name: '',
+      category_id: '',
+      unit: 'each',
+      price: '',
+      quantity: '',
+      image_url: '',
+      size_per_unit: '',
+      min_quantity: '',
+      keep_in_stock: true,
+      needs_return: false,
+      return_supplier: '',
+      location: '',
+      location_notes: '',
+      preferred_vendor: '',
+      supplier_name: '',
+      supplier_contact: '',
+      supplier_part_number: '',
+      reorder_cost: '',
+      amazon_asin: '',
+      amazon_url: '',
+    });
     setCategoryTouched(false);
     setShowModal(true);
     setError(null);
@@ -595,7 +678,16 @@ const InventoryManagement = () => {
       min_quantity: it.min_quantity != null && it.min_quantity !== '' ? String(it.min_quantity) : '',
       keep_in_stock: it.keep_in_stock !== 0 && it.keep_in_stock !== false,
       needs_return: Boolean(it.needs_return),
-      return_supplier: it.return_supplier && String(it.return_supplier).trim() ? String(it.return_supplier) : ''
+      return_supplier: it.return_supplier && String(it.return_supplier).trim() ? String(it.return_supplier) : '',
+      location: it.location && String(it.location).trim() ? String(it.location) : '',
+      location_notes: it.location_notes && String(it.location_notes).trim() ? String(it.location_notes) : '',
+      preferred_vendor: it.preferred_vendor && String(it.preferred_vendor).trim() ? String(it.preferred_vendor) : '',
+      supplier_name: it.supplier_name && String(it.supplier_name).trim() ? String(it.supplier_name) : '',
+      supplier_contact: it.supplier_contact && String(it.supplier_contact).trim() ? String(it.supplier_contact) : '',
+      supplier_part_number: it.supplier_part_number && String(it.supplier_part_number).trim() ? String(it.supplier_part_number) : '',
+      reorder_cost: it.reorder_cost === null || it.reorder_cost === undefined ? '' : String(it.reorder_cost),
+      amazon_asin: it.amazon_asin && String(it.amazon_asin).trim() ? String(it.amazon_asin) : '',
+      amazon_url: it.amazon_url && String(it.amazon_url).trim() ? String(it.amazon_url) : '',
     });
     setCategoryTouched(true);
     setShowModal(true);
@@ -661,6 +753,11 @@ const InventoryManagement = () => {
         setError('Price must be a number.');
         return;
       }
+      const parsedReorderCost = form.reorder_cost === '' ? null : safeNumber(form.reorder_cost);
+      if (form.reorder_cost !== '' && parsedReorderCost === null) {
+        setError('Reorder cost must be a number.');
+        return;
+      }
 
       const payload = {
         barcode: form.barcode.trim() || null,
@@ -673,7 +770,16 @@ const InventoryManagement = () => {
         return_supplier: form.return_supplier.trim() || null,
         size_per_unit: form.size_per_unit.trim() || null,
         min_quantity: form.min_quantity.trim() === '' ? null : safeNumber(form.min_quantity),
-        keep_in_stock: form.keep_in_stock
+        keep_in_stock: form.keep_in_stock,
+        location: form.location.trim() || null,
+        location_notes: form.location_notes.trim() || null,
+        preferred_vendor: form.preferred_vendor.trim() || null,
+        supplier_name: form.supplier_name.trim() || null,
+        supplier_contact: form.supplier_contact.trim() || null,
+        supplier_part_number: form.supplier_part_number.trim() || null,
+        reorder_cost: parsedReorderCost,
+        amazon_asin: form.amazon_asin.trim() || null,
+        amazon_url: form.amazon_url.trim() || null,
       };
 
       if (payload.price !== null && payload.price !== undefined && !Number.isFinite(payload.price)) {
@@ -779,6 +885,11 @@ const InventoryManagement = () => {
                   <span className="font-medium text-gray-900 dark:text-neutral-100">{it.name}</span>
                   {it.return_supplier && (
                     <span className="text-sm text-gray-600 dark:text-neutral-100 ml-2">→ {it.return_supplier}</span>
+                  )}
+                  {it.location && (
+                    <div className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5 truncate" title={it.location}>
+                      📍 {it.location}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -1174,6 +1285,16 @@ const InventoryManagement = () => {
                                     <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
                                       {it.category_name || (it.category_id ? categoriesById.get(String(it.category_id))?.name : '') || '—'}
                                     </p>
+                                    {it.location && (
+                                      <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5 truncate" title={it.location}>
+                                        📍 {it.location}
+                                      </p>
+                                    )}
+                                    {(it.preferred_vendor || it.supplier_name) && (
+                                      <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5 truncate" title={it.preferred_vendor || it.supplier_name}>
+                                        🏷️ {(it.preferred_vendor || it.supplier_name)}
+                                      </p>
+                                    )}
                                     <p className="text-sm text-gray-700 dark:text-neutral-100 mt-1">
                                       <span className="font-medium">{formatQuantityWithSize(it)}</span>
                                       {it.min_quantity != null && it.min_quantity !== '' && (
@@ -1431,6 +1552,174 @@ const InventoryManagement = () => {
                   className="rounded border-gray-300 text-primary focus:ring-primary"
                 />
                 <label htmlFor="form_keep_in_stock" className="text-sm font-medium text-gray-700 dark:text-neutral-100">Always keep in inventory (uncheck for one-time parts)</label>
+              </div>
+
+              <div className="md:col-span-2 pt-2">
+                <p className="text-xs font-bold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">Location</p>
+                <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">Where it lives in the shop (makes “what’s where” instant).</p>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Primary location</label>
+                <input
+                  value={form.location}
+                  onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder="e.g. Front rack • Bin A3, Tire wall • Top shelf"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Location notes (optional)</label>
+                <input
+                  value={form.location_notes}
+                  onChange={(e) => setForm((p) => ({ ...p, location_notes: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder="e.g. behind towels, labeled “Fluids”, second row"
+                />
+              </div>
+
+              <div className="md:col-span-2 pt-2">
+                <p className="text-xs font-bold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">Vendor / Reorder</p>
+                <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">Used for reorders, deal-finding, and history.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Preferred vendor</label>
+                <input
+                  value={form.preferred_vendor}
+                  onChange={(e) => setForm((p) => ({ ...p, preferred_vendor: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder="e.g. NAPA, AutoZone, Amazon"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Supplier part #</label>
+                <input
+                  value={form.supplier_part_number}
+                  onChange={(e) => setForm((p) => ({ ...p, supplier_part_number: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder="e.g. 12345-AB"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Supplier name (optional)</label>
+                <input
+                  value={form.supplier_name}
+                  onChange={(e) => setForm((p) => ({ ...p, supplier_name: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder="e.g. store/rep"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Supplier contact (optional)</label>
+                <input
+                  value={form.supplier_contact}
+                  onChange={(e) => setForm((p) => ({ ...p, supplier_contact: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder="e.g. phone/email"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Reorder cost (optional)</label>
+                <input
+                  value={form.reorder_cost}
+                  onChange={(e) => setForm((p) => ({ ...p, reorder_cost: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder="e.g. 19.99"
+                  inputMode="decimal"
+                />
+              </div>
+
+              <div className="md:col-span-2 pt-2">
+                <p className="text-xs font-bold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">Amazon (optional)</p>
+                <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">For fast ordering and price checks.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">ASIN</label>
+                <input
+                  value={form.amazon_asin}
+                  onChange={(e) => setForm((p) => ({ ...p, amazon_asin: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder="e.g. B08XYZ1234"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Amazon URL</label>
+                <input
+                  value={form.amazon_url}
+                  onChange={(e) => setForm((p) => ({ ...p, amazon_url: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder="https://www.amazon.com/dp/…"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 p-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">Quick Buy & Deals</p>
+                    <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
+                      {dealMeta?.last_fetched_at ? `Last checked: ${new Date(dealMeta.last_fetched_at).toLocaleString()}` : 'Not checked yet'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {amazonLinkForCurrentForm && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(amazonLinkForCurrentForm, '_blank', 'noopener,noreferrer')}
+                        className="min-h-10 px-3 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90"
+                        title="Open Amazon to buy"
+                      >
+                        Buy on Amazon
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={refreshDeals}
+                      disabled={!editing?.id || dealRefreshing}
+                      className="min-h-10 px-3 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-700 dark:text-neutral-100 text-sm font-medium hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-50"
+                      title="Refresh deal suggestions"
+                    >
+                      {dealRefreshing ? 'Refreshing…' : 'Refresh deals'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-2">
+                  {dealLoading ? (
+                    <p className="text-sm text-gray-500 dark:text-neutral-400 py-2">Loading deals…</p>
+                  ) : dealRows.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-neutral-400 py-2">No deal suggestions yet. Refresh to search.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {dealRows.slice(0, 6).map((d) => (
+                        <a
+                          key={d.id}
+                          href={d.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 p-3 hover:border-primary/40 dark:hover:border-primary/50 transition"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-neutral-100 truncate" title={d.title || d.url}>
+                                {d.title || d.url}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
+                                <span className="uppercase font-semibold">{d.source}</span>
+                                {d.reason ? ` · ${d.reason}` : ''}
+                              </p>
+                            </div>
+                            <div className="flex-shrink-0 text-right">
+                              {d.price != null ? (
+                                <p className="text-sm font-bold text-green-600 dark:text-green-400">${Number(d.price).toFixed(2)}</p>
+                              ) : (
+                                <p className="text-xs text-gray-400 dark:text-neutral-500">—</p>
+                              )}
+                            </div>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Item price (add or edit)</label>

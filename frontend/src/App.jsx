@@ -16,6 +16,10 @@ import Products from './pages/Products';
 import Inventory from './pages/Inventory';
 import InventoryManagement from './components/Admin/InventoryManagement';
 import MyWorkList from './pages/MyWorkList';
+import CRM from './pages/CRM';
+import CustomerDetail from './pages/CustomerDetail';
+import VehicleDetail from './pages/VehicleDetail';
+import InvoiceDetail from './pages/InvoiceDetail';
 import CustomerStatus from './pages/CustomerStatus';
 import DispatchBoard from './pages/DispatchBoard';
 import Layout from './components/Layout/Layout';
@@ -115,6 +119,46 @@ function AppRoutes() {
           <AdminRoute>
             <Layout>
               <Admin />
+            </Layout>
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/crm"
+        element={
+          <AdminRoute>
+            <Layout>
+              <CRM />
+            </Layout>
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/crm/customers/:id"
+        element={
+          <AdminRoute>
+            <Layout>
+              <CustomerDetail />
+            </Layout>
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/crm/vehicles/:id"
+        element={
+          <AdminRoute>
+            <Layout>
+              <VehicleDetail />
+            </Layout>
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/crm/invoices/:id"
+        element={
+          <AdminRoute>
+            <Layout>
+              <InvoiceDetail />
             </Layout>
           </AdminRoute>
         }

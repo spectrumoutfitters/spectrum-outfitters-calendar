@@ -12,6 +12,11 @@ import { addPushSubscriptionsTable } from './add_push_subscriptions.js';
 import { addInventoryTaskUsageTable } from './add_inventory_task_usage.js';
 import { addTaskPhotosTable } from './add_task_photos.js';
 import { addInventorySupplierColumns } from './add_inventory_supplier.js';
+import { addInventoryLocationVendorAmazonColumns } from './add_inventory_locations_and_amazon.js';
+import { addInventoryDealsTable } from './add_inventory_deals.js';
+import { addCrmTables } from './add_crm_tables.js';
+import { addPaymentsTables } from './add_payments_tables.js';
+import { addQuantityLogTaskUsage } from './add_quantity_log_task_usage.js';
 import { addCustomerStatusTable } from './add_customer_status.js';
 import { addShortLinksTable } from './add_short_links.js';
 
@@ -229,6 +234,11 @@ export async function runStartupMigrations() {
   await addInventoryTaskUsageTable();
   await addTaskPhotosTable();
   await addInventorySupplierColumns();
+  await addInventoryLocationVendorAmazonColumns();
+  await addInventoryDealsTable();
+  await addQuantityLogTaskUsage();
+  await addCrmTables();
+  await addPaymentsTables();
   await addCustomerStatusTable();
   await addShortLinksTable();
   await ensurePayrollPeopleTable();

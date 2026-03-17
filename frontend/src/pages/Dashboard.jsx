@@ -105,6 +105,7 @@ const Dashboard = () => {
 
   // Low stock alert
   const [lowStockCount, setLowStockCount] = useState(0);
+  const [inventoryMovement, setInventoryMovement] = useState(null);
 
   // Today revenue (admin only)
   const [todayRevenue, setTodayRevenue] = useState(null);
@@ -189,7 +190,7 @@ const Dashboard = () => {
 
         const [
           tasksRes, scheduleRes, statusRes, worklistRes,
-          complianceRes, reorderRes, lowStockRes, pnlRes, myListRes
+          complianceRes, reorderRes, lowStockRes, movementRes, pnlRes, myListRes
         ] = await Promise.all([
           api.get('/tasks'),
           api.get('/schedule', { params: { start_date: todayStr, end_date: endDateStr } }).catch(() => ({ data: { entries: [] } })),
@@ -198,6 +199,7 @@ const Dashboard = () => {
           api.get('/compliance/dashboard').catch(() => ({ data: { overdue: [], dueSoon: [], upcoming: [] } })),
           api.get('/inventory/refill-requests/count', { params: { status: 'pending' } }).catch(() => ({ data: { count: 0 } })),
           api.get('/inventory/low-stock').catch(() => ({ data: { items: [] } })),
+          api.get('/inventory/movement/summary', { params: { days: 30 } }).catch(() => ({ data: null })),
           api.get(`/compliance/pnl/weekly?week_ending_date=${fridayStr}`).catch(() => ({ data: null })),
           myListPromise,
         ]);
@@ -210,6 +212,7 @@ const Dashboard = () => {
         const wlItems = worklist.allItems || worklist.items || [];
         const pnl = pnlRes.data;
         setLowStockCount((lowStockRes.data?.items || []).length);
+        setInventoryMovement(movementRes.data || null);
 
         const pendingTimeOff = (wlItems.filter(i => i.smart_key === 'pending_time_off' && !i.is_completed).length > 0)
           ? parseInt(wlItems.find(i => i.smart_key === 'pending_time_off')?.title?.match(/\d+/)?.[0] || 0) : 0;
@@ -443,6 +446,65 @@ const Dashboard = () => {
               <p className="text-xs text-amber-600 dark:text-amber-400">Tap to view inventory and request reorders</p>
             </div>
             <span className="text-amber-500 text-lg">›</span>
+          </div>
+        )}
+
+        {/* ── Inventory Movement (30 days) ───────────────────── */}
+        {inventoryMovement && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Inventory Movement</h2>
+                <button onClick={() => navigate('/admin?tab=inventory')} className="text-xs text-primary hover:underline">Open inventory</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 p-4">
+                  <p className="text-[10px] text-gray-500 dark:text-neutral-400 uppercase tracking-wider font-semibold">Consumed (30d)</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-neutral-100 mt-1">{Number(inventoryMovement.consumed_qty || 0).toFixed(0)}</p>
+                </div>
+                <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 p-4">
+                  <p className="text-[10px] text-gray-500 dark:text-neutral-400 uppercase tracking-wider font-semibold">Received (30d)</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-neutral-100 mt-1">{Number(inventoryMovement.received_qty || 0).toFixed(0)}</p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wider mb-2">Top consumed</p>
+                {(inventoryMovement.top_consumed || []).length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-neutral-400">No movement logged yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {(inventoryMovement.top_consumed || []).slice(0, 6).map((r) => (
+                      <div key={r.item_id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100 truncate" title={r.item_name}>{r.item_name}</p>
+                          <p className="text-xs text-gray-500 dark:text-neutral-400">{r.item_unit || 'each'}</p>
+                        </div>
+                        <div className="text-sm font-bold text-gray-900 dark:text-neutral-100">{Number(r.qty || 0).toFixed(0)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-neutral-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Low Stock by Location</h2>
+                <button onClick={() => navigate('/inventory')} className="text-xs text-primary hover:underline">View low stock</button>
+              </div>
+              {(inventoryMovement.low_stock_by_location || []).length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-neutral-400">No low-stock items.</p>
+              ) : (
+                <div className="space-y-2">
+                  {(inventoryMovement.low_stock_by_location || []).slice(0, 10).map((l) => (
+                    <div key={l.location} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-3 py-2">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100 truncate" title={l.location}>{l.location}</p>
+                      <p className="text-sm font-bold text-amber-700 dark:text-amber-300">{l.count}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

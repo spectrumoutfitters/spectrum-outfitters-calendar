@@ -49,6 +49,15 @@ export const IconProducts = () => (
   </svg>
 );
 
+export const IconCRM = () => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+    <path d="M21 8v6" />
+    <path d="M18 11h6" />
+  </svg>
+);
+
 export const IconProfile = () => (
   <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
@@ -89,6 +98,7 @@ const iconMap = {
   schedule: IconCalendar,
   inventory: IconInventory,
   products: IconProducts,
+  crm: IconCRM,
   profile: IconProfile,
   admin: IconAdmin,
 };

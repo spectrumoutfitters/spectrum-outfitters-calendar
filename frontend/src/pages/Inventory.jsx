@@ -103,7 +103,8 @@ const Inventory = () => {
     unit: 'each',
     price: '',
     quantity: '',
-    image_url: ''
+    image_url: '',
+    location: ''
   });
   const [createLoading, setCreateLoading] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
@@ -132,7 +133,28 @@ const Inventory = () => {
   const [gotMoreAwaitingQuantity, setGotMoreAwaitingQuantity] = useState(null); // { defaultQty } after "Add to inventory" scan confirmed
   const [gotMoreQuantityInput, setGotMoreQuantityInput] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', barcode: '', category_id: '', unit: 'each', price: '', image_url: '', size_per_unit: '', min_quantity: '', keep_in_stock: true, needs_return: false, return_supplier: '', supplier_name: '', supplier_contact: '', supplier_part_number: '', reorder_cost: '' });
+  const [editForm, setEditForm] = useState({
+    name: '',
+    barcode: '',
+    category_id: '',
+    unit: 'each',
+    price: '',
+    image_url: '',
+    size_per_unit: '',
+    min_quantity: '',
+    keep_in_stock: true,
+    needs_return: false,
+    return_supplier: '',
+    supplier_name: '',
+    supplier_contact: '',
+    supplier_part_number: '',
+    reorder_cost: '',
+    location: '',
+    location_notes: '',
+    preferred_vendor: '',
+    amazon_asin: '',
+    amazon_url: '',
+  });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState(null);
   const [markReturnedLoading, setMarkReturnedLoading] = useState(false);
@@ -143,6 +165,10 @@ const Inventory = () => {
   const [fetchImageLoading, setFetchImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [scanResultImageError, setScanResultImageError] = useState(false);
+  const [deals, setDeals] = useState([]);
+  const [dealsMeta, setDealsMeta] = useState(null);
+  const [dealsLoading, setDealsLoading] = useState(false);
+  const [dealsRefreshing, setDealsRefreshing] = useState(false);
   const [showNewItemRequestModal, setShowNewItemRequestModal] = useState(false);
   const [newItemRequestForm, setNewItemRequestForm] = useState({ item_name: '', notes: '', barcode: '' });
   const [newItemRequestLoading, setNewItemRequestLoading] = useState(false);
@@ -300,7 +326,7 @@ const Inventory = () => {
     setQuantity('');
     setViscosity('');
     setShowScanResultModal(false);
-    setCreateForm({ name: '', category_id: '', unit: 'each', price: '', quantity: '', image_url: '' });
+    setCreateForm({ name: '', category_id: '', unit: 'each', price: '', quantity: '', image_url: '', location: '' });
     setCategoryTouched(false);
   };
 
@@ -407,7 +433,8 @@ const Inventory = () => {
         unit: createForm.unit || 'each',
         price: parsedPrice,
         quantity: parsedQty !== null ? parsedQty : 0,
-        image_url: createForm.image_url && createForm.image_url.trim() ? createForm.image_url.trim() : undefined
+        image_url: createForm.image_url && createForm.image_url.trim() ? createForm.image_url.trim() : undefined,
+        location: createForm.location && createForm.location.trim() ? createForm.location.trim() : null,
       };
       const res = await api.post('/inventory/items', payload);
       const created = res.data?.item;
@@ -582,10 +609,60 @@ const Inventory = () => {
       supplier_name: item.supplier_name && String(item.supplier_name).trim() ? String(item.supplier_name) : '',
       supplier_contact: item.supplier_contact && String(item.supplier_contact).trim() ? String(item.supplier_contact) : '',
       supplier_part_number: item.supplier_part_number && String(item.supplier_part_number).trim() ? String(item.supplier_part_number) : '',
-      reorder_cost: item.reorder_cost != null && item.reorder_cost !== '' ? String(item.reorder_cost) : ''
+      reorder_cost: item.reorder_cost != null && item.reorder_cost !== '' ? String(item.reorder_cost) : '',
+      location: item.location && String(item.location).trim() ? String(item.location) : '',
+      location_notes: item.location_notes && String(item.location_notes).trim() ? String(item.location_notes) : '',
+      preferred_vendor: item.preferred_vendor && String(item.preferred_vendor).trim() ? String(item.preferred_vendor) : '',
+      amazon_asin: item.amazon_asin && String(item.amazon_asin).trim() ? String(item.amazon_asin) : '',
+      amazon_url: item.amazon_url && String(item.amazon_url).trim() ? String(item.amazon_url) : '',
     });
     setEditError(null);
     setShowEditModal(true);
+  };
+
+  const amazonLink = useMemo(() => {
+    const url = item?.amazon_url && String(item.amazon_url).trim() ? String(item.amazon_url).trim() : '';
+    if (url) return url;
+    const asin = item?.amazon_asin && String(item.amazon_asin).trim() ? String(item.amazon_asin).trim() : '';
+    if (!asin) return null;
+    return `https://www.amazon.com/gp/aws/cart/add.html?ASIN.1=${encodeURIComponent(asin)}&Quantity.1=1`;
+  }, [item?.amazon_asin, item?.amazon_url]);
+
+  useEffect(() => {
+    if (!isAdmin || !item?.id) {
+      setDeals([]);
+      setDealsMeta(null);
+      return;
+    }
+    let cancelled = false;
+    setDealsLoading(true);
+    api.get(`/inventory/items/${item.id}/deals`)
+      .then((res) => {
+        if (cancelled) return;
+        setDeals(res.data?.deals || []);
+        setDealsMeta(res.data?.meta || null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDeals([]);
+        setDealsMeta(null);
+      })
+      .finally(() => { if (!cancelled) setDealsLoading(false); });
+    return () => { cancelled = true; };
+  }, [isAdmin, item?.id]);
+
+  const refreshDeals = async () => {
+    if (!isAdmin || !item?.id) return;
+    setDealsRefreshing(true);
+    try {
+      const res = await api.post(`/inventory/items/${item.id}/deals/refresh`);
+      setDeals(res.data?.deals || []);
+      setDealsMeta(res.data?.meta || null);
+    } catch {
+      // ignore
+    } finally {
+      setDealsRefreshing(false);
+    }
   };
 
   const handleSaveEdit = async (e) => {
@@ -613,7 +690,12 @@ const Inventory = () => {
         supplier_name: editForm.supplier_name.trim() || null,
         supplier_contact: editForm.supplier_contact.trim() || null,
         supplier_part_number: editForm.supplier_part_number.trim() || null,
-        reorder_cost: editForm.reorder_cost === '' ? null : safeNumber(editForm.reorder_cost)
+        reorder_cost: editForm.reorder_cost === '' ? null : safeNumber(editForm.reorder_cost),
+        location: editForm.location.trim() || null,
+        location_notes: editForm.location_notes.trim() || null,
+        preferred_vendor: editForm.preferred_vendor.trim() || null,
+        amazon_asin: editForm.amazon_asin.trim() || null,
+        amazon_url: editForm.amazon_url.trim() || null,
       };
       if (payload.price !== null && !Number.isFinite(payload.price)) {
         setEditError('Price must be a number.');
@@ -1162,6 +1244,15 @@ const Inventory = () => {
                     placeholder="each, quarts, oz, cans…"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Location (optional)</label>
+                  <input
+                    value={createForm.location}
+                    onChange={(e) => setCreateForm((p) => ({ ...p, location: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-neutral-700 focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
+                    placeholder="e.g. Front rack • Bin A3"
+                  />
+                </div>
                 {isAdmin && (
                   <>
                     <div>
@@ -1267,6 +1358,10 @@ const Inventory = () => {
                   <dd className="text-gray-900 dark:text-neutral-100">{categoryLabel || '—'}</dd>
                 </div>
                 <div>
+                  <dt className="text-gray-500 dark:text-neutral-400">Location</dt>
+                  <dd className="text-gray-900 dark:text-neutral-100">{item.location || '—'}</dd>
+                </div>
+                <div>
                   <dt className="text-gray-500 dark:text-neutral-400">Unit</dt>
                   <dd className="text-gray-900 dark:text-neutral-100">{item.unit || 'each'}</dd>
                 </div>
@@ -1313,6 +1408,53 @@ const Inventory = () => {
                   )}
                 </div>
               </div>
+              {isAdmin && (
+                <div className="rounded-xl bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 p-4 w-full md:w-[200px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-800 dark:text-neutral-100">Quick buy</div>
+                      <div className="text-[10px] text-gray-500 dark:text-neutral-400">
+                        {dealsMeta?.last_fetched_at ? `Deals: ${new Date(dealsMeta.last_fetched_at).toLocaleDateString()}` : 'Deals: —'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={refreshDeals}
+                      disabled={dealsRefreshing}
+                      className="px-2 py-1 rounded-lg border border-gray-200 dark:border-neutral-700 text-xs font-medium text-gray-700 dark:text-neutral-100 hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-50"
+                      title="Refresh deals"
+                    >
+                      {dealsRefreshing ? '…' : '↻'}
+                    </button>
+                  </div>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {amazonLink && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(amazonLink, '_blank', 'noopener,noreferrer')}
+                        className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90"
+                      >
+                        Buy on Amazon
+                      </button>
+                    )}
+                    {dealsLoading ? (
+                      <div className="text-xs text-gray-500 dark:text-neutral-400">Loading deals…</div>
+                    ) : deals.length > 0 ? (
+                      <a
+                        href={deals[0].url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary hover:underline truncate"
+                        title={deals[0].title || deals[0].url}
+                      >
+                        {deals[0].title || deals[0].url}
+                      </a>
+                    ) : (
+                      <div className="text-xs text-gray-500 dark:text-neutral-400">No deals yet</div>
+                    )}
+                  </div>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -1437,6 +1579,11 @@ const Inventory = () => {
                     <svg className="w-6 h-6 text-gray-500 dark:text-neutral-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
+                {item.location && (
+                  <div className="mt-1 text-xs text-gray-600 dark:text-neutral-300 truncate" title={item.location}>
+                    📍 {item.location}
+                  </div>
+                )}
                 {(item.returned_at || Boolean(item.needs_return) || (isAdmin && item.return_supplier)) && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {item.returned_at && (
@@ -1746,6 +1893,69 @@ const Inventory = () => {
                   />
                 </div>
               )}
+              {/* Location + reorder helpers */}
+              <div className="pt-2 border-t border-gray-200 dark:border-neutral-700">
+                <p className="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wide mb-3">Location & Reorder (optional)</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Location</label>
+                    <input
+                      value={editForm.location}
+                      onChange={(e) => setEditForm((p) => ({ ...p, location: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
+                      placeholder="e.g. Front rack • Bin A3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Location notes</label>
+                    <input
+                      value={editForm.location_notes}
+                      onChange={(e) => setEditForm((p) => ({ ...p, location_notes: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
+                      placeholder="e.g. behind towels, second row"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Preferred vendor</label>
+                    <input
+                      value={editForm.preferred_vendor}
+                      onChange={(e) => setEditForm((p) => ({ ...p, preferred_vendor: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
+                      placeholder="e.g. Amazon, NAPA, AutoZone"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Amazon ASIN</label>
+                      <input
+                        value={editForm.amazon_asin}
+                        onChange={(e) => setEditForm((p) => ({ ...p, amazon_asin: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
+                        placeholder="B08XYZ1234"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-neutral-100 mb-1">Amazon URL</label>
+                      <input
+                        value={editForm.amazon_url}
+                        onChange={(e) => setEditForm((p) => ({ ...p, amazon_url: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-400"
+                        placeholder="https://www.amazon.com/dp/…"
+                      />
+                      {editForm.amazon_url && (
+                        <a
+                          href={editForm.amazon_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-primary mt-0.5 block hover:underline"
+                        >
+                          Open Amazon link
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
               {/* Supplier fields */}
               <div className="pt-2 border-t border-gray-200 dark:border-neutral-700">
                 <p className="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wide mb-3">Supplier Info (optional)</p>

@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { findDealsForInventoryItem } from '../services/deals/dealFinder.js';
 
 const router = express.Router();
 
@@ -154,7 +155,7 @@ router.post('/categories/suggest', async (req, res) => {
 // GET /api/inventory/items
 router.get('/items', async (req, res) => {
   try {
-    const { category_id, q, in_stock_only } = req.query || {};
+    const { category_id, q, in_stock_only, location } = req.query || {};
     const where = [];
     const params = [];
 
@@ -164,8 +165,13 @@ router.get('/items', async (req, res) => {
     }
 
     if (q) {
-      where.push('(i.name LIKE ? OR i.barcode LIKE ?)');
-      params.push(`%${q}%`, `%${q}%`);
+      where.push('(i.name LIKE ? OR i.barcode LIKE ? OR i.supplier_part_number LIKE ? OR i.location LIKE ? OR i.preferred_vendor LIKE ? OR i.supplier_name LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    }
+
+    if (location) {
+      where.push('(i.location LIKE ?)');
+      params.push(`%${location}%`);
     }
 
     // Exclude returned items and 0 quantity from "in stock" list (e.g. main inventory view); search still finds all
@@ -200,6 +206,11 @@ router.get('/items', async (req, res) => {
       'i.supplier_contact',
       'i.supplier_part_number',
       'i.reorder_cost',
+      'i.location',
+      'i.location_notes',
+      'i.preferred_vendor',
+      'i.amazon_asin',
+      'i.amazon_url',
       'i.created_at',
       'i.updated_at'
     ];
@@ -342,6 +353,11 @@ router.get('/items/by-barcode/:barcode', async (req, res) => {
       'i.supplier_contact',
       'i.supplier_part_number',
       'i.reorder_cost',
+      'i.location',
+      'i.location_notes',
+      'i.preferred_vendor',
+      'i.amazon_asin',
+      'i.amazon_url',
       'i.created_at',
       'i.updated_at'
     ];
@@ -370,8 +386,28 @@ router.get('/items/by-barcode/:barcode', async (req, res) => {
 // POST /api/inventory/items — workers can add (name, category, unit, quantity); admins can also set price, image, etc.
 router.post('/items', async (req, res) => {
   try {
-    const { barcode: barcodeRaw, name, category_id, unit, price, quantity: quantityRaw, size_per_unit: sizePerUnitRaw, image_url: imageUrlRaw, min_quantity: minQtyRaw, keep_in_stock: keepInStockRaw } = req.body || {};
     const admin = isAdmin(req);
+    const {
+      barcode: barcodeRaw,
+      name,
+      category_id,
+      unit,
+      price,
+      quantity: quantityRaw,
+      size_per_unit: sizePerUnitRaw,
+      image_url: imageUrlRaw,
+      min_quantity: minQtyRaw,
+      keep_in_stock: keepInStockRaw,
+      location: locationRaw,
+      location_notes: locationNotesRaw,
+      preferred_vendor: preferredVendorRaw,
+      amazon_asin: amazonAsinRaw,
+      amazon_url: amazonUrlRaw,
+      supplier_name: supplierNameRaw,
+      supplier_contact: supplierContactRaw,
+      supplier_part_number: supplierPartNumberRaw,
+      reorder_cost: reorderCostRaw,
+    } = req.body || {};
 
     if (!name) return res.status(400).json({ error: 'Name is required' });
 
@@ -410,18 +446,81 @@ router.post('/items', async (req, res) => {
       return res.status(400).json({ error: 'Invalid min quantity' });
     }
 
+    const location = locationRaw !== undefined && locationRaw !== null && String(locationRaw).trim()
+      ? String(locationRaw).trim()
+      : null;
+    const locationNotes = locationNotesRaw !== undefined && locationNotesRaw !== null && String(locationNotesRaw).trim()
+      ? String(locationNotesRaw).trim()
+      : null;
+
+    const preferredVendor = admin && preferredVendorRaw !== undefined && preferredVendorRaw !== null && String(preferredVendorRaw).trim()
+      ? String(preferredVendorRaw).trim()
+      : null;
+    const amazonAsin = admin && amazonAsinRaw !== undefined && amazonAsinRaw !== null && String(amazonAsinRaw).trim()
+      ? String(amazonAsinRaw).trim()
+      : null;
+    const amazonUrl = admin && amazonUrlRaw !== undefined && amazonUrlRaw !== null && String(amazonUrlRaw).trim()
+      ? String(amazonUrlRaw).trim()
+      : null;
+
+    const supplierName = admin && supplierNameRaw !== undefined && supplierNameRaw !== null && String(supplierNameRaw).trim()
+      ? String(supplierNameRaw).trim()
+      : null;
+    const supplierContact = admin && supplierContactRaw !== undefined && supplierContactRaw !== null && String(supplierContactRaw).trim()
+      ? String(supplierContactRaw).trim()
+      : null;
+    const supplierPartNumber = admin && supplierPartNumberRaw !== undefined && supplierPartNumberRaw !== null && String(supplierPartNumberRaw).trim()
+      ? String(supplierPartNumberRaw).trim()
+      : null;
+    const reorderCost = admin && reorderCostRaw !== undefined && reorderCostRaw !== null && reorderCostRaw !== ''
+      ? Number.parseFloat(reorderCostRaw)
+      : null;
+    if (reorderCost !== null && !Number.isFinite(reorderCost)) {
+      return res.status(400).json({ error: 'Invalid reorder cost' });
+    }
+
     const result = await db.runAsync(
       `
-        INSERT INTO inventory_items (barcode, name, category_id, unit, price, quantity, size_per_unit, image_url, min_quantity, keep_in_stock)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO inventory_items (
+          barcode, name, category_id, unit, price, quantity,
+          size_per_unit, image_url, min_quantity, keep_in_stock,
+          location, location_notes,
+          preferred_vendor, amazon_asin, amazon_url,
+          supplier_name, supplier_contact, supplier_part_number, reorder_cost
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
-      [barcode, name, finalCategoryId, normalizedUnit, parsedPrice, initialQty, sizePerUnit, imageUrl, minQty, keepInStock]
+      [
+        barcode,
+        name,
+        finalCategoryId,
+        normalizedUnit,
+        parsedPrice,
+        initialQty,
+        sizePerUnit,
+        imageUrl,
+        minQty,
+        keepInStock,
+        location,
+        locationNotes,
+        preferredVendor,
+        amazonAsin,
+        amazonUrl,
+        supplierName,
+        supplierContact,
+        supplierPartNumber,
+        reorderCost,
+      ]
     );
 
     const created = await db.getAsync(
       `
         SELECT i.id, i.barcode, i.name, i.category_id, c.name AS category_name, i.unit, i.price, i.quantity,
-               i.weight, i.weight_unit, i.viscosity, i.image_url, i.size_per_unit, i.last_counted_at, i.last_counted_by, u.full_name AS last_counted_by_name, i.needs_return, i.return_supplier, i.return_quantity, i.returned_at, i.min_quantity, i.keep_in_stock, i.supplier_name, i.supplier_contact, i.supplier_part_number, i.reorder_cost, i.created_at, i.updated_at
+               i.weight, i.weight_unit, i.viscosity, i.image_url, i.size_per_unit, i.last_counted_at, i.last_counted_by, u.full_name AS last_counted_by_name,
+               i.needs_return, i.return_supplier, i.return_quantity, i.returned_at, i.min_quantity, i.keep_in_stock,
+               i.supplier_name, i.supplier_contact, i.supplier_part_number, i.reorder_cost,
+               i.location, i.location_notes, i.preferred_vendor, i.amazon_asin, i.amazon_url,
+               i.created_at, i.updated_at
         FROM inventory_items i
         LEFT JOIN inventory_categories c ON c.id = i.category_id
         LEFT JOIN users u ON u.id = i.last_counted_by
@@ -447,7 +546,28 @@ router.put('/items/:id', requireAdmin, async (req, res) => {
     const current = await db.getAsync('SELECT * FROM inventory_items WHERE id = ?', [id]);
     if (!current) return res.status(404).json({ error: 'Item not found' });
 
-    const { barcode: barcodeRaw, name, category_id, unit, price, image_url: imageUrlRaw, needs_return: needsReturnRaw, return_supplier: returnSupplier, size_per_unit: sizePerUnitRaw, min_quantity: minQtyRaw, keep_in_stock: keepInStockRaw, supplier_name: supplierNameRaw, supplier_contact: supplierContactRaw, supplier_part_number: supplierPartNumberRaw, reorder_cost: reorderCostRaw } = req.body || {};
+    const {
+      barcode: barcodeRaw,
+      name,
+      category_id,
+      unit,
+      price,
+      image_url: imageUrlRaw,
+      needs_return: needsReturnRaw,
+      return_supplier: returnSupplier,
+      size_per_unit: sizePerUnitRaw,
+      min_quantity: minQtyRaw,
+      keep_in_stock: keepInStockRaw,
+      supplier_name: supplierNameRaw,
+      supplier_contact: supplierContactRaw,
+      supplier_part_number: supplierPartNumberRaw,
+      reorder_cost: reorderCostRaw,
+      location: locationRaw,
+      location_notes: locationNotesRaw,
+      preferred_vendor: preferredVendorRaw,
+      amazon_asin: amazonAsinRaw,
+      amazon_url: amazonUrlRaw,
+    } = req.body || {};
     const barcode = barcodeRaw === undefined ? current.barcode : normalizeBarcode(barcodeRaw);
     const finalName = name === undefined ? current.name : String(name).trim();
     const finalUnit = unit === undefined ? current.unit : (String(unit).trim() || 'each');
@@ -462,6 +582,11 @@ router.put('/items/:id', requireAdmin, async (req, res) => {
     const finalSupplierContact = supplierContactRaw === undefined ? (current.supplier_contact ?? null) : (supplierContactRaw !== null && String(supplierContactRaw).trim() ? String(supplierContactRaw).trim() : null);
     const finalSupplierPartNumber = supplierPartNumberRaw === undefined ? (current.supplier_part_number ?? null) : (supplierPartNumberRaw !== null && String(supplierPartNumberRaw).trim() ? String(supplierPartNumberRaw).trim() : null);
     const finalReorderCost = reorderCostRaw === undefined ? (current.reorder_cost ?? null) : (reorderCostRaw === null || reorderCostRaw === '' ? null : Number.parseFloat(reorderCostRaw));
+    const finalLocation = locationRaw === undefined ? (current.location ?? null) : (locationRaw !== null && String(locationRaw).trim() ? String(locationRaw).trim() : null);
+    const finalLocationNotes = locationNotesRaw === undefined ? (current.location_notes ?? null) : (locationNotesRaw !== null && String(locationNotesRaw).trim() ? String(locationNotesRaw).trim() : null);
+    const finalPreferredVendor = preferredVendorRaw === undefined ? (current.preferred_vendor ?? null) : (preferredVendorRaw !== null && String(preferredVendorRaw).trim() ? String(preferredVendorRaw).trim() : null);
+    const finalAmazonAsin = amazonAsinRaw === undefined ? (current.amazon_asin ?? null) : (amazonAsinRaw !== null && String(amazonAsinRaw).trim() ? String(amazonAsinRaw).trim() : null);
+    const finalAmazonUrl = amazonUrlRaw === undefined ? (current.amazon_url ?? null) : (amazonUrlRaw !== null && String(amazonUrlRaw).trim() ? String(amazonUrlRaw).trim() : null);
 
     const parsedPrice = price === undefined
       ? current.price
@@ -480,10 +605,35 @@ router.put('/items/:id', requireAdmin, async (req, res) => {
     await db.runAsync(
       `
         UPDATE inventory_items
-        SET barcode = ?, name = ?, category_id = ?, unit = ?, price = ?, image_url = ?, needs_return = ?, return_supplier = ?, size_per_unit = ?, min_quantity = ?, keep_in_stock = ?, supplier_name = ?, supplier_contact = ?, supplier_part_number = ?, reorder_cost = ?, updated_at = CURRENT_TIMESTAMP
+        SET barcode = ?, name = ?, category_id = ?, unit = ?, price = ?, image_url = ?, needs_return = ?, return_supplier = ?, size_per_unit = ?, min_quantity = ?, keep_in_stock = ?,
+            supplier_name = ?, supplier_contact = ?, supplier_part_number = ?, reorder_cost = ?,
+            location = ?, location_notes = ?, preferred_vendor = ?, amazon_asin = ?, amazon_url = ?,
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `,
-      [barcode, finalName, finalCategoryId, finalUnit, parsedPrice, finalImageUrl, finalNeedsReturn, finalReturnSupplier, finalSizePerUnit, finalMinQty, finalKeepInStock, finalSupplierName, finalSupplierContact, finalSupplierPartNumber, finalReorderCost, id]
+      [
+        barcode,
+        finalName,
+        finalCategoryId,
+        finalUnit,
+        parsedPrice,
+        finalImageUrl,
+        finalNeedsReturn,
+        finalReturnSupplier,
+        finalSizePerUnit,
+        finalMinQty,
+        finalKeepInStock,
+        finalSupplierName,
+        finalSupplierContact,
+        finalSupplierPartNumber,
+        finalReorderCost,
+        finalLocation,
+        finalLocationNotes,
+        finalPreferredVendor,
+        finalAmazonAsin,
+        finalAmazonUrl,
+        id
+      ]
     );
 
     const wasAlreadyFlagged = (current.needs_return === 1 || current.needs_return === '1');
@@ -504,7 +654,10 @@ router.put('/items/:id', requireAdmin, async (req, res) => {
     const updated = await db.getAsync(
       `
         SELECT i.id, i.barcode, i.name, i.category_id, c.name AS category_name, i.unit, i.price, i.quantity,
-               i.weight, i.weight_unit, i.viscosity, i.image_url, i.size_per_unit, i.last_counted_at, i.last_counted_by, u.full_name AS last_counted_by_name, i.needs_return, i.return_supplier, i.return_quantity, i.returned_at, i.min_quantity, i.keep_in_stock, i.supplier_name, i.supplier_contact, i.supplier_part_number, i.reorder_cost, i.created_at, i.updated_at
+               i.weight, i.weight_unit, i.viscosity, i.image_url, i.size_per_unit, i.last_counted_at, i.last_counted_by, u.full_name AS last_counted_by_name, i.needs_return, i.return_supplier, i.return_quantity, i.returned_at, i.min_quantity, i.keep_in_stock,
+               i.supplier_name, i.supplier_contact, i.supplier_part_number, i.reorder_cost,
+               i.location, i.location_notes, i.preferred_vendor, i.amazon_asin, i.amazon_url,
+               i.created_at, i.updated_at
         FROM inventory_items i
         LEFT JOIN inventory_categories c ON c.id = i.category_id
         LEFT JOIN users u ON u.id = i.last_counted_by
@@ -543,7 +696,10 @@ router.post('/items/:id/mark-returned', requireAdmin, async (req, res) => {
     const fields = [
       'i.id', 'i.barcode', 'i.name', 'i.category_id', 'c.name AS category_name', 'i.unit', 'i.price', 'i.quantity',
       'i.weight', 'i.weight_unit', 'i.viscosity', 'i.image_url', 'i.size_per_unit', 'i.last_counted_at', 'i.last_counted_by',
-      'u.full_name AS last_counted_by_name', 'i.needs_return', 'i.return_supplier', 'i.return_quantity', 'i.returned_at', 'i.min_quantity', 'i.keep_in_stock', 'i.created_at', 'i.updated_at'
+      'u.full_name AS last_counted_by_name', 'i.needs_return', 'i.return_supplier', 'i.return_quantity', 'i.returned_at', 'i.min_quantity', 'i.keep_in_stock',
+      'i.supplier_name', 'i.supplier_contact', 'i.supplier_part_number', 'i.reorder_cost',
+      'i.location', 'i.location_notes', 'i.preferred_vendor', 'i.amazon_asin', 'i.amazon_url',
+      'i.created_at', 'i.updated_at'
     ];
     const item = await db.getAsync(
       `SELECT ${fields.join(', ')} FROM inventory_items i
@@ -715,6 +871,112 @@ router.post('/items/:id/alternate-barcodes', async (req, res) => {
   } catch (error) {
     console.error('Add alternate barcode error:', error);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+async function getDealsMeta(itemId) {
+  const meta = await db.getAsync(
+    `SELECT MAX(fetched_at) AS last_fetched_at, COUNT(1) AS deal_count
+     FROM inventory_deals
+     WHERE item_id = ?`,
+    [itemId]
+  );
+  return {
+    last_fetched_at: meta?.last_fetched_at || null,
+    deal_count: meta?.deal_count || 0,
+  };
+}
+
+async function loadDeals(itemId, limit = 20) {
+  return await db.allAsync(
+    `SELECT id, item_id, source, title, url, price, currency, shipping, coupon_code, expires_at, score, reason, fetched_at
+     FROM inventory_deals
+     WHERE item_id = ?
+     ORDER BY COALESCE(score, 0) DESC, COALESCE(price, 999999) ASC, fetched_at DESC
+     LIMIT ?`,
+    [itemId, limit]
+  );
+}
+
+function isStale(lastFetchedAt, maxAgeMinutes = 360) {
+  if (!lastFetchedAt) return true;
+  const last = new Date(lastFetchedAt);
+  if (Number.isNaN(last.getTime())) return true;
+  const ageMs = Date.now() - last.getTime();
+  return ageMs > maxAgeMinutes * 60 * 1000;
+}
+
+async function refreshDealsForItem(itemId) {
+  const item = await db.getAsync('SELECT * FROM inventory_items WHERE id = ?', [itemId]);
+  if (!item) return { error: 'Item not found' };
+
+  const deals = await findDealsForInventoryItem(item);
+
+  // Replace cached deals for this item (keep it simple and fast).
+  await db.runAsync('DELETE FROM inventory_deals WHERE item_id = ?', [itemId]).catch(() => {});
+
+  for (const d of deals) {
+    await db.runAsync(
+      `INSERT INTO inventory_deals
+       (item_id, source, title, url, price, currency, shipping, coupon_code, expires_at, score, reason, raw_json, fetched_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [
+        itemId,
+        d.source || 'unknown',
+        d.title || null,
+        d.url,
+        d.price ?? null,
+        d.currency || 'USD',
+        d.shipping || null,
+        d.coupon_code || null,
+        d.expires_at || null,
+        d.score ?? 0,
+        d.reason || null,
+        d.raw_json || null,
+      ]
+    ).catch(() => {});
+  }
+
+  return { item, deals: await loadDeals(itemId) };
+}
+
+// GET /api/inventory/items/:id/deals — cached deals for an item
+router.get('/items/:id/deals', async (req, res) => {
+  try {
+    const itemId = req.params.id != null ? Number(req.params.id) : null;
+    if (!itemId || !Number.isFinite(itemId)) {
+      return res.status(400).json({ error: 'Item id is required' });
+    }
+
+    const meta = await getDealsMeta(itemId);
+    const autoRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
+    if (autoRefresh && isStale(meta.last_fetched_at, 360)) {
+      const refreshed = await refreshDealsForItem(itemId);
+      if (refreshed.error) return res.status(404).json({ error: refreshed.error });
+      return res.json({ deals: refreshed.deals || [], meta: await getDealsMeta(itemId) });
+    }
+
+    const deals = await loadDeals(itemId);
+    return res.json({ deals: deals || [], meta });
+  } catch (error) {
+    console.error('Get inventory deals error:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/inventory/items/:id/deals/refresh — refresh cached deals
+router.post('/items/:id/deals/refresh', async (req, res) => {
+  try {
+    const itemId = req.params.id != null ? Number(req.params.id) : null;
+    if (!itemId || !Number.isFinite(itemId)) {
+      return res.status(400).json({ error: 'Item id is required' });
+    }
+    const refreshed = await refreshDealsForItem(itemId);
+    if (refreshed.error) return res.status(404).json({ error: refreshed.error });
+    return res.json({ deals: refreshed.deals || [], meta: await getDealsMeta(itemId) });
+  } catch (error) {
+    console.error('Refresh inventory deals error:', error);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -1434,7 +1696,8 @@ router.get('/low-stock', async (req, res) => {
   try {
     const rows = await db.allAsync(
       `SELECT i.id, i.name, i.quantity, i.min_quantity, i.unit, i.barcode,
-              c.name AS category_name, i.image_url
+              c.name AS category_name, i.image_url,
+              i.location, i.preferred_vendor, i.supplier_name
        FROM inventory_items i
        LEFT JOIN inventory_categories c ON c.id = i.category_id
        WHERE i.returned_at IS NULL
@@ -1451,6 +1714,79 @@ router.get('/low-stock', async (req, res) => {
     res.json({ items: rows || [] });
   } catch (error) {
     console.error('Low stock error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/inventory/movement/summary — high level inventory movement (consumed/received + top items)
+router.get('/movement/summary', async (req, res) => {
+  try {
+    const daysRaw = req.query.days;
+    const days = Math.min(365, Math.max(1, Number(daysRaw || 30)));
+    const sinceExpr = `-${days} days`;
+
+    const totals = await db.getAsync(
+      `SELECT
+         SUM(CASE WHEN reason IN ('use','used_on_task','task_approved') THEN (quantity_before - quantity_after) ELSE 0 END) AS consumed_qty,
+         SUM(CASE WHEN reason IN ('refill_received','batch_received') THEN (quantity_after - quantity_before) ELSE 0 END) AS received_qty
+       FROM inventory_quantity_log
+       WHERE created_at >= datetime('now', ?)`,
+      [sinceExpr]
+    );
+
+    const topConsumed = await db.allAsync(
+      `SELECT l.item_id, i.name AS item_name, i.unit AS item_unit,
+              SUM(l.quantity_before - l.quantity_after) AS qty
+       FROM inventory_quantity_log l
+       JOIN inventory_items i ON i.id = l.item_id
+       WHERE l.created_at >= datetime('now', ?)
+         AND l.reason IN ('use','used_on_task','task_approved')
+       GROUP BY l.item_id
+       HAVING qty > 0
+       ORDER BY qty DESC
+       LIMIT 10`,
+      [sinceExpr]
+    );
+
+    const topReceived = await db.allAsync(
+      `SELECT l.item_id, i.name AS item_name, i.unit AS item_unit,
+              SUM(l.quantity_after - l.quantity_before) AS qty
+       FROM inventory_quantity_log l
+       JOIN inventory_items i ON i.id = l.item_id
+       WHERE l.created_at >= datetime('now', ?)
+         AND l.reason IN ('refill_received','batch_received')
+       GROUP BY l.item_id
+       HAVING qty > 0
+       ORDER BY qty DESC
+       LIMIT 10`,
+      [sinceExpr]
+    );
+
+    const lowStockByLocation = await db.allAsync(
+      `SELECT
+         COALESCE(NULLIF(TRIM(COALESCE(i.location, '')), ''), '(No location)') AS location,
+         COUNT(1) AS count
+       FROM inventory_items i
+       WHERE i.returned_at IS NULL
+         AND (
+           (i.min_quantity IS NOT NULL AND i.quantity <= i.min_quantity)
+           OR (i.min_quantity IS NULL AND i.quantity < 3)
+         )
+       GROUP BY COALESCE(NULLIF(TRIM(COALESCE(i.location, '')), ''), '(No location)')
+       ORDER BY count DESC
+       LIMIT 12`
+    );
+
+    res.json({
+      days,
+      consumed_qty: totals?.consumed_qty || 0,
+      received_qty: totals?.received_qty || 0,
+      top_consumed: topConsumed || [],
+      top_received: topReceived || [],
+      low_stock_by_location: lowStockByLocation || [],
+    });
+  } catch (error) {
+    console.error('Inventory movement summary error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1480,10 +1816,10 @@ router.post('/batch-receive', async (req, res) => {
         [quantityAfter, req.user.id, itemId]
       );
 
-      await db.runAsync(
-        "INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'batch_receive')",
-        [itemId, quantityBefore, quantityAfter, req.user.id]
-      ).catch(() => {});
+    await db.runAsync(
+      "INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'batch_received')",
+      [itemId, quantityBefore, quantityAfter, req.user.id]
+    ).catch(() => {});
 
       results.push({ item_id: itemId, item_name: row.name, quantity_added: qty, new_quantity: quantityAfter });
     }
