@@ -69,7 +69,8 @@ async function fetchText(url, timeoutMs = 8000) {
 function parseRssItems(xml) {
   const text = String(xml || '');
   const items = [];
-  const itemMatches = text.match(/<item[\\s\\S]*?<\\/item>/gi) || [];
+  // NOTE: use a single backslash to escape the forward slash in a regex literal.
+  const itemMatches = text.match(/<item[\s\S]*?<\/item>/gi) || [];
   for (const raw of itemMatches) {
     const title = extractFirstTag(raw, 'title');
     const link = extractFirstTag(raw, 'link');

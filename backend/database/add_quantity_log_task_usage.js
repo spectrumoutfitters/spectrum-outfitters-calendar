@@ -12,6 +12,9 @@ export async function addQuantityLogTaskUsage() {
     const cols = new Set((info || []).map(c => c.name));
     if (cols.has('task_id')) return; // Already migrated
 
+    // If a prior migration attempt left a temp table around, drop it so the CREATE below is authoritative.
+    await db.runAsync('DROP TABLE IF EXISTS inventory_quantity_log_new').catch(() => {});
+
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS inventory_quantity_log_new (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,8 +30,22 @@ export async function addQuantityLogTaskUsage() {
       )
     `);
     await db.runAsync(`
-      INSERT INTO inventory_quantity_log_new (id, item_id, quantity_before, quantity_after, changed_by, reason, refill_request_id, created_at)
-      SELECT id, item_id, quantity_before, quantity_after, changed_by, reason, refill_request_id, created_at
+      INSERT INTO inventory_quantity_log_new (id, item_id, quantity_before, quantity_after, changed_by, reason, refill_request_id, task_id, notes, created_at)
+      SELECT
+        id,
+        item_id,
+        quantity_before,
+        quantity_after,
+        changed_by,
+        CASE
+          WHEN reason = 'batch_receive' THEN 'batch_received'
+          WHEN reason IN ('count', 'refill_received', 'task_approved', 'use', 'used_on_task', 'batch_received') THEN reason
+          ELSE 'count'
+        END AS reason,
+        refill_request_id,
+        NULL AS task_id,
+        NULL AS notes,
+        created_at
       FROM inventory_quantity_log
     `);
     await db.runAsync('DROP TABLE inventory_quantity_log');
