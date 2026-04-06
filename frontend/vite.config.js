@@ -37,6 +37,63 @@ export default defineConfig(async () => {
   const basePath = (process.env.VITE_BASE_PATH || '').replace(/\/+$/, '');
   const base = basePath ? `${basePath}/` : '/';
 
+  const apiProxy = {
+    target: 'http://localhost:5000',
+    changeOrigin: true,
+    secure: false,
+    ws: true,
+    rewrite: (path) => path.replace(/^\/api/, '/api'),
+    configure: (proxy) => {
+      proxy.on('error', (err) => console.error('Proxy error:', err))
+      proxy.on('proxyReq', (proxyReq) => {
+        proxyReq.setHeader('Host', 'localhost:5000')
+      })
+      proxy.on('proxyRes', (proxyRes, req) => {
+        if (proxyRes.statusCode >= 400) {
+          console.log(`Proxy response: ${req.method} ${req.url} -> ${proxyRes.statusCode}`)
+        }
+      })
+    }
+  };
+
+  const proxy = {
+    '/api': apiProxy,
+    ...(basePath
+      ? {
+          [`${basePath}/api`]: {
+            ...apiProxy,
+            rewrite: (path) =>
+              path.replace(new RegExp(`^${basePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), ''),
+          },
+        }
+      : {}),
+    '/socket.io': {
+      target: 'http://localhost:5000',
+      changeOrigin: true,
+      secure: false,
+      ws: true,
+      configure: (proxy) => {
+        proxy.on('error', (err) => console.error('Socket proxy error:', err))
+      }
+    },
+    '/downloads': {
+      target: 'http://localhost:5000',
+      changeOrigin: true,
+      secure: false,
+      configure: (proxy) => {
+        proxy.on('error', (err) => console.error('Downloads proxy error:', err))
+      }
+    },
+    '/payroll-system': {
+      target: 'http://localhost:5000',
+      changeOrigin: true,
+      secure: false,
+      configure: (proxy) => {
+        proxy.on('error', (err) => console.error('Payroll system proxy error:', err))
+      }
+    },
+  }
+
   return {
     base,
     plugins: [react()],
@@ -45,51 +102,7 @@ export default defineConfig(async () => {
       port: 5173,
       https: { key: pems.private, cert: pems.cert },
       strictPort: false,
-      proxy: {
-        '/api': {
-          target: 'http://localhost:5000',
-          changeOrigin: true,
-          secure: false,
-          ws: true,
-          rewrite: (path) => path.replace(/^\/api/, '/api'),
-          configure: (proxy) => {
-            proxy.on('error', (err) => console.error('Proxy error:', err))
-            proxy.on('proxyReq', (proxyReq) => {
-              proxyReq.setHeader('Host', 'localhost:5000')
-            })
-            proxy.on('proxyRes', (proxyRes, req) => {
-              if (proxyRes.statusCode >= 400) {
-                console.log(`Proxy response: ${req.method} ${req.url} -> ${proxyRes.statusCode}`)
-              }
-            })
-          }
-        },
-        '/socket.io': {
-          target: 'http://localhost:5000',
-          changeOrigin: true,
-          secure: false,
-          ws: true,
-          configure: (proxy) => {
-            proxy.on('error', (err) => console.error('Socket proxy error:', err))
-          }
-        },
-        '/downloads': {
-          target: 'http://localhost:5000',
-          changeOrigin: true,
-          secure: false,
-          configure: (proxy) => {
-            proxy.on('error', (err) => console.error('Downloads proxy error:', err))
-          }
-        },
-        '/payroll-system': {
-          target: 'http://localhost:5000',
-          changeOrigin: true,
-          secure: false,
-          configure: (proxy) => {
-            proxy.on('error', (err) => console.error('Payroll system proxy error:', err))
-          }
-        }
-      }
-    }
+      proxy,
+    },
   }
 })

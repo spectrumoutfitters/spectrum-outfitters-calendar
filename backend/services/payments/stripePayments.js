@@ -164,7 +164,9 @@ export async function createStripePaymentIntentForInvoice(crmInvoiceId) {
   if (!stripe) return { error: 'Stripe is not configured (missing STRIPE_SECRET_KEY)' };
 
   const invoice = await db.getAsync(
-    `SELECT i.*, c.id AS crm_customer_id
+    `SELECT
+       i.*,
+       COALESCE(i.crm_customer_id, c.id) AS crm_customer_id
      FROM crm_invoices i
      LEFT JOIN crm_customers c ON c.shopmonkey_customer_id = i.shopmonkey_customer_id
      WHERE i.id = ?`,

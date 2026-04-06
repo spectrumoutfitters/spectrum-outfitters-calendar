@@ -10,7 +10,8 @@ export async function addCrmTables() {
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS crm_customers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        shopmonkey_customer_id TEXT UNIQUE NOT NULL,
+        source TEXT NOT NULL DEFAULT 'shopmonkey' CHECK(source IN ('shopmonkey','native')),
+        shopmonkey_customer_id TEXT UNIQUE,
         display_name TEXT,
         phone TEXT,
         email TEXT,
@@ -20,12 +21,15 @@ export async function addCrmTables() {
       )
     `);
     await db.runAsync('CREATE INDEX IF NOT EXISTS idx_crm_customers_sm_id ON crm_customers(shopmonkey_customer_id)').catch(() => {});
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_crm_customers_source ON crm_customers(source, display_name)').catch(() => {});
 
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS crm_vehicles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        shopmonkey_vehicle_id TEXT UNIQUE NOT NULL,
+        source TEXT NOT NULL DEFAULT 'shopmonkey' CHECK(source IN ('shopmonkey','native')),
+        shopmonkey_vehicle_id TEXT UNIQUE,
         shopmonkey_customer_id TEXT,
+        crm_customer_id INTEGER REFERENCES crm_customers(id),
         year TEXT,
         make TEXT,
         model TEXT,
@@ -38,17 +42,22 @@ export async function addCrmTables() {
     `);
     await db.runAsync('CREATE INDEX IF NOT EXISTS idx_crm_vehicles_sm_id ON crm_vehicles(shopmonkey_vehicle_id)').catch(() => {});
     await db.runAsync('CREATE INDEX IF NOT EXISTS idx_crm_vehicles_customer_sm_id ON crm_vehicles(shopmonkey_customer_id)').catch(() => {});
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_crm_vehicles_customer_crm_id ON crm_vehicles(crm_customer_id)').catch(() => {});
 
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS crm_invoices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        shopmonkey_order_id TEXT UNIQUE NOT NULL,
+        source TEXT NOT NULL DEFAULT 'shopmonkey' CHECK(source IN ('shopmonkey','native')),
+        shopmonkey_order_id TEXT UNIQUE,
         shopmonkey_order_number TEXT,
         shopmonkey_workflow_status_id TEXT,
         status TEXT,
         invoice_date TEXT,
         shopmonkey_customer_id TEXT,
         shopmonkey_vehicle_id TEXT,
+        crm_customer_id INTEGER REFERENCES crm_customers(id),
+        crm_vehicle_id INTEGER REFERENCES crm_vehicles(id),
+        invoice_number TEXT,
         labor_cents INTEGER,
         parts_cents INTEGER,
         fees_cents INTEGER,
@@ -61,7 +70,10 @@ export async function addCrmTables() {
     `);
     await db.runAsync('CREATE INDEX IF NOT EXISTS idx_crm_invoices_customer ON crm_invoices(shopmonkey_customer_id, invoice_date)').catch(() => {});
     await db.runAsync('CREATE INDEX IF NOT EXISTS idx_crm_invoices_vehicle ON crm_invoices(shopmonkey_vehicle_id, invoice_date)').catch(() => {});
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_crm_invoices_crm_customer ON crm_invoices(crm_customer_id, invoice_date)').catch(() => {});
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_crm_invoices_crm_vehicle ON crm_invoices(crm_vehicle_id, invoice_date)').catch(() => {});
     await db.runAsync('CREATE INDEX IF NOT EXISTS idx_crm_invoices_sm_order ON crm_invoices(shopmonkey_order_id)').catch(() => {});
+    await db.runAsync('CREATE UNIQUE INDEX IF NOT EXISTS uq_crm_invoices_invoice_number ON crm_invoices(invoice_number)').catch(() => {});
 
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS crm_invoice_items (

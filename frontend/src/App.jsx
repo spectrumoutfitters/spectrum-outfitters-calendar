@@ -20,11 +20,16 @@ import CRM from './pages/CRM';
 import CustomerDetail from './pages/CustomerDetail';
 import VehicleDetail from './pages/VehicleDetail';
 import InvoiceDetail from './pages/InvoiceDetail';
+import NewInvoice from './pages/NewInvoice';
+import PayInvoice from './pages/PayInvoice';
+import QuickJobsAdmin from './pages/QuickJobsAdmin';
 import CustomerStatus from './pages/CustomerStatus';
 import DispatchBoard from './pages/DispatchBoard';
 import Layout from './components/Layout/Layout';
 import FloatingActions from './components/Layout/FloatingActions';
 import Logo from './components/Logo';
+import AffiliatesAdmin from './pages/AffiliatesAdmin';
+import AffiliateQuote from './pages/AffiliateQuote';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -73,6 +78,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/pay/:token" element={<PayInvoice />} />
       <Route
         path="/dashboard"
         element={
@@ -126,41 +132,61 @@ function AppRoutes() {
       <Route
         path="/crm"
         element={
-          <AdminRoute>
+          <PrivateRoute>
             <Layout>
               <CRM />
             </Layout>
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/crm/quick-jobs"
+        element={
+          <AdminRoute>
+            <Layout>
+              <QuickJobsAdmin />
+            </Layout>
           </AdminRoute>
+        }
+      />
+      <Route
+        path="/crm/invoices/new"
+        element={
+          <PrivateRoute>
+            <Layout>
+              <NewInvoice />
+            </Layout>
+          </PrivateRoute>
         }
       />
       <Route
         path="/crm/customers/:id"
         element={
-          <AdminRoute>
+          <PrivateRoute>
             <Layout>
               <CustomerDetail />
             </Layout>
-          </AdminRoute>
+          </PrivateRoute>
         }
       />
       <Route
         path="/crm/vehicles/:id"
         element={
-          <AdminRoute>
+          <PrivateRoute>
             <Layout>
               <VehicleDetail />
             </Layout>
-          </AdminRoute>
+          </PrivateRoute>
         }
       />
       <Route
         path="/crm/invoices/:id"
         element={
-          <AdminRoute>
+          <PrivateRoute>
             <Layout>
               <InvoiceDetail />
             </Layout>
-          </AdminRoute>
+          </PrivateRoute>
         }
       />
       <Route
@@ -214,6 +240,17 @@ function AppRoutes() {
         }
       />
       <Route path="/status/:token" element={<CustomerStatus />} />
+      <Route path="/affiliates/:token" element={<AffiliateQuote />} />
+      <Route
+        path="/admin/affiliates"
+        element={
+          <AdminRoute>
+            <Layout>
+              <AffiliatesAdmin />
+            </Layout>
+          </AdminRoute>
+        }
+      />
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
   );

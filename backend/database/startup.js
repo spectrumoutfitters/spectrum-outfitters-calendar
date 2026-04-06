@@ -15,10 +15,16 @@ import { addInventorySupplierColumns } from './add_inventory_supplier.js';
 import { addInventoryLocationVendorAmazonColumns } from './add_inventory_locations_and_amazon.js';
 import { addInventoryDealsTable } from './add_inventory_deals.js';
 import { addCrmTables } from './add_crm_tables.js';
+import { addCrmBackfillJobsTable } from './add_crm_backfill_jobs.js';
+import { migrateCrmNativeSupport } from './migrate_crm_native_support.js';
+import { addInvoicePaymentLinksTable } from './add_invoice_payment_links.js';
+import { addQuickJobsTable } from './add_quick_jobs.js';
 import { addPaymentsTables } from './add_payments_tables.js';
 import { addQuantityLogTaskUsage } from './add_quantity_log_task_usage.js';
 import { addCustomerStatusTable } from './add_customer_status.js';
 import { addShortLinksTable } from './add_short_links.js';
+import { addEmployeeShopFinancingTables } from './add_employee_shop_financing.js';
+import { addQuoteAffiliateTables } from './add_quote_affiliates.js';
 
 export async function ensureUserColumns() {
   const columns = [
@@ -195,6 +201,24 @@ export async function ensureLoginEventsIsVpn() {
 }
 
 /** Ad-hoc inventory scan-outs (use item not on a task) — admin list and notifications. */
+/** Team vs admin message boards — required by /api/messages/unread-count (was only in standalone add_board_type_migration.js). */
+export async function ensureMessagesBoardTypeColumn() {
+  try {
+    const info = await db.allAsync('PRAGMA table_info(messages)');
+    const names = new Set((info || []).map((c) => c.name));
+    if (!names.has('board_type')) {
+      await db.runAsync(`
+        ALTER TABLE messages ADD COLUMN board_type TEXT CHECK(board_type IN ('admin_board', 'team_board'))
+      `).catch(() => {});
+    }
+    await db.runAsync(`
+      UPDATE messages
+      SET board_type = 'admin_board'
+      WHERE is_team_message = 1 AND (board_type IS NULL OR board_type = '')
+    `).catch(() => {});
+  } catch (_) {}
+}
+
 export async function ensureAdHocScanOutTable() {
   try {
     await db.runAsync(`
@@ -220,6 +244,7 @@ export async function runStartupMigrations() {
   await ensureUserColumns();
   await ensureNeelMasterAdmin();
   await ensureAppSettingsTable();
+  await ensureMessagesBoardTypeColumn();
   await ensureSystemUpdatesTables();
   await ensureNewItemRequestsTable();
   await ensureInventoryAlternateBarcodesTable();
@@ -238,9 +263,15 @@ export async function runStartupMigrations() {
   await addInventoryDealsTable();
   await addQuantityLogTaskUsage();
   await addCrmTables();
+  await addQuoteAffiliateTables();
+  await migrateCrmNativeSupport();
+  await addCrmBackfillJobsTable();
+  await addInvoicePaymentLinksTable();
+  await addQuickJobsTable();
   await addPaymentsTables();
   await addCustomerStatusTable();
   await addShortLinksTable();
   await ensurePayrollPeopleTable();
   await ensurePayrollReimbursementsSetup();
+  await addEmployeeShopFinancingTables();
 }

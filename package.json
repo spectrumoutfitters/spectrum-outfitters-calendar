@@ -5,10 +5,18 @@
   "type": "module",
   "scripts": {
     "launcher": "node launcher/launcher.js",
-    "deploy": "node scripts/deploy.cjs"
+    "deploy": "node scripts/deploy.cjs",
+    "dev": "concurrently -n backend,frontend -c cyan,magenta \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "start:backend": "npm start --prefix backend",
+    "free:5000": "npx --yes kill-port 5000"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
 }
 

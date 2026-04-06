@@ -11,6 +11,7 @@ import ProductManagement from '../components/Admin/ProductManagement';
 import InventoryManagement from '../components/Admin/InventoryManagement';
 import OrderManagement from '../components/Admin/OrderManagement';
 import PayrollManagement from '../components/Admin/PayrollManagement';
+import EmployeeShopFinancing from '../components/Admin/EmployeeShopFinancing';
 import Settings from '../components/Admin/Settings';
 import AdminWorkList from '../components/Admin/AdminWorkList';
 import ComplianceCenter from '../components/Admin/ComplianceCenter';
@@ -48,6 +49,7 @@ const SUB_TABS = {
   ],
   finance: [
     { id: 'payroll', label: 'Payroll' },
+    { id: 'shop_financing', label: 'Shop financing' },
     { id: 'finance', label: 'Finance' },
     { id: 'compliance', label: 'Compliance' },
   ],
@@ -533,6 +535,7 @@ const Admin = () => {
       <>
         <SubTabBar tabs={SUB_TABS.finance} activeId={sub} onSelect={(id) => selectSubTab('finance', id)} />
         {sub === 'payroll' && <PayrollManagement />}
+        {sub === 'shop_financing' && <EmployeeShopFinancing />}
         {sub === 'finance' && <FinanceDashboard />}
         {sub === 'compliance' && <ComplianceCenter />}
       </>

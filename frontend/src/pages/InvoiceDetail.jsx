@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../utils/api';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
@@ -81,11 +81,39 @@ const StripeElementsForm = ({ mode, buttonLabel, onSuccess }) => {
 
 const InvoiceDetail = () => {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
+  const isNative = useMemo(() => {
+    if (!invoice) return false;
+    return String(invoice.source || '').toLowerCase() === 'native' || !invoice.shopmonkey_order_id;
+  }, [invoice]);
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState({
+    line_type: 'part',
+    inventory_item_id: null,
+    inventory_item_name: '',
+    description: '',
+    part_number: '',
+    quantity: '1',
+    unit_price: '',
+    total: '',
+  });
+  const [addSaving, setAddSaving] = useState(false);
+  const [addMsg, setAddMsg] = useState('');
+
+  const [invQ, setInvQ] = useState('');
+  const [invDebounced, setInvDebounced] = useState('');
+  const [invLoading, setInvLoading] = useState(false);
+  const [invResults, setInvResults] = useState([]);
+  const [invOpen, setInvOpen] = useState(false);
+
+  const [taxEditing, setTaxEditing] = useState(false);
+  const [taxDraft, setTaxDraft] = useState('');
 
   const [paymentTab, setPaymentTab] = useState('card'); // card | manual | cards
   const [paymentsLoading, setPaymentsLoading] = useState(false);
@@ -106,6 +134,13 @@ const InvoiceDetail = () => {
   const [manualSaving, setManualSaving] = useState(false);
   const [manualMsg, setManualMsg] = useState('');
 
+  const [payLinkLoading, setPayLinkLoading] = useState(false);
+  const [payLink, setPayLink] = useState(null); // { token, pay_url, short_url }
+  const [payLinkMsg, setPayLinkMsg] = useState('');
+
+  const [quickJobs, setQuickJobs] = useState([]);
+  const [quickJobsLoading, setQuickJobsLoading] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -116,6 +151,7 @@ const InvoiceDetail = () => {
         if (cancelled) return;
         setInvoice(res.data?.invoice || null);
         setItems(res.data?.items || []);
+        setTaxDraft(res.data?.invoice?.tax_cents != null ? String(res.data?.invoice?.tax_cents) : '');
       } catch (e) {
         if (cancelled) return;
         setError(e.response?.data?.error || 'Failed to load invoice');
@@ -126,6 +162,58 @@ const InvoiceDetail = () => {
     load();
     return () => { cancelled = true; };
   }, [id]);
+
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search || '');
+    const open = sp.get('add') === '1';
+    if (open && isNative) setAddOpen(true);
+  }, [location.search, isNative]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setQuickJobsLoading(true);
+      try {
+        const res = await api.get('/crm/quick-jobs');
+        if (!cancelled) setQuickJobs((res.data?.jobs || []).filter((j) => j.is_active !== 0));
+      } catch {
+        if (!cancelled) setQuickJobs([]);
+      } finally {
+        if (!cancelled) setQuickJobsLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setInvDebounced(invQ.trim()), 180);
+    return () => clearTimeout(t);
+  }, [invQ]);
+
+  useEffect(() => {
+    if (!addOpen) return;
+    const q = invDebounced;
+    if (!q) {
+      setInvResults([]);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setInvLoading(true);
+      try {
+        const res = await api.get('/inventory/items', { params: { q } });
+        const items = res.data?.items || [];
+        if (!cancelled) setInvResults(items.slice(0, 10));
+      } catch {
+        if (!cancelled) setInvResults([]);
+      } finally {
+        if (!cancelled) setInvLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [addOpen, invDebounced]);
 
   const vehicleLabel = useMemo(() => {
     if (!invoice) return '—';
@@ -180,6 +268,7 @@ const InvoiceDetail = () => {
     setIntentAmountDueCents(null);
     setSetupClientSecret(null);
     setManualMsg('');
+    setPayLinkMsg('');
     if (!invoice?.id) return;
     reloadPayments();
     reloadCards();
@@ -196,7 +285,7 @@ const InvoiceDetail = () => {
           ← Back
         </button>
         <h1 className="mt-2 text-xl md:text-2xl font-bold text-gray-900 dark:text-neutral-100">
-          Invoice {invoice?.shopmonkey_order_number || invoice?.shopmonkey_order_id || ''}
+          Invoice {invoice?.invoice_number || invoice?.shopmonkey_order_number || invoice?.shopmonkey_order_id || ''}
         </h1>
         <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
           {invoice?.invoice_date || '—'} · {invoice?.customer_name || '—'} · {vehicleLabel}
@@ -233,8 +322,51 @@ const InvoiceDetail = () => {
               <p className="text-lg font-bold text-gray-900 dark:text-neutral-100 mt-1">{fmtCents(invoice.labor_cents)}</p>
             </div>
             <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
-              <p className="text-[10px] text-gray-500 dark:text-neutral-400 uppercase tracking-wider font-semibold">Tax</p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[10px] text-gray-500 dark:text-neutral-400 uppercase tracking-wider font-semibold">Tax</p>
+                {isNative ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTaxEditing((v) => !v);
+                      setTaxDraft(invoice?.tax_cents != null ? String(invoice.tax_cents) : '');
+                    }}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    {taxEditing ? 'Close' : 'Edit'}
+                  </button>
+                ) : null}
+              </div>
               <p className="text-lg font-bold text-gray-900 dark:text-neutral-100 mt-1">{fmtCents(invoice.tax_cents)}</p>
+              {isNative && taxEditing ? (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    value={taxDraft}
+                    onChange={(e) => setTaxDraft(e.target.value)}
+                    className="flex-1 h-10 px-3 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm"
+                    placeholder="Tax cents (e.g. 825)"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const cents = taxDraft.trim() === '' ? 0 : Number(taxDraft);
+                        await api.put(`/crm/invoices/${invoice.id}`, { tax_cents: Number.isFinite(cents) ? Math.round(cents) : 0 });
+                        const res = await api.get(`/crm/invoices/${encodeURIComponent(id)}`);
+                        setInvoice(res.data?.invoice || null);
+                        setItems(res.data?.items || []);
+                      } catch {
+                        // ignore
+                      } finally {
+                        setTaxEditing(false);
+                      }
+                    }}
+                    className="h-10 px-3 rounded-lg bg-primary text-white text-xs font-semibold"
+                  >
+                    Save
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -281,6 +413,86 @@ const InvoiceDetail = () => {
             </div>
 
             <div className="p-4 space-y-4">
+              <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 p-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">Send payment link</p>
+                    <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
+                      Generate a secure link to text/email the customer.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={payLinkLoading}
+                    onClick={async () => {
+                      if (!invoice?.id) return;
+                      setPayLinkLoading(true);
+                      setPayLinkMsg('');
+                      try {
+                        const res = await api.post(`/crm/invoices/${invoice.id}/payment-link`);
+                        const link = res.data || null;
+                        setPayLink(link);
+                        const url = link?.short_url || link?.pay_url;
+                        if (url && navigator?.clipboard?.writeText) {
+                          await navigator.clipboard.writeText(url);
+                          setPayLinkMsg('Link copied to clipboard.');
+                        } else {
+                          setPayLinkMsg('Link generated.');
+                        }
+                      } catch (e) {
+                        setPayLinkMsg(e.response?.data?.error || 'Failed to generate payment link');
+                      } finally {
+                        setPayLinkLoading(false);
+                      }
+                    }}
+                    className="min-h-12 px-4 rounded-xl bg-primary text-white font-semibold disabled:opacity-50"
+                  >
+                    {payLinkLoading ? 'Working…' : 'Generate link'}
+                  </button>
+                </div>
+
+                {payLink?.pay_url && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex flex-col md:flex-row gap-2 md:items-center">
+                      <input
+                        value={payLink.short_url || payLink.pay_url}
+                        readOnly
+                        className="flex-1 h-11 px-3 rounded-xl border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const url = payLink.short_url || payLink.pay_url;
+                            try {
+                              if (navigator?.clipboard?.writeText) await navigator.clipboard.writeText(url);
+                              setPayLinkMsg('Link copied to clipboard.');
+                            } catch {
+                              setPayLinkMsg('Copy failed — select and copy manually.');
+                            }
+                          }}
+                          className="min-h-11 px-4 rounded-xl border border-gray-200 dark:border-neutral-700 text-sm font-semibold text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-900"
+                        >
+                          Copy
+                        </button>
+                        <a
+                          href={`mailto:${encodeURIComponent(invoice.customer_email || '')}?subject=${encodeURIComponent(`Invoice ${invoice.invoice_number || invoice.id} payment link`)}&body=${encodeURIComponent(`Hi${invoice.customer_name ? ` ${invoice.customer_name}` : ''},\n\nPlease use this secure link to pay your invoice:\n${payLink.short_url || payLink.pay_url}\n\nThank you!`)}`}
+                          className="min-h-11 px-4 rounded-xl bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 text-sm font-semibold text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-900 inline-flex items-center justify-center"
+                        >
+                          Email
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {payLinkMsg && (
+                  <p className={`text-sm mt-2 ${payLinkMsg.toLowerCase().includes('fail') ? 'text-amber-700 dark:text-amber-300' : 'text-green-700 dark:text-green-300'}`}>
+                    {payLinkMsg}
+                  </p>
+                )}
+              </div>
+
               {!stripePromise && paymentTab === 'card' && (
                 <div className="text-sm text-amber-700 dark:text-amber-300">
                   Set `VITE_STRIPE_PUBLISHABLE_KEY` in the frontend env to enable card payments.
@@ -574,27 +786,289 @@ const InvoiceDetail = () => {
           </div>
 
           <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Line items</h2>
-              {invoice.shopmonkey_order_id && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await api.post(`/crm/sync/order/${encodeURIComponent(invoice.shopmonkey_order_id)}`);
-                      const res = await api.get(`/crm/invoices/${encodeURIComponent(id)}`);
-                      setInvoice(res.data?.invoice || null);
-                      setItems(res.data?.items || []);
-                    } catch {
-                      // ignore
-                    }
-                  }}
-                  className="min-h-10 px-3 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-700 dark:text-neutral-200 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-neutral-900"
-                >
-                  Re-sync
-                </button>
+            <div className="p-4 border-b border-gray-100 dark:border-neutral-800 flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Line items</h2>
+                <div className="flex items-center gap-2">
+                  {isNative && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddOpen((v) => !v);
+                        setAddMsg('');
+                      }}
+                      className="min-h-10 px-3 rounded-lg bg-primary text-white text-xs font-semibold"
+                    >
+                      {addOpen ? 'Close' : 'Add item'}
+                    </button>
+                  )}
+                  {invoice.shopmonkey_order_id && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await api.post(`/crm/sync/order/${encodeURIComponent(invoice.shopmonkey_order_id)}`);
+                          const res = await api.get(`/crm/invoices/${encodeURIComponent(id)}`);
+                          setInvoice(res.data?.invoice || null);
+                          setItems(res.data?.items || []);
+                        } catch {
+                          // ignore
+                        }
+                      }}
+                      className="min-h-10 px-3 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-700 dark:text-neutral-200 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-neutral-900"
+                    >
+                      Re-sync
+                    </button>
+                  )}
+                </div>
+              </div>
+              {isNative && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
+                    Quick jobs
+                  </span>
+                  {quickJobsLoading && (
+                    <span className="text-[11px] text-gray-400 dark:text-neutral-500">Loading…</span>
+                  )}
+                  {!quickJobsLoading && quickJobs.length === 0 && (
+                    <span className="text-[11px] text-gray-400 dark:text-neutral-500">
+                      No quick jobs yet. Admins can add them under CRM → Quick jobs.
+                    </span>
+                  )}
+                  {!quickJobsLoading &&
+                    quickJobs.map((j) => (
+                      <button
+                        key={j.id}
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await api.post(
+                              `/crm/invoices/${encodeURIComponent(id)}/apply-quick-job/${j.id}`
+                            );
+                            if (res.data?.invoice) {
+                              setInvoice(res.data.invoice);
+                              const refreshed = await api.get(`/crm/invoices/${encodeURIComponent(id)}`);
+                              setItems(refreshed.data?.items || []);
+                            }
+                          } catch {
+                            // ignore for now; error toast not critical
+                          }
+                        }}
+                        className={`min-h-8 px-3 rounded-full text-[11px] font-semibold border transition ${
+                          j.color === 'green'
+                            ? 'bg-emerald-500/10 border-emerald-400/60 text-emerald-600 dark:text-emerald-300'
+                            : j.color === 'amber'
+                            ? 'bg-amber-500/10 border-amber-400/60 text-amber-700 dark:text-amber-300'
+                            : 'bg-gray-100 dark:bg-neutral-900 border-gray-300 dark:border-neutral-700 text-gray-700 dark:text-neutral-200'
+                        }`}
+                      >
+                        {j.name}
+                      </button>
+                    ))}
+                </div>
               )}
             </div>
+            {isNative && addOpen && (
+              <div className="p-4 border-b border-gray-100 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-900/30">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                  <div className="md:col-span-6">
+                    <label className="block text-[10px] text-gray-500 dark:text-neutral-400 uppercase tracking-wider font-semibold mb-1">
+                      Inventory (optional)
+                    </label>
+                    <div className="relative">
+                      <input
+                        value={invQ}
+                        onChange={(e) => {
+                          setInvQ(e.target.value);
+                          setInvOpen(true);
+                        }}
+                        onFocus={() => setInvOpen(true)}
+                        onBlur={() => setTimeout(() => setInvOpen(false), 120)}
+                        className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm"
+                        placeholder="Search inventory item name / part # / barcode…"
+                      />
+                      {invOpen && (invLoading || invResults.length > 0) && (
+                        <div className="absolute z-20 mt-2 w-full rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-xl overflow-hidden">
+                          <div className="max-h-[260px] overflow-auto">
+                            {invLoading ? (
+                              <div className="p-3 text-sm text-gray-500 dark:text-neutral-400">Searching…</div>
+                            ) : (
+                              <div className="divide-y divide-gray-100 dark:divide-neutral-800">
+                                {invResults.map((it) => (
+                                  <button
+                                    key={it.id}
+                                    type="button"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => {
+                                      const reorder = Number(it.reorder_cost);
+                                      setAddForm((s) => ({
+                                        ...s,
+                                        inventory_item_id: it.id,
+                                        inventory_item_name: it.name || '',
+                                        description: s.description || it.name || '',
+                                        part_number: s.part_number || it.supplier_part_number || it.barcode || '',
+                                        unit_price: s.unit_price || (Number.isFinite(reorder) ? reorder.toFixed(2) : ''),
+                                      }));
+                                      setInvQ(it.name || '');
+                                      setInvOpen(false);
+                                    }}
+                                    className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-neutral-900 transition"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100 truncate">{it.name || '—'}</p>
+                                        <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5 truncate">
+                                          {it.supplier_part_number || it.barcode || '—'}
+                                          {it.location ? ` · ${it.location}` : ''}
+                                        </p>
+                                      </div>
+                                      <span className="text-xs text-gray-400 dark:text-neutral-500">Use</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {addForm.inventory_item_id ? (
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs text-gray-600 dark:text-neutral-300">
+                          Linked: <span className="font-semibold">{addForm.inventory_item_name || `#${addForm.inventory_item_id}`}</span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAddForm((s) => ({ ...s, inventory_item_id: null, inventory_item_name: '' }));
+                            setInvQ('');
+                            setInvResults([]);
+                          }}
+                          className="text-xs font-semibold text-red-700 dark:text-red-300 hover:underline"
+                        >
+                          Clear link
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="block text-[10px] text-gray-500 dark:text-neutral-400 uppercase tracking-wider font-semibold mb-1">Type</label>
+                    <select
+                      value={addForm.line_type}
+                      onChange={(e) => setAddForm((s) => ({ ...s, line_type: e.target.value }))}
+                      className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm"
+                    >
+                      <option value="part">Part</option>
+                      <option value="labor">Labor</option>
+                      <option value="fee">Fee</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] text-gray-500 dark:text-neutral-400 uppercase tracking-wider font-semibold mb-1">Description</label>
+                    <input
+                      value={addForm.description}
+                      onChange={(e) => setAddForm((s) => ({ ...s, description: e.target.value }))}
+                      className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm"
+                      placeholder="Oil change, brake pads…"
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="block text-[10px] text-gray-500 dark:text-neutral-400 uppercase tracking-wider font-semibold mb-1">Part #</label>
+                    <input
+                      value={addForm.part_number}
+                      onChange={(e) => setAddForm((s) => ({ ...s, part_number: e.target.value }))}
+                      className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm font-mono"
+                      placeholder="SKU"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-gray-500 dark:text-neutral-400 uppercase tracking-wider font-semibold mb-1">Qty</label>
+                    <input
+                      value={addForm.quantity}
+                      onChange={(e) => setAddForm((s) => ({ ...s, quantity: e.target.value }))}
+                      className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm text-right"
+                      inputMode="decimal"
+                      placeholder="1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-gray-500 dark:text-neutral-400 uppercase tracking-wider font-semibold mb-1">Unit ($)</label>
+                    <input
+                      value={addForm.unit_price}
+                      onChange={(e) => setAddForm((s) => ({ ...s, unit_price: e.target.value }))}
+                      className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 text-sm text-right"
+                      inputMode="decimal"
+                      placeholder="99.99"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 items-center">
+                  <button
+                    type="button"
+                    disabled={addSaving}
+                    onClick={async () => {
+                      if (!invoice?.id) return;
+                      setAddSaving(true);
+                      setAddMsg('');
+                      try {
+                        const qty = Number(addForm.quantity);
+                        const unit = Number(addForm.unit_price);
+                        const unitCents = Number.isFinite(unit) ? Math.round(unit * 100) : null;
+                        const payload = {
+                          line_type: addForm.line_type,
+                          description: addForm.description || undefined,
+                          part_number: addForm.part_number || undefined,
+                          quantity: Number.isFinite(qty) ? qty : 1,
+                          unit_price_cents: unitCents,
+                          inventory_item_id: addForm.inventory_item_id || undefined,
+                        };
+                        await api.post(`/crm/invoices/${invoice.id}/items`, payload);
+                        const res = await api.get(`/crm/invoices/${encodeURIComponent(id)}`);
+                        setInvoice(res.data?.invoice || null);
+                        setItems(res.data?.items || []);
+                        setAddForm({
+                          line_type: 'part',
+                          inventory_item_id: null,
+                          inventory_item_name: '',
+                          description: '',
+                          part_number: '',
+                          quantity: '1',
+                          unit_price: '',
+                          total: '',
+                        });
+                        setInvQ('');
+                        setInvResults([]);
+                        setAddOpen(false);
+                      } catch (e) {
+                        setAddMsg(e.response?.data?.error || 'Failed to add item');
+                      } finally {
+                        setAddSaving(false);
+                      }
+                    }}
+                    className="min-h-11 px-4 rounded-xl bg-primary text-white text-sm font-semibold disabled:opacity-50"
+                  >
+                    {addSaving ? 'Saving…' : 'Add line item'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await api.post(`/crm/invoices/${invoice.id}/recalculate`);
+                        const res = await api.get(`/crm/invoices/${encodeURIComponent(id)}`);
+                        setInvoice(res.data?.invoice || null);
+                        setItems(res.data?.items || []);
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    className="min-h-11 px-4 rounded-xl border border-gray-200 dark:border-neutral-700 text-sm font-semibold text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-900"
+                  >
+                    Recalculate totals
+                  </button>
+                  {addMsg && <p className="text-sm text-amber-700 dark:text-amber-300">{addMsg}</p>}
+                </div>
+              </div>
+            )}
             {items.length === 0 ? (
               <div className="p-6 text-sm text-gray-500 dark:text-neutral-400">No line items cached.</div>
             ) : (
@@ -604,9 +1078,11 @@ const InvoiceDetail = () => {
                     <tr className="text-left text-xs text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                       <th className="py-3 px-4">Item</th>
                       <th className="py-3 px-4">Part #</th>
+                      <th className="py-3 px-4">Type</th>
                       <th className="py-3 px-4 text-right">Qty</th>
                       <th className="py-3 px-4 text-right">Unit</th>
                       <th className="py-3 px-4 text-right">Total</th>
+                      {isNative ? <th className="py-3 px-4 text-right">Actions</th> : null}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
@@ -626,9 +1102,30 @@ const InvoiceDetail = () => {
                           )}
                         </td>
                         <td className="py-3 px-4 font-mono text-gray-600 dark:text-neutral-300">{li.part_number || '—'}</td>
+                        <td className="py-3 px-4 text-gray-600 dark:text-neutral-300">{li.line_type || '—'}</td>
                         <td className="py-3 px-4 text-right text-gray-900 dark:text-neutral-100">{li.quantity ?? '—'}</td>
                         <td className="py-3 px-4 text-right text-gray-600 dark:text-neutral-300">{fmtCents(li.unit_price_cents)}</td>
                         <td className="py-3 px-4 text-right font-semibold text-gray-900 dark:text-neutral-100">{fmtCents(li.total_cents)}</td>
+                        {isNative ? (
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await api.delete(`/crm/invoice-items/${li.id}`);
+                                  const res = await api.get(`/crm/invoices/${encodeURIComponent(id)}`);
+                                  setInvoice(res.data?.invoice || null);
+                                  setItems(res.data?.items || []);
+                                } catch {
+                                  // ignore
+                                }
+                              }}
+                              className="min-h-10 px-3 rounded-lg border border-red-200 dark:border-red-800 text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>

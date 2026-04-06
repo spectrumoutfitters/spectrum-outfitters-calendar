@@ -46,8 +46,9 @@ export async function shopmonkeyRequest(endpoint, options = {}) {
   }
 
   try {
-    console.log(`ShopMonkey API Request: ${config.method} ${url}`);
-    console.log(`API Key present: ${!!apiKey}, Length: ${apiKey ? apiKey.length : 0}`);
+    console.log(
+      `ShopMonkey API Request: ${config.method} ${url} (API key length: ${apiKey ? apiKey.length : 0})`
+    );
     
     // Create timeout controller for fetch
     const controller = new AbortController();
@@ -69,37 +70,49 @@ export async function shopmonkeyRequest(endpoint, options = {}) {
       } catch {
         errorMessage = errorText || errorMessage;
       }
-      throw new Error(errorMessage);
+      // Prefix so downstream callers can distinguish HTTP errors vs connectivity issues.
+      throw new Error(`ShopMonkey API error: ${errorMessage}`);
     }
 
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    if (error.message.includes('ShopMonkey API error')) {
-      throw error;
+    const bodyText = await response.text();
+    const trimmed = bodyText != null ? String(bodyText).trim() : '';
+    if (!trimmed) {
+      return {};
     }
-    
+    try {
+      return JSON.parse(trimmed);
+    } catch (parseErr) {
+      throw new Error(
+        `ShopMonkey API error: Response was not valid JSON (${response.status}): ${parseErr.message}`
+      );
+    }
+  } catch (error) {
+    const msg = error && typeof error.message === 'string' ? error.message : String(error);
+    if (msg.includes('ShopMonkey API error')) {
+      throw error instanceof Error ? error : new Error(msg);
+    }
+
     // Provide more detailed error information
     const errorDetails = {
       url,
       method: config.method,
-      error: error.message,
-      errorName: error.name,
-      code: error.code
+      error: msg,
+      errorName: error && error.name,
+      code: error && error.code
     };
     
     console.error('ShopMonkey API connection error:', errorDetails);
     
     // Provide user-friendly error messages
-    if (error.name === 'AbortError') {
+    if (error && error.name === 'AbortError') {
       throw new Error('ShopMonkey API request timed out. The server may be slow or unreachable.');
-    } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+    } else if (error && (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED')) {
       throw new Error(`Cannot reach ShopMonkey API (${error.code}). Check your internet connection and verify the API base URL is correct: ${SHOPMONKEY_API_BASE}`);
-    } else if (error.message.includes('fetch failed')) {
-      throw new Error(`Network error connecting to ShopMonkey API. This could be due to:\n- Internet connectivity issues\n- Firewall blocking the connection\n- Incorrect API base URL\n\nError: ${error.message}`);
+    } else if (msg.includes('fetch failed')) {
+      throw new Error(`Network error connecting to ShopMonkey API. This could be due to:\n- Internet connectivity issues\n- Firewall blocking the connection\n- Incorrect API base URL\n\nError: ${msg}`);
     }
-    
-    throw new Error(`Failed to connect to ShopMonkey API: ${error.message}. Check your internet connection and verify the API endpoint is correct.`);
+
+    throw new Error(`Failed to connect to ShopMonkey API: ${msg}. Check your internet connection and verify the API endpoint is correct.`);
   }
 }
 
@@ -142,51 +155,140 @@ export async function getRepairOrder(orderId, options = {}) {
  */
 export async function getOrderLineItems(orderId) {
   try {
-    // Try different possible endpoints for line items
-    // Based on ShopMonkey API, line items might be at /line_item with orderId filter
-    const endpoints = [
-      `/line_item?orderId=${orderId}`,
-      `/line_item?order.id=${orderId}`,
-      `/line_item?repairOrderId=${orderId}`,
-      `/lineItem?orderId=${orderId}`,
-      `/lineItem?order.id=${orderId}`,
-      `/lineItem?repairOrderId=${orderId}`
-    ];
-    
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`Trying line items endpoint: ${endpoint}`);
-        const response = await shopmonkeyRequest(endpoint);
-        const data = response.data || response;
-        
-        // Handle different response formats
-        if (Array.isArray(data) && data.length > 0) {
-          console.log(`✅ Found ${data.length} line items from endpoint: ${endpoint}`);
-          return data;
+    const toInt = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.round(n) : null;
+    };
+
+    const toNum = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const applyDiscount = ({ baseCents, discountCents, discountPercent, discountValueType }) => {
+      const base = toInt(baseCents) || 0;
+      const type = String(discountValueType || '').toLowerCase();
+      const pct = toNum(discountPercent);
+      const fixed = toInt(discountCents);
+      let disc = 0;
+      if (type.includes('percent') && pct != null) disc = Math.round((base * pct) / 100);
+      else if (fixed != null) disc = fixed;
+      return Math.max(0, base - Math.max(0, disc));
+    };
+
+    const normalizeItems = (items, type) => {
+      const out = [];
+      for (const it of items || []) {
+        const id = it?.id || it?._id || it?.serviceItemId || null;
+        const name = it?.name || it?.description || null;
+
+        let quantity = null;
+        let unitPriceCents = null;
+
+        if (type === 'labor') {
+          quantity = toNum(it?.hours) ?? toNum(it?.quantity);
+          unitPriceCents = toInt(it?.rateCents ?? it?.retailCostCents ?? it?.unitPriceCents);
+        } else {
+          quantity = toNum(it?.quantity);
+          unitPriceCents = toInt(it?.retailCostCents ?? it?.unitPriceCents ?? it?.priceCents);
         }
-        if (data && Array.isArray(data.items) && data.items.length > 0) {
-          console.log(`✅ Found ${data.items.length} line items in data.items from: ${endpoint}`);
-          return data.items;
-        }
-        if (data && Array.isArray(data.lineItems) && data.lineItems.length > 0) {
-          console.log(`✅ Found ${data.lineItems.length} line items in data.lineItems from: ${endpoint}`);
-          return data.lineItems;
-        }
-        if (data && Array.isArray(data.data) && data.data.length > 0) {
-          console.log(`✅ Found ${data.data.length} line items in data.data from: ${endpoint}`);
-          return data.data;
-        }
-        if (data && data.results && Array.isArray(data.results) && data.results.length > 0) {
-          console.log(`✅ Found ${data.results.length} line items in data.results from: ${endpoint}`);
-          return data.results;
-        }
-      } catch (err) {
-        // Try next endpoint - don't log every failure, just continue
-        continue;
+
+        const qty = quantity != null ? quantity : 1;
+        const unit = unitPriceCents != null ? unitPriceCents : 0;
+        const baseCents = Math.round(qty * unit);
+        const totalCents = applyDiscount({
+          baseCents,
+          discountCents: it?.discountCents,
+          discountPercent: it?.discountPercent,
+          discountValueType: it?.discountValueType,
+        });
+
+        out.push({
+          id,
+          type, // for extractLineItemFields()
+          name,
+          partNumber: it?.partNumber || it?.sku || null,
+          quantity: qty,
+          unitPriceCents: unitPriceCents,
+          totalCents,
+          raw: it,
+        });
       }
+      return out;
+    };
+
+    const flattenServiceItemPayload = (payload) => {
+      // ShopMonkey returns { success, meta, data }, where data is an object with arrays (parts, labors, tires, subcontracts, fees...)
+      const data = payload?.data != null ? payload.data : payload;
+      if (!data) return [];
+
+      if (Array.isArray(data)) return data;
+
+      const parts = Array.isArray(data.parts) ? normalizeItems(data.parts, 'part') : [];
+      const labors = Array.isArray(data.labors) ? normalizeItems(data.labors, 'labor') : [];
+      const tires = Array.isArray(data.tires) ? normalizeItems(data.tires, 'part') : [];
+      const subcontracts = Array.isArray(data.subcontracts) ? normalizeItems(data.subcontracts, 'fee') : [];
+      const fees = Array.isArray(data.fees) ? normalizeItems(data.fees, 'fee') : [];
+
+      return [...parts, ...labors, ...tires, ...subcontracts, ...fees];
+    };
+
+    // Correct approach (ShopMonkey v3): Service Items, filtered by orderId using `where`.
+    const where = encodeURIComponent(JSON.stringify({ orderId: String(orderId) }));
+    const primaryEndpoint = `/service_item?where=${where}&limit=500`;
+    console.log(`Trying line items endpoint: ${primaryEndpoint}`);
+    const response = await shopmonkeyRequest(primaryEndpoint);
+    const normalized = flattenServiceItemPayload(response);
+    if (normalized.length > 0) {
+      console.log(`✅ Found ${normalized.length} service items for order ${orderId}`);
+      // Return a shape compatible with extractLineItemFields
+      return normalized.map((x) => ({
+        id: x.id,
+        type: x.type,
+        name: x.name,
+        partNumber: x.partNumber,
+        quantity: x.quantity,
+        unitPriceCents: x.unitPriceCents,
+        totalCents: x.totalCents,
+        raw_json: x.raw ? JSON.stringify(x.raw) : null,
+      }));
     }
-    
-    console.warn('❌ No line items found from any endpoint');
+
+    // Fallback: fetch services for the order, then query by serviceId(s)
+    try {
+      const serviceEndpoint = `/order/${orderId}/service`;
+      console.log(`Trying services endpoint: ${serviceEndpoint}`);
+      const svcResp = await shopmonkeyRequest(serviceEndpoint);
+      const svcData = svcResp?.data || svcResp;
+      const services = Array.isArray(svcData) ? svcData : Array.isArray(svcData?.data) ? svcData.data : [];
+      const serviceIds = (services || []).map((s) => s?.id).filter(Boolean);
+      const all = [];
+      for (const serviceId of serviceIds) {
+        const w = encodeURIComponent(JSON.stringify({ serviceId: String(serviceId) }));
+        const ep = `/service_item?where=${w}&limit=500`;
+        console.log(`Trying service items endpoint: ${ep}`);
+        const r = await shopmonkeyRequest(ep);
+        const items = flattenServiceItemPayload(r);
+        all.push(...items);
+      }
+      if (all.length > 0) {
+        console.log(`✅ Found ${all.length} service items via serviceId fallback for order ${orderId}`);
+        return all.map((x) => ({
+          id: x.id,
+          type: x.type,
+          name: x.name,
+          partNumber: x.partNumber,
+          quantity: x.quantity,
+          unitPriceCents: x.unitPriceCents,
+          totalCents: x.totalCents,
+          raw_json: x.raw ? JSON.stringify(x.raw) : null,
+        }));
+      }
+    } catch {
+      // ignore fallback failure
+    }
+
+    console.warn('❌ No service items found for order');
     return [];
   } catch (error) {
     console.warn('Could not fetch line items from separate endpoint:', error.message);

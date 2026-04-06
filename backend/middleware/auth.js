@@ -3,7 +3,9 @@ import db from '../database/db.js';
 import { ensureUserColumns } from '../database/startup.js';
 
 export const authenticateToken = async (req, res, next) => {
-  const token = req.cookies?.token || req.headers.authorization?.split(' ')[1];
+  // Prefer Authorization header so a stale `token` cookie cannot block a valid Bearer (local dev / rotated secrets).
+  const bearer = req.headers.authorization?.split(' ')[1];
+  const token = bearer || req.cookies?.token;
 
   if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -33,6 +35,9 @@ export const authenticateToken = async (req, res, next) => {
 };
 
 export const requireAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
   const isAdmin = req.user.role === 'admin' || req.user.is_master_admin === true;
   if (!isAdmin) {
     return res.status(403).json({ error: 'Admin access required' });
@@ -41,6 +46,9 @@ export const requireAdmin = (req, res, next) => {
 };
 
 export const requireMasterAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
   if (req.user.role !== 'admin' || !req.user.is_master_admin) {
     return res.status(403).json({ error: 'Master admin access required' });
   }
@@ -48,6 +56,9 @@ export const requireMasterAdmin = (req, res, next) => {
 };
 
 export const requirePayrollAccess = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' });
   }

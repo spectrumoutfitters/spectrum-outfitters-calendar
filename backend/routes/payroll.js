@@ -1,6 +1,6 @@
 import express from 'express';
 import db from '../database/db.js';
-import { authenticateToken, requirePayrollAccess, requireMasterAdmin } from '../middleware/auth.js';
+import { authenticateToken, requireAdmin, requirePayrollAccess, requireMasterAdmin } from '../middleware/auth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -567,6 +567,89 @@ router.post('/import/history', requirePayrollAccess, (req, res) => {
   } catch (error) {
     console.error('Import payroll history error:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/payroll/financing-week-summary?week_ending=YYYY-MM-DD
+router.get('/financing-week-summary', requireAdmin, async (req, res) => {
+  try {
+    const week = (req.query.week_ending || '').trim();
+    if (!week) {
+      return res.status(400).json({ error: 'Query parameter week_ending is required (e.g. 2026-04-04)' });
+    }
+
+    const pending = await db.allAsync(
+      `
+      SELECT
+        f.id AS financing_id,
+        f.user_id,
+        f.external_party_name,
+        f.external_party_company,
+        (CASE WHEN f.user_id IS NOT NULL THEN u.full_name
+         ELSE TRIM(COALESCE(f.external_party_name, '')) ||
+           CASE WHEN f.external_party_company IS NOT NULL AND LENGTH(TRIM(f.external_party_company)) > 0
+           THEN ' — ' || TRIM(f.external_party_company) ELSE '' END
+        END) AS employee_name,
+        u.username AS employee_username,
+        f.item_description,
+        f.total_amount,
+        f.balance_due,
+        f.weekly_payment,
+        f.deduction_reason,
+        (CASE
+          WHEN f.weekly_payment < f.balance_due THEN f.weekly_payment
+          ELSE f.balance_due
+        END) AS suggested_deduction
+      FROM employee_shop_financing f
+      LEFT JOIN users u ON u.id = f.user_id
+      WHERE f.status = 'active'
+        AND f.deduct_from_payroll = 1
+        AND f.balance_due > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM employee_shop_financing_deductions d
+          WHERE d.financing_id = f.id AND d.week_ending_date = ?
+        )
+      ORDER BY LOWER(COALESCE(u.full_name, f.external_party_name, '')) ASC, f.id ASC
+    `,
+      [week]
+    );
+
+    const recorded = await db.allAsync(
+      `
+      SELECT
+        d.id AS deduction_id,
+        d.financing_id,
+        d.week_ending_date,
+        d.amount,
+        d.reason_note,
+        d.created_at,
+        f.user_id,
+        f.external_party_name,
+        f.external_party_company,
+        (CASE WHEN f.user_id IS NOT NULL THEN u.full_name
+         ELSE TRIM(COALESCE(f.external_party_name, '')) ||
+           CASE WHEN f.external_party_company IS NOT NULL AND LENGTH(TRIM(f.external_party_company)) > 0
+           THEN ' — ' || TRIM(f.external_party_company) ELSE '' END
+        END) AS employee_name,
+        u.username AS employee_username,
+        f.item_description
+      FROM employee_shop_financing_deductions d
+      JOIN employee_shop_financing f ON f.id = d.financing_id
+      LEFT JOIN users u ON u.id = f.user_id
+      WHERE d.week_ending_date = ?
+      ORDER BY LOWER(COALESCE(u.full_name, f.external_party_name, '')) ASC, d.id ASC
+    `,
+      [week]
+    );
+
+    res.json({
+      week_ending: week,
+      pending_payroll_deductions: pending,
+      recorded_this_week: recorded
+    });
+  } catch (error) {
+    console.error('Financing week summary error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
   }
 });
 

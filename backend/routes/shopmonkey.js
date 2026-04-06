@@ -362,6 +362,197 @@ router.post('/webhook', async (req, res) => {
     
     console.log('ShopMonkey webhook received:', { event, data });
 
+    const extractAffiliateToken = (payload) => {
+      const candidates = [];
+      const pushIfString = (v) => {
+        if (typeof v === 'string' && v.trim()) candidates.push(v.trim());
+      };
+
+      // Common places token might be embedded
+      pushIfString(payload?.description);
+      pushIfString(payload?.note);
+      pushIfString(payload?.externalId);
+      pushIfString(payload?.workRequest?.description);
+      pushIfString(payload?.work_request?.description);
+
+      // Nested metadata/custom fields (best-effort)
+      if (payload?.metadata && typeof payload.metadata === 'object') {
+        for (const v of Object.values(payload.metadata)) {
+          pushIfString(v);
+        }
+      }
+
+      if (payload?.customFields && typeof payload.customFields === 'object') {
+        for (const v of Object.values(payload.customFields)) {
+          pushIfString(v);
+        }
+      }
+
+      const combined = candidates.join('\n');
+      const m = combined.match(/AFFILIATE_TOKEN[:=]([a-zA-Z0-9_-]{6,64})/);
+      if (m?.[1]) return m[1];
+
+      const m2 = combined.match(/affiliate[_-]?token[:=]([a-zA-Z0-9_-]{6,64})/i);
+      if (m2?.[1]) return m2[1];
+
+      return null;
+    };
+
+    const token = extractAffiliateToken({ event, data });
+
+    if (token) {
+      const link = await db.getAsync(
+        'SELECT id FROM quote_affiliate_links WHERE token = ? LIMIT 1',
+        [token]
+      );
+
+      if (link?.id) {
+        const workRequestId =
+          data?.id ||
+          data?.workRequestId ||
+          data?.work_request_id ||
+          data?.workRequest?.id ||
+          data?.work_request?.id ||
+          null;
+
+        const orderId =
+          data?.orderId ||
+          data?.order_id ||
+          data?.order?.id ||
+          data?.estimateId ||
+          data?.estimate_id ||
+          null;
+
+        const customerId =
+          data?.customerId ||
+          data?.customer_id ||
+          data?.customer?.id ||
+          data?.customer?.customerId ||
+          data?.customer?.customer_id ||
+          null;
+
+        const customerFirstName = data?.firstName || data?.customer?.firstName || data?.customer?.first_name || null;
+        const customerLastName = data?.lastName || data?.customer?.lastName || data?.customer?.last_name || null;
+        const customerEmail = data?.email || data?.customer?.email || data?.customer?.emailAddress || null;
+        const customerPhone = data?.phone || data?.phoneNumber || data?.customer?.phone || data?.customer?.phoneNumber || null;
+
+        const vin = data?.vin || data?.vehicle?.vin || data?.vehicle?.VIN || null;
+        const plate =
+          data?.licensePlate ||
+          data?.license_plate ||
+          data?.plate ||
+          data?.vehicle?.licensePlate ||
+          data?.vehicle?.license_plate ||
+          null;
+
+        const vehicleYear = data?.year || data?.vehicle?.year || null;
+        const vehicleMake = data?.make || data?.vehicle?.make || null;
+        const vehicleModel = data?.model || data?.vehicle?.model || null;
+
+        const idsWhere = [];
+        const idsParams = [link.id];
+        if (workRequestId) {
+          idsWhere.push('shopmonkey_work_request_id = ?');
+          idsParams.push(String(workRequestId));
+        }
+        if (orderId) {
+          idsWhere.push('shopmonkey_order_id = ?');
+          idsParams.push(String(orderId));
+        }
+        if (customerId) {
+          idsWhere.push('shopmonkey_customer_id = ?');
+          idsParams.push(String(customerId));
+        }
+
+        let existingId = null;
+        if (idsWhere.length > 0) {
+          const existing = await db.getAsync(
+            `SELECT id FROM quote_affiliate_submissions
+             WHERE affiliate_link_id = ? AND (${idsWhere.join(' OR ')})
+             ORDER BY submitted_at DESC
+             LIMIT 1`,
+            idsParams
+          );
+          existingId = existing?.id || null;
+        }
+
+        const raw_json = JSON.stringify({ event, data });
+
+        if (existingId) {
+          await db.runAsync(
+            `UPDATE quote_affiliate_submissions
+             SET
+               shopmonkey_work_request_id = COALESCE(shopmonkey_work_request_id, ?),
+               shopmonkey_order_id = COALESCE(shopmonkey_order_id, ?),
+               shopmonkey_customer_id = COALESCE(shopmonkey_customer_id, ?),
+               customer_first_name = COALESCE(customer_first_name, ?),
+               customer_last_name = COALESCE(customer_last_name, ?),
+               customer_email = COALESCE(customer_email, ?),
+               customer_phone = COALESCE(customer_phone, ?),
+               vehicle_vin = COALESCE(vehicle_vin, ?),
+               vehicle_license_plate = COALESCE(vehicle_license_plate, ?),
+               vehicle_year = COALESCE(vehicle_year, ?),
+               vehicle_make = COALESCE(vehicle_make, ?),
+               vehicle_model = COALESCE(vehicle_model, ?),
+               raw_json = ?,
+               updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [
+              workRequestId || null,
+              orderId || null,
+              customerId || null,
+              customerFirstName || null,
+              customerLastName || null,
+              customerEmail || null,
+              customerPhone || null,
+              vin || null,
+              plate || null,
+              vehicleYear || null,
+              vehicleMake || null,
+              vehicleModel || null,
+              raw_json,
+              existingId,
+            ]
+          );
+        } else {
+          await db.runAsync(
+            `INSERT INTO quote_affiliate_submissions
+              (affiliate_link_id,
+               shopmonkey_work_request_id,
+               shopmonkey_order_id,
+               shopmonkey_customer_id,
+               customer_first_name,
+               customer_last_name,
+               customer_email,
+               customer_phone,
+               vehicle_vin,
+               vehicle_license_plate,
+               vehicle_year,
+               vehicle_make,
+               vehicle_model,
+               raw_json)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              link.id,
+              workRequestId || null,
+              orderId || null,
+              customerId || null,
+              customerFirstName || null,
+              customerLastName || null,
+              customerEmail || null,
+              customerPhone || null,
+              vin || null,
+              plate || null,
+              vehicleYear || null,
+              vehicleMake || null,
+              vehicleModel || null,
+              raw_json,
+            ]
+          );
+        }
+      }
+    }
+
     // Handle different webhook events
     switch (event) {
       case 'order.created':

@@ -7,9 +7,8 @@ const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
-  // Use relative path to leverage Vite proxy
-  // The proxy handles HTTPS frontend -> HTTP backend conversion
-  return '/api';
+  // With VITE_BASE_PATH (e.g. /so-app), API must be under that prefix so Vite proxy still hits /api on the dev server.
+  return withBase('/api');
 };
 
 const API_BASE_URL = getApiBaseUrl();

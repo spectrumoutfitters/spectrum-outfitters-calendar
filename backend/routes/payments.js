@@ -1,6 +1,6 @@
 import express from 'express';
 import db from '../database/db.js';
-import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
 import {
   createStripePaymentIntentForInvoice,
   createStripeSetupIntent,
@@ -14,7 +14,7 @@ import {
 const router = express.Router();
 
 router.use(authenticateToken);
-router.use(requireAdmin);
+// Payments are part of daily operations; allow authenticated team members.
 
 // GET /api/payments/invoices/:id/payments
 router.get('/invoices/:id/payments', async (req, res) => {

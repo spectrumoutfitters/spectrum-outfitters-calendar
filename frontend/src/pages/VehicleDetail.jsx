@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../utils/api';
+import PageShell from '../components/ui/PageShell';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import AvatarInitials from '../components/ui/AvatarInitials';
 
 const fmtCents = (cents) => {
   const n = Number(cents);
@@ -41,19 +45,24 @@ const VehicleDetail = () => {
   const title = vehicle ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ') : 'Vehicle';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-5">
-      <div>
+    <PageShell className="py-6">
+      <div className="flex items-start gap-4">
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="text-sm text-gray-500 dark:text-neutral-400 hover:text-primary"
+          className="mt-1 text-sm text-gray-500 dark:text-neutral-400 hover:text-primary"
         >
           ← Back
         </button>
-        <h1 className="mt-2 text-xl md:text-2xl font-bold text-gray-900 dark:text-neutral-100">{title || 'Vehicle'}</h1>
-        <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
-          {vehicle?.vin ? `VIN ${vehicle.vin}` : vehicle?.license_plate ? `Plate ${vehicle.license_plate}` : ''}
-        </p>
+        <div className="flex items-center gap-4">
+          <AvatarInitials name={title} dimensionPx={56} />
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-neutral-100">{title || 'Vehicle'}</h1>
+            <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+              {vehicle?.vin ? `VIN ${vehicle.vin}` : vehicle?.license_plate ? `Plate ${vehicle.license_plate}` : ''}
+            </p>
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -63,16 +72,16 @@ const VehicleDetail = () => {
       )}
 
       {loading ? (
-        <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-6 text-sm text-gray-500 dark:text-neutral-400">
-          Loading…
-        </div>
+        <Card className="p-6">
+          <div className="text-sm text-gray-500 dark:text-neutral-400">Loading…</div>
+        </Card>
       ) : !data ? (
-        <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-6 text-sm text-gray-500 dark:text-neutral-400">
-          Not found.
-        </div>
+        <Card className="p-6">
+          <div className="text-sm text-gray-500 dark:text-neutral-400">Not found.</div>
+        </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl overflow-hidden">
+          <Card noPadding>
             <div className="p-4 border-b border-gray-100 dark:border-neutral-800">
               <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Invoices</h2>
             </div>
@@ -102,9 +111,9 @@ const VehicleDetail = () => {
                 ))}
               </div>
             )}
-          </div>
+          </Card>
 
-          <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl overflow-hidden">
+          <Card noPadding>
             <div className="p-4 border-b border-gray-100 dark:border-neutral-800">
               <h2 className="text-sm font-bold text-gray-700 dark:text-neutral-100 uppercase tracking-wider">Parts (qty)</h2>
             </div>
@@ -130,10 +139,10 @@ const VehicleDetail = () => {
                 </table>
               </div>
             )}
-          </div>
+          </Card>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

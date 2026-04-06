@@ -45,6 +45,7 @@ import dashboardRevenueRoutes from './routes/dashboardRevenue.js';
 import customerStatusRoutes from './routes/customerStatus.js';
 import dispatchRoutes from './routes/dispatch.js';
 import employeeRoutes from './routes/employee.js';
+import employeeFinancingRoutes from './routes/employeeFinancing.js';
 import paymentProcessorRoutes from './routes/paymentProcessor.js';
 import paymentsRoutes, { handleStripePaymentsWebhook } from './routes/payments.js';
 import { handleStripeWebhook } from './routes/paymentProcessor.js';
@@ -56,6 +57,8 @@ import jwt from 'jsonwebtoken';
 import { pullChangesFromGoogle } from './utils/googleCalendarService.js';
 import { getSocketClientIP, startSession, endSession, heartbeatSession } from './utils/security.js';
 import shortLinksRoutes from './routes/shortLinks.js';
+import publicInvoicesRoutes from './routes/publicInvoices.js';
+import affiliatesRoutes from './routes/affiliates.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -622,15 +625,116 @@ app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), han
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Serve static files from frontend dist in production
-if (process.env.NODE_ENV === 'production') {
-  const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
-  app.use(express.static(frontendDist));
-}
+// Do not mount express.static before /api routes — a matching file under dist/ can shadow API paths.
+// Production static + SPA fallback is registered after all API routes (see bottom of this file).
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Public customer affiliate quote landing (not the React SPA route)
+// This avoids relying on spectrumoutfitters.com React routing /base44 configuration.
+app.get(['/affiliates/:token', '/base44/affiliates/:token'], (req, res) => {
+  const token = String(req.params?.token || '').trim();
+  if (!token || !/^[a-fA-F0-9]{8,}$/.test(token)) {
+    res.status(400).send('Invalid affiliate token');
+    return;
+  }
+
+  const SHOPMONKEY_QUOTE_BASE = 'https://app.shopmonkey.cloud/public/quote-request/b6ddd723-82be-48b3-9166-59ac434cda7c';
+  const iframeParams = new URLSearchParams();
+  iframeParams.set('noExternalScripts', '1');
+
+  // Best-effort: include token in fields that may appear in webhooks.
+  const tag = `AFFILIATE_TOKEN:${token}`;
+  iframeParams.set('externalId', tag);
+  iframeParams.set('note', tag);
+  iframeParams.set('description', tag);
+
+  const iframeSrc = `${SHOPMONKEY_QUOTE_BASE}?${iframeParams.toString()}`;
+
+  const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Request a Quote</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; background: #f8fafc; }
+      .page { max-width: 980px; margin: 0 auto; padding: 16px; }
+      .card { background: #ffffff; border: 1px solid rgba(15,23,42,0.10); border-radius: 24px; overflow: hidden; box-shadow: 0 1px 0 rgba(15,23,42,0.02); }
+      .head { display:flex; align-items:center; justify-content:space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid rgba(15,23,42,0.08); background: linear-gradient(135deg, rgba(212,160,23,0.18), rgba(212,160,23,0.03)); }
+      .brand { display:flex; align-items:center; gap: 10px; min-width: 0; }
+      .logoMark { width: 42px; height: 42px; border-radius: 14px; background: #111827; display:flex; align-items:center; justify-content:center; color: #D4A017; font-weight: 900; }
+      .logoText { line-height:1.05; }
+      .title { font-weight: 800; font-size: 18px; color: #0f172a; }
+      .sub { font-size: 13px; color: #475569; margin-top: 3px; }
+      iframe { width: 100%; border: 0; display:block; }
+      .wrap { padding: 0; background: #fff; }
+      .footer { padding: 10px 16px 14px; font-size: 12px; color: #64748b; }
+      /* Dark mode */
+      @media (prefers-color-scheme: dark) {
+        body { background: #0b1220; }
+        .card { background: #0b1220; border-color: rgba(148,163,184,0.18); }
+        .head { border-bottom-color: rgba(148,163,184,0.18); background: linear-gradient(135deg, rgba(212,160,23,0.22), rgba(212,160,23,0.05)); }
+        .title { color: #e5e7eb; }
+        .sub { color: #cbd5e1; }
+        .logoMark { background: #e5e7eb; color: #0b1220; }
+        .footer { color: #94a3b8; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="card">
+        <div class="head">
+          <div class="brand">
+            <div class="logoMark" aria-hidden="true">SO</div>
+            <div class="logoText">
+              <div class="title">Request a Quote</div>
+              <div class="sub">Tell us about your vehicle — we’ll handle the rest.</div>
+            </div>
+          </div>
+          <div style="font-size:12px;color:#64748b;white-space:nowrap;">
+            Spectrum Outfitters
+          </div>
+        </div>
+
+        <div class="wrap">
+          <iframe title="ShopMonkey Quote Request" src="${iframeSrc}" height="78vh" style="height:78vh"></iframe>
+        </div>
+
+        <div class="footer">
+          Thanks! If this is your first-time quote, we’ll match it to the employee who sent this link.
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Best-effort: if ShopMonkey posts a message on submit, record it immediately.
+      (function() {
+        var token = ${JSON.stringify(token)};
+        function tryTrack(payload) {
+          return fetch('/api/affiliates/public/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ affiliate_token: token, raw_json: payload })
+          }).catch(function() {});
+        }
+        window.addEventListener('message', function(event) {
+          var payload = event && event.data ? event.data : null;
+          if (!payload) return;
+          if (typeof payload !== 'object') return;
+          tryTrack(payload);
+        });
+      })();
+    </script>
+  </body>
+</html>`;
+
+  res.status(200).send(html);
 });
 
 // Maps API key for frontend (interactive Street View). Same key as backend; restrict by HTTP referrer for browser.
@@ -658,6 +762,8 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/payroll', payrollRoutes);
+// Shop financing plans (admin). Use /api/admin/shop-financing — not /api/employee-* (avoids any path clash with /api/employee).
+app.use('/api/admin/shop-financing', employeeFinancingRoutes);
 app.use('/api/admin/worklist', adminWorkListRoutes);
 app.use('/api/my-worklist', myWorklistRoutes);
 app.use('/api/compliance', complianceRoutes);
@@ -668,6 +774,7 @@ app.use('/api/plaid', plaidRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/payment-processor', paymentProcessorRoutes);
 app.use('/api/payments', paymentsRoutes);
+app.use(publicInvoicesRoutes);
 app.use('/api/admin/security', securityRoutes);
 app.use('/api/geocode', geocodeRoutes);
 app.use('/api/push', pushRoutes);
@@ -676,6 +783,7 @@ app.use('/api/customer-status', customerStatusRoutes);
 app.use('/api/admin/dispatch', dispatchRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use(shortLinksRoutes);
+app.use('/api/affiliates', affiliatesRoutes);
 
 // Serve uploaded files
 const uploadsPath = process.env.UPLOADS_PATH || path.join(__dirname, 'uploads');
@@ -799,11 +907,14 @@ function startBackgroundJobs() {
       const sevenDays = new Date();
       sevenDays.setDate(sevenDays.getDate() - 7);
       syncShopMonkeyRevenue(sevenDays.toISOString().split('T')[0])
-        .catch(err => console.warn('ShopMonkey revenue auto-sync failed:', err?.message || err))
-        .finally(() => { smSyncRunning = false; });
+        .catch((err) => console.warn('ShopMonkey revenue auto-sync failed:', err?.message || err))
+        .finally(() => {
+          smSyncRunning = false;
+        });
     };
 
-    runSmSync();
+    // Defer first sync so HTTP listen completes and logs clearly before external API calls.
+    setTimeout(runSmSync, 2000);
     setInterval(runSmSync, SM_SYNC_INTERVAL);
     console.log('📊 ShopMonkey revenue auto-sync enabled (every 5 minutes)');
   }
