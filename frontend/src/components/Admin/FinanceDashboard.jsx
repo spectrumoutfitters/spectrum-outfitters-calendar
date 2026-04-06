@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { usePlaidLink } from 'react-plaid-link';
 import api from '../../utils/api';
 
@@ -350,6 +351,18 @@ export default function FinanceDashboard() {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+        <span className="font-semibold">Shop employee financing</span>
+        {' — '}
+        Pay-over-time plans and payroll deductions (separate from this Plaid / cash-flow view).{' '}
+        <Link
+          to="/admin/shop-financing"
+          className="font-medium underline underline-offset-2 hover:no-underline text-amber-900 dark:text-amber-200"
+        >
+          Open shop financing
+        </Link>
+      </div>
+
       {/* Sub-navigation */}
       <div className="flex gap-1 bg-gray-100 dark:bg-neutral-950 p-1 rounded-lg overflow-x-auto">
         {tabs.map(tab => (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 
 const GOLD = '#D4A017';
@@ -229,6 +230,12 @@ export default function EmployeeShopFinancing() {
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-6">
+        <Link
+          to="/admin"
+          className="inline-block text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-neutral-100 hover:underline mb-3"
+        >
+          ← Back to Admin
+        </Link>
         <h2 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-1">Shop employee financing</h2>
         <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
           Track shop purchases being paid over time for <strong>your team</strong> or for <strong>someone who is not in

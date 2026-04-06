@@ -5,7 +5,20 @@ import Logo from '../Logo';
 import { NavIcon } from './NavIcons';
 import api from '../../utils/api';
 
-const DEFAULT_NAV_ORDER = ['dashboard', 'dispatch', 'mylist', 'tasks', 'time', 'schedule', 'inventory', 'products', 'crm', 'profile', 'admin'];
+const DEFAULT_NAV_ORDER = [
+  'dashboard',
+  'dispatch',
+  'mylist',
+  'tasks',
+  'time',
+  'schedule',
+  'inventory',
+  'products',
+  'crm',
+  'profile',
+  'admin',
+  'shop_financing',
+];
 
 const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
@@ -25,6 +38,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/crm', label: 'Customers', key: 'crm' },
     { path: '/profile', label: 'Profile', key: 'profile' },
     { path: '/admin', label: 'Admin', key: 'admin', adminOnly: true },
+    { path: '/admin/shop-financing', label: 'Shop financing', key: 'shop_financing', adminOnly: true },
   ];
 
   useEffect(() => {

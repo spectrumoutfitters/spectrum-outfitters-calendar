@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Tasks from './pages/Tasks';
 import TimeEntries from './pages/TimeEntries';
 import Admin from './pages/Admin';
+import EmployeeShopFinancing from './components/Admin/EmployeeShopFinancing';
 import Profile from './pages/Profile';
 import Schedule from './pages/Schedule';
 import Products from './pages/Products';
@@ -125,6 +126,16 @@ function AppRoutes() {
           <AdminRoute>
             <Layout>
               <Admin />
+            </Layout>
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/shop-financing"
+        element={
+          <AdminRoute>
+            <Layout>
+              <EmployeeShopFinancing />
             </Layout>
           </AdminRoute>
         }

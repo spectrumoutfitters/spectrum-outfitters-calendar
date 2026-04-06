@@ -75,4 +75,4 @@ jobs:
 
       - name: Reload nginx
         run: |
-          ssh root@165.245.137.192 "systemctl reload nginx"
+          ssh root@165.245.137.192 "touch /var/www/spectrum-outfitters/frontend/dist/index.html 2>/dev/null || true; systemctl reload nginx"
