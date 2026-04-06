@@ -26,32 +26,27 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
 
-      - name: Detect changed files
+      - name: Detect backend changes
         id: changes
         run: |
           CHANGED=$(git diff --name-only HEAD~1 HEAD)
           echo "Changed files:"
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -q "^frontend/"; then
-            echo "frontend_changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "frontend_changed=false" >> $GITHUB_OUTPUT
-          fi
           if echo "$CHANGED" | grep -q "^backend/"; then
             echo "backend_changed=true" >> $GITHUB_OUTPUT
           else
             echo "backend_changed=false" >> $GITHUB_OUTPUT
           fi
 
+      # Always build & deploy frontend on main — conditional deploys skipped UI updates when
+      # change detection missed paths or users needed the latest bundle/cache-bust.
       - name: Build frontend
-        if: steps.changes.outputs.frontend_changed == 'true'
         run: |
           cd frontend
           npm ci
           npm run build
 
       - name: Deploy frontend
-        if: steps.changes.outputs.frontend_changed == 'true'
         run: |
           rsync -avz --delete \
             --exclude='.git' \
@@ -79,6 +74,5 @@ jobs:
           ssh root@165.245.137.192 "cd /var/www/spectrum-outfitters/backend && npm install && node database/startup.js && pm2 restart spectrum-outfitters"
 
       - name: Reload nginx
-        if: steps.changes.outputs.frontend_changed == 'true'
         run: |
           ssh root@165.245.137.192 "systemctl reload nginx"

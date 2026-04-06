@@ -50,7 +50,7 @@ const SUB_TABS = {
   finance: [
     { id: 'payroll', label: 'Payroll' },
     { id: 'shop_financing', label: 'Shop financing' },
-    { id: 'finance', label: 'Finance' },
+    { id: 'finance', label: 'P&L / summary' },
     { id: 'compliance', label: 'Compliance' },
   ],
   insights: [
@@ -66,7 +66,7 @@ const SUB_TABS = {
 
 function TabBar({ tabs, activeId, onSelect, badge }) {
   return (
-    <div className="flex overflow-x-auto scrollbar-hide border-b border-gray-200 dark:border-neutral-700 -mx-4 px-4 sm:mx-0 sm:px-0">
+    <div className="flex flex-wrap border-b border-gray-200 dark:border-neutral-700 -mx-4 px-4 sm:mx-0 sm:px-0 gap-x-1">
       {tabs.map((tab) => {
         const isActive = tab.id === activeId;
         const hasBadge = badge && tab.id === badge.tabId && badge.count > 0;
@@ -101,7 +101,7 @@ function TabBar({ tabs, activeId, onSelect, badge }) {
 
 function SubTabBar({ tabs, activeId, onSelect }) {
   return (
-    <div className="flex overflow-x-auto scrollbar-hide gap-1 mb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+    <div className="flex flex-wrap gap-2 mb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
       {tabs.map((tab) => {
         const isActive = tab.id === activeId;
         return (
