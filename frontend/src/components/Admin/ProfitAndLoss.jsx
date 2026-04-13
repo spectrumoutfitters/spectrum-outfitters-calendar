@@ -315,6 +315,19 @@ const ProfitAndLoss = () => {
     });
   };
 
+  const weekPayrollCostForSource = (src) => {
+    const list = payroll?.employees || [];
+    const match = list.find(
+      (e) =>
+        (src.source_type === 'user' && e.employee_id === src.source_id) ||
+        (src.source_type === 'payroll_person' && e.payroll_people_id === src.source_id)
+    );
+    if (match) return Number(match.cost) || 0;
+    const n = (src.name || '').toLowerCase().trim();
+    const byName = list.find((e) => (e.employee_name || '').toLowerCase().trim() === n);
+    return byName ? Number(byName.cost) || 0 : 0;
+  };
+
   const getCategoryColor = (category) => {
     const colors = {
       rent: 'bg-red-100 text-red-800',
@@ -567,6 +580,9 @@ const ProfitAndLoss = () => {
                 const payRecords = src.pay_records || [];
                 const totalPaid = src.total_paid_from_payroll != null ? src.total_paid_from_payroll : payRecords.reduce((s, r) => s + (r.amount || 0), 0);
                 const amountOwed = src.amount_owed_estimate != null ? src.amount_owed_estimate : 0;
+                const weekCost = weekPayrollCostForSource(src);
+                const paidForCompare = totalPaid > 0 ? totalPaid : weekCost;
+                const diffPaidMinusReceived = paidForCompare - totalReceived;
                 return (
                   <div key={key} className="p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -580,6 +596,54 @@ const ProfitAndLoss = () => {
                         <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Received from other biz: {formatCurrency(totalReceived)}</span>
                         {amountOwed > 0 && <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">Est. owed: {formatCurrency(amountOwed)}</span>}
                       </div>
+                    </div>
+                    <div className="rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-950 p-3 space-y-2">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Paid vs received</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                        <div>
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">This week (P&amp;L payroll)</div>
+                          <div className="font-semibold text-red-600 dark:text-red-400">{formatCurrency(weekCost)}</div>
+                          <div className="text-[10px] text-neutral-500 dark:text-neutral-500 mt-0.5">What this business counts this week</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">Total paid (Payroll System)</div>
+                          <div className="font-semibold text-neutral-800 dark:text-neutral-100">{totalPaid > 0 ? formatCurrency(totalPaid) : '—'}</div>
+                          <div className="text-[10px] text-neutral-500 dark:text-neutral-500 mt-0.5">
+                            {totalPaid > 0 ? 'Sum of pays in payroll history' : 'No matching history — name must match Payroll System'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">Total received (recorded)</div>
+                          <div className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalReceived)}</div>
+                          <div className="text-[10px] text-neutral-500 dark:text-neutral-500 mt-0.5">Payments you recorded from the other business</div>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700 flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs text-neutral-600 dark:text-neutral-300">Difference (paid − received)</span>
+                        <span
+                          className={`text-sm font-bold ${
+                            diffPaidMinusReceived > 0
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : diffPaidMinusReceived < 0
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-neutral-600 dark:text-neutral-400'
+                          }`}
+                        >
+                          {totalPaid > 0
+                            ? `${formatCurrency(totalPaid)} − ${formatCurrency(totalReceived)} = ${formatCurrency(diffPaidMinusReceived)}`
+                            : `${formatCurrency(weekCost)} (this week only) − ${formatCurrency(totalReceived)} = ${formatCurrency(diffPaidMinusReceived)}`}
+                        </span>
+                      </div>
+                      {diffPaidMinusReceived > 0 && (
+                        <p className="text-xs text-amber-700 dark:text-amber-300/90">
+                          You have paid more to {src.name.split(' ')[0] || 'this person'} than you have recorded as received from the other business (by {formatCurrency(diffPaidMinusReceived)}).
+                        </p>
+                      )}
+                      {diffPaidMinusReceived < 0 && (
+                        <p className="text-xs text-emerald-700 dark:text-emerald-300/90">
+                          Recorded reimbursements exceed the comparison total by {formatCurrency(-diffPaidMinusReceived)} — check pay history or recording dates if that is unexpected.
+                        </p>
+                      )}
                     </div>
                     {payRecords.length > 0 && (
                       <div className="border-t border-gray-200 dark:border-neutral-700 pt-2 mt-2">
