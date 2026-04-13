@@ -4,6 +4,7 @@ import path from 'path';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import db from '../database/db.js';
 import { getPayrollDataPath } from '../utils/payrollDataPath.js';
+import { payrollHistoryRecordMatchesSource } from '../utils/payrollHistoryMatch.js';
 import {
   getTodayInHouston,
   getWeekEndingFridayHouston,
@@ -347,13 +348,21 @@ router.get('/reimbursements', async (req, res) => {
       payments = payments.filter(p => p.source_type === source_type && p.source_id === parseInt(source_id, 10));
     }
     const usersWithSplit = await db.allAsync(
-      "SELECT id, full_name, weekly_salary, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM users WHERE is_active = 1 AND COALESCE(split_reimbursable_amount, 0) > 0"
+      "SELECT id, username, full_name, weekly_salary, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM users WHERE is_active = 1 AND COALESCE(split_reimbursable_amount, 0) > 0"
     );
     const peopleWithSplit = await db.allAsync(
       'SELECT id, full_name, weekly_salary, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM payroll_people WHERE is_active = 1 AND COALESCE(split_reimbursable_amount, 0) > 0'
     );
     const sources = [
-      ...usersWithSplit.map(u => ({ source_type: 'user', source_id: u.id, name: u.full_name, expected_amount: parseFloat(u.split_reimbursable_amount) || 0, expected_period: u.split_reimbursable_period || 'weekly', notes: u.split_reimbursable_notes })),
+      ...usersWithSplit.map(u => ({
+        source_type: 'user',
+        source_id: u.id,
+        name: u.full_name,
+        username: (u.username || '').trim() || undefined,
+        expected_amount: parseFloat(u.split_reimbursable_amount) || 0,
+        expected_period: u.split_reimbursable_period || 'weekly',
+        notes: u.split_reimbursable_notes
+      })),
       ...peopleWithSplit.map(p => ({ source_type: 'payroll_person', source_id: p.id, name: p.full_name, expected_amount: parseFloat(p.split_reimbursable_amount) || 0, expected_period: p.split_reimbursable_period || 'weekly', notes: p.split_reimbursable_notes }))
     ];
     const totalReceivedBySource = {};
@@ -372,14 +381,9 @@ router.get('/reimbursements', async (req, res) => {
         payrollHistory = JSON.parse(data);
       }
     } catch (_) {}
-    const normalizeName = (n) => (n || '').toLowerCase().trim().replace(/\s+/g, ' ');
     const payRecordsBySource = {};
     for (const src of sources) {
-      const srcName = normalizeName(src.name);
-      const records = (payrollHistory || []).filter((rec) => {
-        const empName = normalizeName(rec.employee?.name || rec.employeeName || rec.name || '');
-        return empName && srcName && empName === srcName;
-      });
+      const records = (payrollHistory || []).filter((rec) => payrollHistoryRecordMatchesSource(rec, src));
       const payRecords = records.map((r) => {
         const payDate = r.payDate || r.date || r.processedDate || '';
         const amount = parseFloat(r.grossPay ?? r.netPay ?? r.amount ?? 0);
