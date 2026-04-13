@@ -62,19 +62,22 @@ export function namesLikelyMatch(calendarFullName, payrollDisplayName) {
 }
 
 function recordEmployeeIds(rec) {
-  const e = rec.employee || {};
+  const e = rec.employee || rec.paystub?.employee || {};
   const ids = [
     e.id,
     e.userId,
     e.user_id,
     e.calendarUserId,
     e.calendar_user_id,
+    e.calendarId,
     rec.employeeId,
     rec.employee_id,
     rec.userId,
     rec.user_id,
     rec.calendarUserId,
     rec.calendar_user_id,
+    rec.selectedEmployee?.id,
+    rec.selectedEmployee?.userId,
   ];
   return ids.filter((v) => v != null && v !== '').map((v) => String(v));
 }
@@ -83,17 +86,36 @@ function recordEmployeeIds(rec) {
  * @param {object} rec - one payroll-history row
  * @param {{ source_type: string, source_id: number, name: string, username?: string }} src
  */
+function employeeFirstLastName(emp) {
+  if (!emp || typeof emp !== 'object') return '';
+  const parts = [emp.firstName, emp.middleName, emp.lastName].filter((p) => p != null && String(p).trim() !== '');
+  return parts.map((p) => String(p).trim()).join(' ').trim();
+}
+
 export function payrollHistoryRecordMatchesSource(rec, src) {
   const emp = rec.employee || {};
+  const stubEmp = rec.paystub?.employee || rec.paystubEmployee || {};
+  const sel = rec.selectedEmployee || {};
+  const fromParts = employeeFirstLastName(emp) || employeeFirstLastName(stubEmp) || employeeFirstLastName(sel);
   const displayName =
     emp.name ||
     emp.fullName ||
     emp.full_name ||
+    emp.displayName ||
+    stubEmp.name ||
+    stubEmp.fullName ||
+    stubEmp.full_name ||
+    rec.paystub?.employeeName ||
+    rec.paystub?.employee_name ||
+    sel.name ||
+    sel.full_name ||
+    sel.fullName ||
     rec.employeeName ||
     rec.employee_name ||
     rec.name ||
     rec.payeeName ||
     rec.payee_name ||
+    fromParts ||
     '';
 
   if (src.source_type === 'user') {

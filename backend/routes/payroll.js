@@ -5,7 +5,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import fs from 'fs';
-import { getPayrollDataPath } from '../utils/payrollDataPath.js';
+import {
+  getPayrollDataPath,
+  readPayrollHistoryFromAnyPath,
+  resolvePayrollHistoryJsonPathForWrite,
+  normalizePayrollHistoryParsed,
+} from '../utils/payrollDataPath.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -479,19 +484,7 @@ router.get('/sync/payroll-summary', requirePayrollAccess, async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
     
-    // Read payroll history
-    const dataPath = getPayrollDataPath();
-    const historyPath = path.join(dataPath, 'payroll-history.json');
-    let payrollHistory = [];
-    
-    if (fs.existsSync(historyPath)) {
-      try {
-        const data = fs.readFileSync(historyPath, 'utf8');
-        payrollHistory = JSON.parse(data);
-      } catch (error) {
-        console.warn('Could not read payroll history:', error);
-      }
-    }
+    const { records: payrollHistory } = readPayrollHistoryFromAnyPath();
 
     // Filter by date range if provided
     let filteredHistory = payrollHistory;
@@ -535,13 +528,12 @@ router.post('/import/history', requirePayrollAccess, (req, res) => {
       return res.status(400).json({ error: 'Body must include "records" as a non-empty array' });
     }
 
-    const dataPath = getPayrollDataPath();
-    const historyPath = path.join(dataPath, 'payroll-history.json');
+    const historyPath = resolvePayrollHistoryJsonPathForWrite();
     let existing = [];
     if (fs.existsSync(historyPath)) {
       try {
         const data = fs.readFileSync(historyPath, 'utf8');
-        existing = JSON.parse(data);
+        existing = normalizePayrollHistoryParsed(JSON.parse(data));
       } catch (e) {
         console.warn('Could not read existing payroll history:', e);
       }

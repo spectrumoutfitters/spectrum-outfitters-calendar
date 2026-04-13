@@ -42,7 +42,13 @@ const ProfitAndLoss = () => {
   const [editingPayrollPerson, setEditingPayrollPerson] = useState(null);
   const [payrollForm, setPayrollForm] = useState({ full_name: '', weekly_salary: '', hourly_rate: '', notes: '', split_reimbursable_amount: '', split_reimbursable_notes: '', split_reimbursable_period: 'weekly' });
   const [payrollSaving, setPayrollSaving] = useState(false);
-  const [reimbursements, setReimbursements] = useState({ sources: [], payments: [], total_received_by_source: {} });
+  const [reimbursements, setReimbursements] = useState({
+    sources: [],
+    payments: [],
+    total_received_by_source: {},
+    payroll_history_path: null,
+    payroll_history_row_count: 0,
+  });
   const [showReimbModal, setShowReimbModal] = useState(false);
   const [reimbForm, setReimbForm] = useState({ source_type: '', source_id: '', received_date: new Date().toISOString().split('T')[0], amount: '', notes: '' });
   const [reimbSaving, setReimbSaving] = useState(false);
@@ -82,7 +88,13 @@ const ProfitAndLoss = () => {
   const loadReimbursements = async () => {
     try {
       const res = await api.get('/finance/reimbursements');
-      setReimbursements({ sources: res.data.sources || [], payments: res.data.payments || [], total_received_by_source: res.data.total_received_by_source || {} });
+      setReimbursements({
+        sources: res.data.sources || [],
+        payments: res.data.payments || [],
+        total_received_by_source: res.data.total_received_by_source || {},
+        payroll_history_path: res.data.payroll_history_path ?? null,
+        payroll_history_row_count: res.data.payroll_history_row_count ?? 0,
+      });
     } catch (err) {
       console.error('Error loading reimbursements:', err);
     }
@@ -575,10 +587,20 @@ const ProfitAndLoss = () => {
               {reimbursements.sources.map((src) => {
                 const key = `${src.source_type}:${src.source_id}`;
                 const totalReceived = reimbursements.total_received_by_source[key] || 0;
+                const rhPath = reimbursements.payroll_history_path;
+                const rhRows = reimbursements.payroll_history_row_count ?? 0;
                 const isMonthly = src.expected_period === 'monthly';
                 const expectedLabel = isMonthly ? `Expected per month: ${formatCurrency(src.expected_amount)}` : `Expected per week: ${formatCurrency(src.expected_amount)}`;
                 const payRecords = src.pay_records || [];
                 const totalPaid = src.total_paid_from_payroll != null ? src.total_paid_from_payroll : payRecords.reduce((s, r) => s + (r.amount || 0), 0);
+                const payrollPaidHint =
+                  totalPaid > 0
+                    ? 'Sum of pays in payroll history'
+                    : !rhPath
+                      ? 'No payroll-history.json found on the server. Set PAYROLL_DATA_PATH in the backend .env, or place a PayrollData folder with that file next to the Calendar backend (for example ../PayrollData).'
+                      : rhRows === 0
+                        ? 'History file exists but has no rows the server can read (check JSON format).'
+                        : 'No pays matched this person — align Calendar user ID or full name with the Payroll System export.';
                 const amountOwed = src.amount_owed_estimate != null ? src.amount_owed_estimate : 0;
                 const weekCost = weekPayrollCostForSource(src);
                 const paidForCompare = totalPaid > 0 ? totalPaid : weekCost;
@@ -608,9 +630,7 @@ const ProfitAndLoss = () => {
                         <div>
                           <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">Total paid (Payroll System)</div>
                           <div className="font-semibold text-neutral-800 dark:text-neutral-100">{totalPaid > 0 ? formatCurrency(totalPaid) : '—'}</div>
-                          <div className="text-[10px] text-neutral-500 dark:text-neutral-500 mt-0.5">
-                            {totalPaid > 0 ? 'Sum of pays in payroll history' : 'No matching history — name must match Payroll System'}
-                          </div>
+                          <div className="text-[10px] text-neutral-500 dark:text-neutral-500 mt-0.5">{payrollPaidHint}</div>
                         </div>
                         <div>
                           <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">Total received (recorded)</div>

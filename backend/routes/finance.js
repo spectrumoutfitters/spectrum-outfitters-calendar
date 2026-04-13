@@ -1,9 +1,7 @@
 import express from 'express';
-import fs from 'fs';
-import path from 'path';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import db from '../database/db.js';
-import { getPayrollDataPath } from '../utils/payrollDataPath.js';
+import { readPayrollHistoryFromAnyPath } from '../utils/payrollDataPath.js';
 import { payrollHistoryRecordMatchesSource } from '../utils/payrollHistoryMatch.js';
 import {
   getTodayInHouston,
@@ -371,22 +369,24 @@ router.get('/reimbursements', async (req, res) => {
       totalReceivedBySource[key] = (totalReceivedBySource[key] || 0) + (parseFloat(p.amount) || 0);
     }
 
-    // Pull pay history from Payroll System for each source (match by name)
-    let payrollHistory = [];
-    try {
-      const dataPath = getPayrollDataPath();
-      const historyPath = path.join(dataPath, 'payroll-history.json');
-      if (fs.existsSync(historyPath)) {
-        const data = fs.readFileSync(historyPath, 'utf8');
-        payrollHistory = JSON.parse(data);
+    // Pull pay history from Payroll System (search PAYROLL_DATA_PATH, ../PayrollData, AppData, etc.)
+    const { records: payrollHistory, pathUsed: payrollHistoryPath } = readPayrollHistoryFromAnyPath();
+    const payrollHistoryRowCount = payrollHistory.length;
+
+    const payRecordAmount = (r) => {
+      for (const k of ['grossPay', 'netPay', 'amount', 'total', 'totalPay', 'payAmount', 'totalAmount']) {
+        const x = parseFloat(r[k]);
+        if (Number.isFinite(x) && x > 0) return x;
       }
-    } catch (_) {}
+      return 0;
+    };
+
     const payRecordsBySource = {};
     for (const src of sources) {
-      const records = (payrollHistory || []).filter((rec) => payrollHistoryRecordMatchesSource(rec, src));
+      const records = payrollHistory.filter((rec) => payrollHistoryRecordMatchesSource(rec, src));
       const payRecords = records.map((r) => {
         const payDate = r.payDate || r.date || r.processedDate || '';
-        const amount = parseFloat(r.grossPay ?? r.netPay ?? r.amount ?? 0);
+        const amount = payRecordAmount(r);
         return { pay_date: payDate, amount };
       }).sort((a, b) => (a.pay_date || '').localeCompare(b.pay_date || ''));
       const totalPaidFromPayroll = payRecords.reduce((sum, r) => sum + r.amount, 0);
@@ -416,7 +416,13 @@ router.get('/reimbursements', async (req, res) => {
       }
     });
 
-    res.json({ sources, payments, total_received_by_source: totalReceivedBySource });
+    res.json({
+      sources,
+      payments,
+      total_received_by_source: totalReceivedBySource,
+      payroll_history_path: payrollHistoryPath || null,
+      payroll_history_row_count: payrollHistoryRowCount
+    });
   } catch (error) {
     console.error('Get reimbursements error:', error);
     res.status(500).json({ error: 'Failed to load reimbursements' });
