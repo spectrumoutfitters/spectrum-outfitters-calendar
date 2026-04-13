@@ -58,6 +58,15 @@ export function namesLikelyMatch(calendarFullName, payrollDisplayName) {
   // One normalized string contains the other (avoid tiny strings)
   if (a.length >= 6 && b.length >= 6 && (a.includes(b) || b.includes(a))) return true;
 
+  // Every "significant" calendar token (3+ chars) appears in payroll string — e.g. Calendar
+  // "Patrick Tung Gaines" matches payroll export "Patrick Gaines" (patrick + gaines both in longer payroll name).
+  const sigA = ta.filter((t) => t.length >= 3);
+  if (sigA.length >= 2 && sigA.every((t) => b.includes(t))) return true;
+
+  // Reciprocal: payroll's significant tokens all appear in calendar full name (short payroll label)
+  const sigB = tb.filter((t) => t.length >= 3);
+  if (sigB.length >= 2 && sigB.every((t) => a.includes(t))) return true;
+
   return false;
 }
 
@@ -70,6 +79,10 @@ function recordEmployeeIds(rec) {
     e.calendarUserId,
     e.calendar_user_id,
     e.calendarId,
+    e.linkedUserId,
+    e.linked_user_id,
+    e.spectrumUserId,
+    e.spectrum_user_id,
     rec.employeeId,
     rec.employee_id,
     rec.userId,
@@ -78,13 +91,27 @@ function recordEmployeeIds(rec) {
     rec.calendar_user_id,
     rec.selectedEmployee?.id,
     rec.selectedEmployee?.userId,
+    rec.selectedEmployee?.calendarId,
   ];
   return ids.filter((v) => v != null && v !== '').map((v) => String(v));
 }
 
+/** Any string field on the employee object may carry a display / legal / nick name. */
+function employeeStringNameBlob(emp) {
+  if (!emp || typeof emp !== 'object') return '';
+  const parts = [];
+  for (const v of Object.values(emp)) {
+    if (typeof v === 'string') {
+      const t = v.trim();
+      if (t && !/^\d+$/.test(t) && t.length < 200) parts.push(t);
+    }
+  }
+  return parts.join(' ').trim();
+}
+
 /**
  * @param {object} rec - one payroll-history row
- * @param {{ source_type: string, source_id: number, name: string, username?: string }} src
+ * @param {{ source_type: string, source_id: number, name: string, username?: string, email?: string }} src
  */
 function employeeFirstLastName(emp) {
   if (!emp || typeof emp !== 'object') return '';
@@ -118,16 +145,33 @@ export function payrollHistoryRecordMatchesSource(rec, src) {
     fromParts ||
     '';
 
+  const nameBlob = [displayName, employeeStringNameBlob(emp), employeeStringNameBlob(stubEmp), employeeStringNameBlob(sel)]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  const emailsMatch = () => {
+    const want = (src.email || '').trim().toLowerCase();
+    if (!want || !want.includes('@')) return false;
+    const candidates = [emp.email, emp.workEmail, stubEmp.email, sel.email, rec.email].filter(Boolean).map((x) => String(x).trim().toLowerCase());
+    return candidates.some((c) => c === want);
+  };
+
   if (src.source_type === 'user') {
     const want = String(src.source_id);
     for (const id of recordEmployeeIds(rec)) {
       if (id === want) return true;
     }
+    if (emailsMatch()) return true;
     if (namesLikelyMatch(src.name, displayName)) return true;
+    if (nameBlob && namesLikelyMatch(src.name, nameBlob)) return true;
     if (src.username && namesLikelyMatch(src.username, displayName)) return true;
+    if (src.username && nameBlob && namesLikelyMatch(src.username, nameBlob)) return true;
     return false;
   }
 
   // payroll_person — name only
-  return namesLikelyMatch(src.name, displayName);
+  if (namesLikelyMatch(src.name, displayName)) return true;
+  if (nameBlob) return namesLikelyMatch(src.name, nameBlob);
+  return false;
 }

@@ -365,7 +365,7 @@ router.get('/reimbursements', async (req, res) => {
       payments = payments.filter(p => p.source_type === source_type && p.source_id === parseInt(source_id, 10));
     }
     const usersWithSplit = await db.allAsync(
-      "SELECT id, username, full_name, weekly_salary, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM users WHERE is_active = 1 AND COALESCE(split_reimbursable_amount, 0) > 0"
+      "SELECT id, username, full_name, email, weekly_salary, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM users WHERE is_active = 1 AND COALESCE(split_reimbursable_amount, 0) > 0"
     );
     const peopleWithSplit = await db.allAsync(
       'SELECT id, full_name, weekly_salary, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM payroll_people WHERE is_active = 1 AND COALESCE(split_reimbursable_amount, 0) > 0'
@@ -376,6 +376,7 @@ router.get('/reimbursements', async (req, res) => {
         source_id: u.id,
         name: u.full_name,
         username: (u.username || '').trim() || undefined,
+        email: (u.email || '').trim() || undefined,
         expected_amount: parseFloat(u.split_reimbursable_amount) || 0,
         expected_period: u.split_reimbursable_period || 'weekly',
         notes: u.split_reimbursable_notes
