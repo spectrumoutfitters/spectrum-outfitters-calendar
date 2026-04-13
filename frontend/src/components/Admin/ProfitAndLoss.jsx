@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
 
 const ProfitAndLoss = () => {
@@ -48,7 +48,11 @@ const ProfitAndLoss = () => {
     total_received_by_source: {},
     payroll_history_path: null,
     payroll_history_row_count: 0,
+    payroll_history_db_count: 0,
+    payroll_history_file_count: 0,
   });
+  const payrollHistFileRef = useRef(null);
+  const [payrollHistoryImporting, setPayrollHistoryImporting] = useState(false);
   const [showReimbModal, setShowReimbModal] = useState(false);
   const [reimbForm, setReimbForm] = useState({ source_type: '', source_id: '', received_date: new Date().toISOString().split('T')[0], amount: '', notes: '' });
   const [reimbSaving, setReimbSaving] = useState(false);
@@ -94,9 +98,37 @@ const ProfitAndLoss = () => {
         total_received_by_source: res.data.total_received_by_source || {},
         payroll_history_path: res.data.payroll_history_path ?? null,
         payroll_history_row_count: res.data.payroll_history_row_count ?? 0,
+        payroll_history_db_count: res.data.payroll_history_db_count ?? 0,
+        payroll_history_file_count: res.data.payroll_history_file_count ?? 0,
       });
     } catch (err) {
       console.error('Error loading reimbursements:', err);
+    }
+  };
+
+  const handlePayrollHistoryFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPayrollHistoryImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      let records = Array.isArray(parsed) ? parsed : null;
+      if (!records && parsed && typeof parsed === 'object') {
+        records = parsed.records || parsed.history || parsed.data || parsed.payrolls;
+      }
+      if (!Array.isArray(records) || records.length === 0) {
+        alert('Choose a valid payroll-history.json: a JSON array of pay records, or an object with a "records" (or "history") array.');
+        return;
+      }
+      const res = await api.post('/finance/payroll-history-import', { records });
+      alert(`Imported ${res.data.imported} new pay run(s). ${res.data.total} total stored on the server.`);
+      await loadReimbursements();
+    } catch (err) {
+      alert(err.response?.data?.error || err.message || 'Import failed');
+    } finally {
+      setPayrollHistoryImporting(false);
     }
   };
 
@@ -571,36 +603,59 @@ const ProfitAndLoss = () => {
             <div>
               <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Reimbursements (split salary)</h3>
               <p className="text-sm text-gray-600 dark:text-neutral-400 mt-0.5">Track when the other business pays you back for their share of payroll.</p>
+              <p className="text-xs text-gray-500 dark:text-neutral-500 mt-1 max-w-2xl">
+                Payroll pay totals come from pay history stored on this server (Calendar database). On production, import{' '}
+                <code className="text-[11px] bg-gray-100 dark:bg-neutral-900 px-1 rounded">payroll-history.json</code> from the PC that runs the Payroll app (usually{' '}
+                <code className="text-[11px] bg-gray-100 dark:bg-neutral-900 px-1 rounded">…\SpectrumOutfitters-Payroll-System\PayrollData\</code>
+                ). Re-import after new pay runs.
+              </p>
             </div>
-            {reimbursements.sources?.length > 0 && (
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
+              <input
+                ref={payrollHistFileRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handlePayrollHistoryFile}
+              />
               <button
                 type="button"
-                onClick={handleRecordReimbursement}
-                className="w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-sm font-medium"
+                onClick={() => payrollHistFileRef.current?.click()}
+                disabled={payrollHistoryImporting}
+                className="w-full sm:w-auto min-h-12 px-4 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-900 text-gray-800 dark:text-neutral-100 text-sm font-medium hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-50"
               >
-                Record payment received
+                {payrollHistoryImporting ? 'Importing…' : 'Import pay history (JSON)'}
               </button>
-            )}
+              {reimbursements.sources?.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleRecordReimbursement}
+                  className="w-full sm:w-auto min-h-12 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-sm font-medium"
+                >
+                  Record payment received
+                </button>
+              )}
+            </div>
           </div>
           {reimbursements.sources?.length > 0 && (
             <div className="space-y-3 mb-4">
               {reimbursements.sources.map((src) => {
                 const key = `${src.source_type}:${src.source_id}`;
                 const totalReceived = reimbursements.total_received_by_source[key] || 0;
-                const rhPath = reimbursements.payroll_history_path;
                 const rhRows = reimbursements.payroll_history_row_count ?? 0;
+                const rhDb = reimbursements.payroll_history_db_count ?? 0;
                 const isMonthly = src.expected_period === 'monthly';
                 const expectedLabel = isMonthly ? `Expected per month: ${formatCurrency(src.expected_amount)}` : `Expected per week: ${formatCurrency(src.expected_amount)}`;
                 const payRecords = src.pay_records || [];
                 const totalPaid = src.total_paid_from_payroll != null ? src.total_paid_from_payroll : payRecords.reduce((s, r) => s + (r.amount || 0), 0);
                 const payrollPaidHint =
                   totalPaid > 0
-                    ? 'Sum of pays in payroll history'
-                    : !rhPath
-                      ? 'No payroll-history.json found on the server. Set PAYROLL_DATA_PATH in the backend .env, or place a PayrollData folder with that file next to the Calendar backend (for example ../PayrollData).'
-                      : rhRows === 0
-                        ? 'History file exists but has no rows the server can read (check JSON format).'
-                        : 'No pays matched this person — align Calendar user ID or full name with the Payroll System export.';
+                    ? rhDb > 0
+                      ? 'Sum of pays from stored payroll history (Calendar database; file on disk is optional).'
+                      : 'Sum of pays in payroll history'
+                    : rhRows === 0
+                      ? 'No pay history on the server yet. Use Import pay history (JSON) with payroll-history.json from the Payroll app PC.'
+                      : 'No pays matched this person — align Calendar user ID or full name with the Payroll System export.';
                 const amountOwed = src.amount_owed_estimate != null ? src.amount_owed_estimate : 0;
                 const weekCost = weekPayrollCostForSource(src);
                 const paidForCompare = totalPaid > 0 ? totalPaid : weekCost;

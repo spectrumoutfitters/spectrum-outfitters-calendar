@@ -5,12 +5,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import fs from 'fs';
-import {
-  getPayrollDataPath,
-  readPayrollHistoryFromAnyPath,
-  resolvePayrollHistoryJsonPathForWrite,
-  normalizePayrollHistoryParsed,
-} from '../utils/payrollDataPath.js';
+import { getPayrollDataPath } from '../utils/payrollDataPath.js';
+import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/payrollHistoryRecords.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -484,13 +480,13 @@ router.get('/sync/payroll-summary', requirePayrollAccess, async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
     
-    const { records: payrollHistory } = readPayrollHistoryFromAnyPath();
+    const { records: payrollHistory } = await loadMergedPayrollHistory();
 
     // Filter by date range if provided
     let filteredHistory = payrollHistory;
     if (start_date || end_date) {
       filteredHistory = payrollHistory.filter(record => {
-        const recordDate = record.payDate || record.date || '';
+        const recordDate = record.payDate || record.date || record.processedDate || '';
         if (start_date && recordDate < start_date) return false;
         if (end_date && recordDate > end_date) return false;
         return true;
@@ -520,42 +516,15 @@ router.get('/sync/payroll-summary', requirePayrollAccess, async (req, res) => {
   }
 });
 
-// POST /api/payroll/import/history - Merge imported pay history (from file upload)
-router.post('/import/history', requirePayrollAccess, (req, res) => {
+// POST /api/payroll/import/history - Merge imported pay history (from file upload); mirrors to SQLite for production.
+router.post('/import/history', requirePayrollAccess, async (req, res) => {
   try {
     const { records } = req.body;
     if (!Array.isArray(records) || records.length === 0) {
       return res.status(400).json({ error: 'Body must include "records" as a non-empty array' });
     }
-
-    const historyPath = resolvePayrollHistoryJsonPathForWrite();
-    let existing = [];
-    if (fs.existsSync(historyPath)) {
-      try {
-        const data = fs.readFileSync(historyPath, 'utf8');
-        existing = normalizePayrollHistoryParsed(JSON.parse(data));
-      } catch (e) {
-        console.warn('Could not read existing payroll history:', e);
-      }
-    }
-
-    const existingIds = new Set((existing).map(r => r.id).filter(Boolean));
-    const key = (r) => `${r.processedDate || ''}-${(r.employee && r.employee.id) || r.employeeId || ''}`;
-    const existingKeys = new Set(existing.map(key));
-    let imported = 0;
-    for (const rec of records) {
-      const id = rec.id;
-      const k = key(rec);
-      if (id && existingIds.has(id)) continue;
-      if (existingKeys.has(k)) continue;
-      existingIds.add(id);
-      existingKeys.add(k);
-      existing.push(rec);
-      imported++;
-    }
-    existing.sort((a, b) => new Date(a.processedDate || 0) - new Date(b.processedDate || 0));
-    fs.writeFileSync(historyPath, JSON.stringify(existing, null, 2), 'utf8');
-    res.json({ success: true, imported, total: existing.length });
+    const { imported, total } = await mergeImportPayrollHistory(records);
+    res.json({ success: true, imported, total });
   } catch (error) {
     console.error('Import payroll history error:', error);
     res.status(500).json({ success: false, error: error.message });

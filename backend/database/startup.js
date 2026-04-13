@@ -273,5 +273,33 @@ export async function runStartupMigrations() {
   await addShortLinksTable();
   await ensurePayrollPeopleTable();
   await ensurePayrollReimbursementsSetup();
+  await ensurePayrollSystemPayHistoryTable();
+  await runPayrollHistoryStartupBackfill();
   await addEmployeeShopFinancingTables();
+}
+
+/** Persist Payroll System pay stubs for reimbursements / reporting (server has no local JSON on Linux). */
+export async function ensurePayrollSystemPayHistoryTable() {
+  try {
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS payroll_system_pay_history (
+        id TEXT PRIMARY KEY NOT NULL,
+        payload_json TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_payroll_sys_hist_updated ON payroll_system_pay_history(updated_at)').catch(() => {});
+  } catch (_) {}
+}
+
+async function runPayrollHistoryStartupBackfill() {
+  try {
+    const { runPayrollHistoryBackfillFromFile } = await import('../utils/payrollHistoryRecords.js');
+    const r = await runPayrollHistoryBackfillFromFile();
+    if (!r.skipped && r.count > 0) {
+      console.log(`Payroll history: backfilled ${r.count} row(s) from payroll-history.json into the database.`);
+    }
+  } catch (e) {
+    console.warn('Payroll history DB backfill skipped:', e?.message || e);
+  }
 }

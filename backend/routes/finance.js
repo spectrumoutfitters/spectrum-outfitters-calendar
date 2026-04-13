@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import db from '../database/db.js';
-import { readPayrollHistoryFromAnyPath } from '../utils/payrollDataPath.js';
+import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/payrollHistoryRecords.js';
 import { payrollHistoryRecordMatchesSource } from '../utils/payrollHistoryMatch.js';
 import {
   getTodayInHouston,
@@ -335,6 +335,25 @@ router.delete('/payroll-people/:id', async (req, res) => {
 
 // --- Split salary reimbursements (other business pays this business back) ---
 
+/**
+ * POST /api/finance/payroll-history-import — merge payroll-history.json contents into SQLite (+ optional local file).
+ * Admin-only; use once on production (upload from the machine that runs the Payroll app).
+ */
+router.post('/payroll-history-import', async (req, res) => {
+  try {
+    let records = req.body?.records;
+    if (!Array.isArray(records) && Array.isArray(req.body)) records = req.body;
+    if (!Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({ error: 'Body must include a non-empty "records" array (Payroll System pay history).' });
+    }
+    const { imported, total } = await mergeImportPayrollHistory(records);
+    res.json({ success: true, imported, total });
+  } catch (error) {
+    console.error('Payroll history import error:', error);
+    res.status(500).json({ error: error.message || 'Failed to import payroll history' });
+  }
+});
+
 /** GET /api/finance/reimbursements — list people with split + payments received, or filter by source */
 router.get('/reimbursements', async (req, res) => {
   try {
@@ -369,8 +388,7 @@ router.get('/reimbursements', async (req, res) => {
       totalReceivedBySource[key] = (totalReceivedBySource[key] || 0) + (parseFloat(p.amount) || 0);
     }
 
-    // Pull pay history from Payroll System (search PAYROLL_DATA_PATH, ../PayrollData, AppData, etc.)
-    const { records: payrollHistory, pathUsed: payrollHistoryPath } = readPayrollHistoryFromAnyPath();
+    const { records: payrollHistory, pathUsed: payrollHistoryPath, dbCount, fileCount } = await loadMergedPayrollHistory();
     const payrollHistoryRowCount = payrollHistory.length;
 
     const payRecordAmount = (r) => {
@@ -421,7 +439,9 @@ router.get('/reimbursements', async (req, res) => {
       payments,
       total_received_by_source: totalReceivedBySource,
       payroll_history_path: payrollHistoryPath || null,
-      payroll_history_row_count: payrollHistoryRowCount
+      payroll_history_row_count: payrollHistoryRowCount,
+      payroll_history_db_count: dbCount,
+      payroll_history_file_count: fileCount,
     });
   } catch (error) {
     console.error('Get reimbursements error:', error);
