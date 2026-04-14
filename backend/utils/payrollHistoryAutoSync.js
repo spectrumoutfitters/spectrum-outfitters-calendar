@@ -3,6 +3,7 @@ import { getHoustonDayOfWeek, getTodayInHouston } from './appTimezone.js';
 import { syncPayrollHistoryFromFile } from './payrollHistoryRecords.js';
 
 const SETTING_KEY = 'payroll_history_last_auto_sync_date';
+const STATUS_KEY = 'payroll_history_last_sync_status';
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
 async function getSetting(key) {
@@ -23,6 +24,46 @@ async function setSetting(key, value) {
   );
 }
 
+async function setSyncStatus(status) {
+  await setSetting(STATUS_KEY, JSON.stringify(status));
+}
+
+export async function readPayrollHistorySyncStatus() {
+  const raw = await getSetting(STATUS_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export async function runPayrollHistorySyncNow(reason = 'manual') {
+  const nowIso = new Date().toISOString();
+  try {
+    const result = await syncPayrollHistoryFromFile();
+    const status = {
+      ok: true,
+      reason,
+      at: nowIso,
+      imported: result.imported || 0,
+      total: result.total || 0,
+      sourceCount: result.sourceCount || 0,
+    };
+    await setSyncStatus(status);
+    return status;
+  } catch (err) {
+    const status = {
+      ok: false,
+      reason,
+      at: nowIso,
+      error: err?.message || String(err),
+    };
+    await setSyncStatus(status);
+    throw err;
+  }
+}
+
 /**
  * Runs on Saturdays (Houston) once per day by default.
  * @param {{ force?: boolean }} opts
@@ -38,7 +79,7 @@ export async function runPayrollHistoryAutoSyncIfDue(opts = {}) {
   if (!force && last === today) {
     return { ran: false, reason: 'already_ran_today', today };
   }
-  const result = await syncPayrollHistoryFromFile();
+  const result = await runPayrollHistorySyncNow('scheduled_saturday');
   await setSetting(SETTING_KEY, today);
   return { ran: true, today, ...result };
 }

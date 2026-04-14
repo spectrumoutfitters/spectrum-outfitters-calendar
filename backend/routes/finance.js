@@ -1,9 +1,10 @@
 import express from 'express';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import db from '../database/db.js';
-import { loadMergedPayrollHistory, mergeImportPayrollHistory, syncPayrollHistoryFromFile } from '../utils/payrollHistoryRecords.js';
+import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/payrollHistoryRecords.js';
 import { payrollHistoryRecordMatchesSource } from '../utils/payrollHistoryMatch.js';
 import { readPayrollEmployeesFromAnyPath } from '../utils/payrollDataPath.js';
+import { readPayrollHistorySyncStatus, runPayrollHistorySyncNow } from '../utils/payrollHistoryAutoSync.js';
 import {
   getTodayInHouston,
   getWeekEndingFridayHouston,
@@ -370,7 +371,7 @@ router.post('/payroll-history-import', async (req, res) => {
  */
 router.post('/payroll-history-sync-now', async (_req, res) => {
   try {
-    const result = await syncPayrollHistoryFromFile();
+    const result = await runPayrollHistorySyncNow('manual_button');
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('Payroll history sync-now error:', error);
@@ -493,6 +494,8 @@ router.get('/reimbursements', async (req, res) => {
       }
     });
 
+    const payrollSyncStatus = await readPayrollHistorySyncStatus();
+
     res.json({
       sources,
       payments,
@@ -501,6 +504,7 @@ router.get('/reimbursements', async (req, res) => {
       payroll_history_row_count: payrollHistoryRowCount,
       payroll_history_db_count: dbCount,
       payroll_history_file_count: fileCount,
+      payroll_history_sync_status: payrollSyncStatus,
     });
   } catch (error) {
     console.error('Get reimbursements error:', error);

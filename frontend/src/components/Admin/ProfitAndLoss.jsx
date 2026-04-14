@@ -50,6 +50,7 @@ const ProfitAndLoss = () => {
     payroll_history_row_count: 0,
     payroll_history_db_count: 0,
     payroll_history_file_count: 0,
+    payroll_history_sync_status: null,
   });
   const payrollHistFileRef = useRef(null);
   const [payrollHistoryImporting, setPayrollHistoryImporting] = useState(false);
@@ -101,6 +102,7 @@ const ProfitAndLoss = () => {
         payroll_history_row_count: res.data.payroll_history_row_count ?? 0,
         payroll_history_db_count: res.data.payroll_history_db_count ?? 0,
         payroll_history_file_count: res.data.payroll_history_file_count ?? 0,
+        payroll_history_sync_status: res.data.payroll_history_sync_status ?? null,
       });
     } catch (err) {
       console.error('Error loading reimbursements:', err);
@@ -623,6 +625,14 @@ const ProfitAndLoss = () => {
                 <code className="text-[11px] bg-gray-100 dark:bg-neutral-900 px-1 rounded">…\SpectrumOutfitters-Payroll-System\PayrollData\</code>
                 ). Re-import after new pay runs.
               </p>
+              {reimbursements.payroll_history_sync_status && (
+                <p className={`text-xs mt-1 ${reimbursements.payroll_history_sync_status.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                  Last payroll sync: {new Date(reimbursements.payroll_history_sync_status.at).toLocaleString()} ({reimbursements.payroll_history_sync_status.reason})
+                  {reimbursements.payroll_history_sync_status.ok
+                    ? ` — imported ${reimbursements.payroll_history_sync_status.imported || 0}, source rows ${reimbursements.payroll_history_sync_status.sourceCount || 0}, server total ${reimbursements.payroll_history_sync_status.total || 0}.`
+                    : ` — failed: ${reimbursements.payroll_history_sync_status.error || 'unknown error'}`}
+                </p>
+              )}
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
               <button
