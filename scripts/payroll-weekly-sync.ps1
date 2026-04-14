@@ -68,6 +68,7 @@ Log-Info "Loaded $($records.Count) record(s)"
 
 $loginUrl = "$BaseUrl/api/auth/login"
 $importUrl = "$BaseUrl/api/finance/payroll-history-import"
+$syncNowUrl = "$BaseUrl/api/finance/payroll-history-sync-now"
 
 Log-Info "Logging in as $Username"
 $loginBody = @{
@@ -94,5 +95,11 @@ $resp = Invoke-RestMethod -Method Post -Uri $importUrl -Headers $headers -Conten
 
 $imported = if ($resp.imported -ne $null) { $resp.imported } else { 0 }
 $total = if ($resp.total -ne $null) { $resp.total } else { 0 }
-Log-Info "Sync complete. Imported $imported new pay run(s). Server total: $total."
+Log-Info "Import complete. Imported $imported new pay run(s). Server total: $total."
+
+Log-Info "Triggering sync-now to record weekly split pay runs"
+$syncResp = Invoke-RestMethod -Method Post -Uri $syncNowUrl -Headers $headers -ContentType "application/json" -Body "{}"
+$splitInserted = if ($syncResp.splitRunsInserted -ne $null) { $syncResp.splitRunsInserted } else { 0 }
+$splitWeek = if ($syncResp.splitRunsWeekEnding) { $syncResp.splitRunsWeekEnding } else { "n/a" }
+Log-Info "Sync-now complete. Split pay runs added: $splitInserted (week ending $splitWeek)."
 
