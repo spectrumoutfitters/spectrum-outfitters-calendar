@@ -3,6 +3,7 @@ import fs from 'fs';
 import os from 'os';
 
 const HISTORY_FILE = 'payroll-history.json';
+const EMPLOYEES_FILE = 'employees.json';
 
 function windowsDefaultPayrollDir() {
   const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
@@ -69,6 +70,16 @@ export function normalizePayrollHistoryParsed(parsed) {
   return [];
 }
 
+/** Normalize Payroll employees export: array or wrapped object variants. */
+export function normalizePayrollEmployeesParsed(parsed) {
+  if (Array.isArray(parsed)) return parsed;
+  if (!parsed || typeof parsed !== 'object') return [];
+  for (const key of ['employees', 'data', 'items', 'records']) {
+    if (Array.isArray(parsed[key])) return parsed[key];
+  }
+  return [];
+}
+
 /**
  * Load payroll-history.json from the first candidate path that has the file.
  * @returns {{ records: object[], pathUsed: string | null }}
@@ -81,6 +92,26 @@ export function readPayrollHistoryFromAnyPath() {
     try {
       const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
       const records = normalizePayrollHistoryParsed(raw);
+      return { records, pathUsed: file };
+    } catch (_) {
+      continue;
+    }
+  }
+  return { records: [], pathUsed: null };
+}
+
+/**
+ * Load employees.json from the first candidate path that has the file.
+ * @returns {{ records: object[], pathUsed: string | null }}
+ */
+export function readPayrollEmployeesFromAnyPath() {
+  const candidates = getPayrollDataDirectoryCandidates();
+  for (const dir of candidates) {
+    const file = path.join(dir, EMPLOYEES_FILE);
+    if (!fs.existsSync(file)) continue;
+    try {
+      const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const records = normalizePayrollEmployeesParsed(raw);
       return { records, pathUsed: file };
     } catch (_) {
       continue;

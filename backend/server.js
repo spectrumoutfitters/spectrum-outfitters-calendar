@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { networkInterfaces } from 'os';
 import db from './database/db.js';
 import { runStartupMigrations } from './database/startup.js';
+import { startPayrollHistoryAutoSyncJob } from './utils/payrollHistoryAutoSync.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import taskRoutes from './routes/tasks.js';
@@ -847,6 +848,7 @@ db.getAsync('SELECT 1')
   .then(() => runStartupMigrations())
   .then(() => {
     console.log('✅ Database connection verified');
+    startPayrollHistoryAutoSyncJob();
     startServer();
   })
   .catch((err) => {

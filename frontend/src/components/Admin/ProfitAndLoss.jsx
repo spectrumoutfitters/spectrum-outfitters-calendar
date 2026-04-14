@@ -53,6 +53,7 @@ const ProfitAndLoss = () => {
   });
   const payrollHistFileRef = useRef(null);
   const [payrollHistoryImporting, setPayrollHistoryImporting] = useState(false);
+  const [payrollHistorySyncing, setPayrollHistorySyncing] = useState(false);
   const [showReimbModal, setShowReimbModal] = useState(false);
   const [reimbForm, setReimbForm] = useState({ source_type: '', source_id: '', received_date: new Date().toISOString().split('T')[0], amount: '', notes: '' });
   const [reimbSaving, setReimbSaving] = useState(false);
@@ -129,6 +130,19 @@ const ProfitAndLoss = () => {
       alert(err.response?.data?.error || err.message || 'Import failed');
     } finally {
       setPayrollHistoryImporting(false);
+    }
+  };
+
+  const handlePayrollHistorySyncNow = async () => {
+    setPayrollHistorySyncing(true);
+    try {
+      const res = await api.post('/finance/payroll-history-sync-now');
+      alert(`Payroll sync complete. Imported ${res.data.imported || 0} new pay run(s). Total on server: ${res.data.total || 0}.`);
+      await loadReimbursements();
+    } catch (err) {
+      alert(err.response?.data?.error || err.message || 'Payroll sync failed');
+    } finally {
+      setPayrollHistorySyncing(false);
     }
   };
 
@@ -604,13 +618,21 @@ const ProfitAndLoss = () => {
               <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Reimbursements (split salary)</h3>
               <p className="text-sm text-gray-600 dark:text-neutral-400 mt-0.5">Track when the other business pays you back for their share of payroll.</p>
               <p className="text-xs text-gray-500 dark:text-neutral-500 mt-1 max-w-2xl">
-                Payroll pay totals come from pay history stored on this server (Calendar database). On production, import{' '}
+                Payroll pay totals come from pay history stored on this server (Calendar database). The server auto-syncs from PayrollData every Saturday (Houston time). Use Sync from Payroll now after Friday payroll if you want to update immediately. Import{' '}
                 <code className="text-[11px] bg-gray-100 dark:bg-neutral-900 px-1 rounded">payroll-history.json</code> from the PC that runs the Payroll app (usually{' '}
                 <code className="text-[11px] bg-gray-100 dark:bg-neutral-900 px-1 rounded">…\SpectrumOutfitters-Payroll-System\PayrollData\</code>
                 ). Re-import after new pay runs.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
+              <button
+                type="button"
+                onClick={handlePayrollHistorySyncNow}
+                disabled={payrollHistorySyncing}
+                className="w-full sm:w-auto min-h-12 px-4 py-2 rounded-lg border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 text-sm font-medium hover:bg-sky-100 dark:hover:bg-sky-900 disabled:opacity-50"
+              >
+                {payrollHistorySyncing ? 'Syncing…' : 'Sync from Payroll now'}
+              </button>
               <input
                 ref={payrollHistFileRef}
                 type="file"

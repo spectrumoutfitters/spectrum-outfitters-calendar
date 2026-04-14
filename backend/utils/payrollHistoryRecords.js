@@ -137,3 +137,16 @@ export async function runPayrollHistoryBackfillFromFile() {
   await replaceAllPayrollHistoryInDb(records);
   return { skipped: false, count: records.length };
 }
+
+/**
+ * Pull latest payroll-history.json from configured PayrollData path and merge into DB.
+ * Safe to run repeatedly (idempotent dedupe).
+ */
+export async function syncPayrollHistoryFromFile() {
+  const { records } = readPayrollHistoryFromAnyPath();
+  if (!Array.isArray(records) || records.length === 0) {
+    return { imported: 0, total: await countPayrollHistoryInDb(), sourceCount: 0 };
+  }
+  const { imported, total } = await mergeImportPayrollHistory(records);
+  return { imported, total, sourceCount: records.length };
+}

@@ -1,8 +1,9 @@
 import express from 'express';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import db from '../database/db.js';
-import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/payrollHistoryRecords.js';
+import { loadMergedPayrollHistory, mergeImportPayrollHistory, syncPayrollHistoryFromFile } from '../utils/payrollHistoryRecords.js';
 import { payrollHistoryRecordMatchesSource } from '../utils/payrollHistoryMatch.js';
+import { readPayrollEmployeesFromAnyPath } from '../utils/payrollDataPath.js';
 import {
   getTodayInHouston,
   getWeekEndingFridayHouston,
@@ -20,6 +21,15 @@ function getWeekEndingFriday(dateStr) {
 
 function getWeekStart(weekEndDate) {
   return getWeekStartHouston(weekEndDate);
+}
+
+function normLower(v) {
+  return String(v || '').trim().toLowerCase();
+}
+
+function firstLastName(e) {
+  const parts = [e?.firstName, e?.middleName, e?.lastName].filter((x) => x != null && String(x).trim() !== '');
+  return parts.map((x) => String(x).trim()).join(' ').trim();
 }
 
 /**
@@ -354,6 +364,20 @@ router.post('/payroll-history-import', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/finance/payroll-history-sync-now
+ * Pull latest payroll-history.json from PayrollData into Calendar DB immediately.
+ */
+router.post('/payroll-history-sync-now', async (_req, res) => {
+  try {
+    const result = await syncPayrollHistoryFromFile();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Payroll history sync-now error:', error);
+    res.status(500).json({ error: error.message || 'Failed to sync payroll history from PayrollData' });
+  }
+});
+
 /** GET /api/finance/reimbursements — list people with split + payments received, or filter by source */
 router.get('/reimbursements', async (req, res) => {
   try {
@@ -390,7 +414,13 @@ router.get('/reimbursements', async (req, res) => {
     }
 
     const { records: payrollHistory, pathUsed: payrollHistoryPath, dbCount, fileCount } = await loadMergedPayrollHistory();
+    const { records: payrollEmployees } = readPayrollEmployeesFromAnyPath();
     const payrollHistoryRowCount = payrollHistory.length;
+    const payrollEmployeeById = new Map();
+    for (const e of payrollEmployees) {
+      const id = String(e?.id || '').trim();
+      if (id) payrollEmployeeById.set(id, e);
+    }
 
     const payRecordAmount = (r) => {
       for (const k of ['grossPay', 'netPay', 'amount', 'total', 'totalPay', 'payAmount', 'totalAmount']) {
@@ -400,9 +430,37 @@ router.get('/reimbursements', async (req, res) => {
       return 0;
     };
 
+    const sourceMatchesRecord = (rec, src) => {
+      if (payrollHistoryRecordMatchesSource(rec, src)) return true;
+      const empId = String(rec?.employee?.id || rec?.employeeId || rec?.employee_id || '').trim();
+      if (!empId) return false;
+      const linked = payrollEmployeeById.get(empId);
+      if (!linked) return false;
+
+      if (src.source_type === 'user') {
+        // Strong link when Payroll employee carries calendarId from employee sync.
+        if (String(linked.calendarId || '').trim() === String(src.source_id)) return true;
+        // Fallback to email/name from Payroll employees.json.
+        const linkedEmail = normLower(linked.email);
+        if (linkedEmail && src.email && linkedEmail === normLower(src.email)) return true;
+        const linkedName = linked.name || firstLastName(linked);
+        if (linkedName) {
+          return payrollHistoryRecordMatchesSource(
+            { employee: { name: linkedName } },
+            src
+          );
+        }
+        return false;
+      }
+
+      const linkedName = linked.name || firstLastName(linked);
+      if (!linkedName) return false;
+      return payrollHistoryRecordMatchesSource({ employee: { name: linkedName } }, src);
+    };
+
     const payRecordsBySource = {};
     for (const src of sources) {
-      const records = payrollHistory.filter((rec) => payrollHistoryRecordMatchesSource(rec, src));
+      const records = payrollHistory.filter((rec) => sourceMatchesRecord(rec, src));
       const payRecords = records.map((r) => {
         const payDate = r.payDate || r.date || r.processedDate || '';
         const amount = payRecordAmount(r);
