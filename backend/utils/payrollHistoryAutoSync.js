@@ -1,6 +1,7 @@
 import db from '../database/db.js';
 import { getHoustonDayOfWeek, getTodayInHouston } from './appTimezone.js';
 import { syncPayrollHistoryFromFile } from './payrollHistoryRecords.js';
+import { recordWeeklySplitPayRuns } from './payrollSplitRuns.js';
 
 const SETTING_KEY = 'payroll_history_last_auto_sync_date';
 const STATUS_KEY = 'payroll_history_last_sync_status';
@@ -42,6 +43,7 @@ export async function runPayrollHistorySyncNow(reason = 'manual') {
   const nowIso = new Date().toISOString();
   try {
     const result = await syncPayrollHistoryFromFile();
+    const split = await recordWeeklySplitPayRuns();
     const status = {
       ok: true,
       reason,
@@ -49,6 +51,8 @@ export async function runPayrollHistorySyncNow(reason = 'manual') {
       imported: result.imported || 0,
       total: result.total || 0,
       sourceCount: result.sourceCount || 0,
+      splitRunsInserted: split.inserted || 0,
+      splitRunsWeekEnding: split.weekEnding || null,
     };
     await setSyncStatus(status);
     return status;

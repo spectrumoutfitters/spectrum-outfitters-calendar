@@ -5,6 +5,7 @@ import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/pa
 import { payrollHistoryRecordMatchesSource } from '../utils/payrollHistoryMatch.js';
 import { readPayrollEmployeesFromAnyPath } from '../utils/payrollDataPath.js';
 import { readPayrollHistorySyncStatus, runPayrollHistorySyncNow } from '../utils/payrollHistoryAutoSync.js';
+import { getSplitPayRunsBySource } from '../utils/payrollSplitRuns.js';
 import {
   getTodayInHouston,
   getWeekEndingFridayHouston,
@@ -459,14 +460,18 @@ router.get('/reimbursements', async (req, res) => {
       return payrollHistoryRecordMatchesSource({ employee: { name: linkedName } }, src);
     };
 
+    const splitRunsBySource = await getSplitPayRunsBySource();
     const payRecordsBySource = {};
     for (const src of sources) {
       const records = payrollHistory.filter((rec) => sourceMatchesRecord(rec, src));
-      const payRecords = records.map((r) => {
+      const payrollFileRecords = records.map((r) => {
         const payDate = r.payDate || r.date || r.processedDate || '';
         const amount = payRecordAmount(r);
         return { pay_date: payDate, amount };
-      }).sort((a, b) => (a.pay_date || '').localeCompare(b.pay_date || ''));
+      });
+      const splitRuns = splitRunsBySource[`${src.source_type}:${src.source_id}`] || [];
+      const payRecords = [...payrollFileRecords, ...splitRuns]
+        .sort((a, b) => (a.pay_date || '').localeCompare(b.pay_date || ''));
       const totalPaidFromPayroll = payRecords.reduce((sum, r) => sum + r.amount, 0);
       let amountOwedEstimate = 0;
       if (src.expected_amount > 0 && payRecords.length > 0) {

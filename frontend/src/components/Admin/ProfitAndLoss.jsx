@@ -629,7 +629,7 @@ const ProfitAndLoss = () => {
                 <p className={`text-xs mt-1 ${reimbursements.payroll_history_sync_status.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                   Last payroll sync: {new Date(reimbursements.payroll_history_sync_status.at).toLocaleString()} ({reimbursements.payroll_history_sync_status.reason})
                   {reimbursements.payroll_history_sync_status.ok
-                    ? ` — imported ${reimbursements.payroll_history_sync_status.imported || 0}, source rows ${reimbursements.payroll_history_sync_status.sourceCount || 0}, server total ${reimbursements.payroll_history_sync_status.total || 0}.`
+                    ? ` — imported ${reimbursements.payroll_history_sync_status.imported || 0}, source rows ${reimbursements.payroll_history_sync_status.sourceCount || 0}, server total ${reimbursements.payroll_history_sync_status.total || 0}, split pay runs added ${reimbursements.payroll_history_sync_status.splitRunsInserted || 0}${reimbursements.payroll_history_sync_status.splitRunsWeekEnding ? ` (week ending ${reimbursements.payroll_history_sync_status.splitRunsWeekEnding})` : ''}.`
                     : ` — failed: ${reimbursements.payroll_history_sync_status.error || 'unknown error'}`}
                 </p>
               )}

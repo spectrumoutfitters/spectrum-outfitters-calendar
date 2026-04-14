@@ -186,6 +186,21 @@ export async function ensurePayrollReimbursementsSetup() {
     `);
     await db.runAsync('CREATE INDEX IF NOT EXISTS idx_payroll_reimb_source ON payroll_reimbursements(source_type, source_id)').catch(() => {});
     await db.runAsync('CREATE INDEX IF NOT EXISTS idx_payroll_reimb_date ON payroll_reimbursements(received_date)').catch(() => {});
+
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS payroll_split_pay_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_type TEXT NOT NULL CHECK(source_type IN ('user', 'payroll_person')),
+        source_id INTEGER NOT NULL,
+        week_ending_date TEXT NOT NULL,
+        amount REAL NOT NULL,
+        source_label TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(source_type, source_id, week_ending_date)
+      )
+    `);
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_split_pay_runs_source ON payroll_split_pay_runs(source_type, source_id)').catch(() => {});
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_split_pay_runs_week ON payroll_split_pay_runs(week_ending_date)').catch(() => {});
   } catch (_) {}
 }
 
