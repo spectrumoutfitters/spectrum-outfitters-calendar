@@ -10,7 +10,7 @@ module.exports = {
       name: 'spectrum-raffle',
       script: 'node_modules/.bin/next',
       args: 'start --port 3001',
-      cwd: '/opt/spectrum-raffle',
+      cwd: '/opt/spectrum-raffle/raffle-platform',
       interpreter: 'none',
       env_production: {
         NODE_ENV: 'production',

@@ -26,17 +26,12 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
 
-      - name: Detect backend changes
-        id: changes
+      # Log what changed (optional). Deploy always pushes backend + restarts PM2 so the
+      # DigitalOcean droplet never stays on stale server.js while the UI updates.
+      - name: List changed files
         run: |
-          CHANGED=$(git diff --name-only HEAD~1 HEAD)
           echo "Changed files:"
-          echo "$CHANGED"
-          if echo "$CHANGED" | grep -q "^backend/"; then
-            echo "backend_changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "backend_changed=false" >> $GITHUB_OUTPUT
-          fi
+          git diff --name-only HEAD~1 HEAD || true
 
       # Always build & deploy frontend on main — conditional deploys skipped UI updates when
       # change detection missed paths or users needed the latest bundle/cache-bust.
@@ -54,7 +49,6 @@ jobs:
             root@165.245.137.192:/var/www/spectrum-outfitters/frontend/dist/
 
       - name: Deploy backend
-        if: steps.changes.outputs.backend_changed == 'true'
         run: |
           rsync -avz \
             --exclude='.git' \
@@ -68,10 +62,43 @@ jobs:
             backend/ \
             root@165.245.137.192:/var/www/spectrum-outfitters/backend/
 
-      - name: Restart server
-        if: steps.changes.outputs.backend_changed == 'true'
+      - name: Install deps, migrate, restart PM2 (DigitalOcean)
         run: |
           ssh root@165.245.137.192 "cd /var/www/spectrum-outfitters/backend && npm install && node database/startup.js && pm2 restart spectrum-outfitters"
+
+      # Raffle app: /opt/spectrum-raffle/raffle-platform (PM2 spectrum-raffle, port 3001). One-time server
+      # setup: /etc/spectrum-raffle.env + nginx (see raffle-platform/scripts/SETUP_SERVER.md).
+      - name: Deploy raffle platform (rsync)
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='.env.local' \
+            raffle-platform/ \
+            root@165.245.137.192:/opt/spectrum-raffle/raffle-platform/
+
+      - name: Raffle — install, build, restart PM2
+        run: |
+          ssh root@165.245.137.192 bash -s <<'ENDSSH'
+          set -euo pipefail
+          mkdir -p /var/log/spectrum-raffle
+          cd /opt/spectrum-raffle/raffle-platform
+          if [ -f /etc/spectrum-raffle.env ]; then
+            cp /etc/spectrum-raffle.env .env.local
+            echo "Raffle: synced .env.local from /etc/spectrum-raffle.env"
+          else
+            echo "Raffle: /etc/spectrum-raffle.env not found yet — create it for APPS_SCRIPT_URL (setup page will guide you)."
+          fi
+          npm ci --include=dev
+          npm run build
+          if pm2 describe spectrum-raffle >/dev/null 2>&1; then
+            pm2 restart spectrum-raffle
+          else
+            pm2 start ecosystem.config.cjs --env production
+          fi
+          pm2 save
+          ENDSSH
 
       - name: Reload nginx
         run: |

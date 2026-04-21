@@ -87,7 +87,7 @@ npm install -g pm2
 ## 7. First-time deploy
 
 ```bash
-cd /opt/spectrum-raffle
+cd /opt/spectrum-raffle/raffle-platform
 
 # Copy env
 cp /etc/spectrum-raffle.env .env.local
@@ -111,7 +111,7 @@ pm2 startup
 
 ```bash
 # Copy the nginx config
-cp /opt/spectrum-raffle/scripts/raffle.nginx /etc/nginx/sites-available/spectrum-raffle
+cp /opt/spectrum-raffle/raffle-platform/scripts/raffle.nginx /etc/nginx/sites-available/spectrum-raffle
 
 # Enable it
 ln -s /etc/nginx/sites-available/spectrum-raffle /etc/nginx/sites-enabled/spectrum-raffle
@@ -156,16 +156,18 @@ After this, **https://raffle.spectrumoutfitters.com** is live with SSL. ✅
 
 ## Future deploys
 
-After any code changes, run from the server:
+**Default:** pushing to `main` runs GitHub Actions, which rsyncs `raffle-platform/` to this droplet, runs `npm ci` / `npm run build`, and restarts PM2 (`spectrum-raffle`). No manual step needed.
+
+If you use a **full git clone** at `/opt/spectrum-raffle`, you can also deploy from the server:
 
 ```bash
-bash /opt/spectrum-raffle/scripts/deploy.sh
+bash /opt/spectrum-raffle/raffle-platform/scripts/deploy.sh
 ```
 
 Or from your local machine:
 
 ```bash
-ssh root@165.245.137.192 'bash /opt/spectrum-raffle/scripts/deploy.sh'
+ssh root@165.245.137.192 'bash /opt/spectrum-raffle/raffle-platform/scripts/deploy.sh'
 ```
 
 ---
