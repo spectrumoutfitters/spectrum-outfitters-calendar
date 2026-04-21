@@ -1,16 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import type { EventConfig } from "@/lib/types";
+import { trimBonusProofForSubmit, validateBonusProof } from "@/lib/bonusProof";
 import { computeTicketsFromBonuses, resolveBonusRules } from "@/lib/entryMath";
 import { BonusToggle } from "./BonusToggle";
-import { RaffleCard } from "./RaffleCard";
 
 type Props = {
   event: EventConfig;
 };
+
+/** Even split share for display (e.g. 1 ticket ÷ 4 pools → 0.25). */
+function formatTicketSlice(total: number, pools: number): string {
+  if (pools < 1) return "—";
+  const v = total / pools;
+  if (Number.isInteger(v)) return String(v);
+  const s = v.toFixed(6);
+  return s.replace(/\.?0+$/, "");
+}
 
 export function EventEntryClient({ event }: Props) {
   const searchParams = useSearchParams();
@@ -19,15 +28,17 @@ export function EventEntryClient({ event }: Props) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [raffleId, setRaffleId] = useState(event.raffles[0]?.id ?? "");
-  /** "one" = single pool (default). "every" = split tickets across all active pools. */
-  const [poolChoice, setPoolChoice] = useState<"one" | "every">("one");
-  const [showCustomSplit, setShowCustomSplit] = useState(false);
-  const [splitShares, setSplitShares] = useState<Record<string, number>>({});
+  /** Which prize pool(s) get tickets — at least one must stay on. Order follows event list for API. */
+  const [poolSelected, setPoolSelected] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = Object.fromEntries(event.raffles.map((r) => [r.id, false]));
+    if (event.raffles[0]) init[event.raffles[0].id] = true;
+    return init;
+  });
   const bonusRules = useMemo(() => resolveBonusRules(event), [event]);
   const [bonusById, setBonusById] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(bonusRules.map((r) => [r.id, false])),
   );
+  const [bonusProof, setBonusProof] = useState<Record<string, Record<string, string>>>({});
   const [terms, setTerms] = useState(false);
   const [company, setCompany] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -43,23 +54,44 @@ export function EventEntryClient({ event }: Props) {
     [bonusById, bonusRules],
   );
 
+  const selectedIdsOrdered = useMemo(
+    () => event.raffles.map((r) => r.id).filter((id) => poolSelected[id]),
+    [event.raffles, poolSelected],
+  );
+  const selectedCount = selectedIdsOrdered.length;
+
   const selectedPrize = useMemo(
-    () => event.raffles.find((r) => r.id === raffleId) ?? null,
-    [event.raffles, raffleId],
+    () => (selectedCount === 1 ? (event.raffles.find((r) => r.id === selectedIdsOrdered[0]) ?? null) : null),
+    [event.raffles, selectedCount, selectedIdsOrdered],
   );
 
-  const canSplitAcrossPools = event.raffles.length >= 2;
+  const multiPool = event.raffles.length >= 2;
 
-  useEffect(() => {
-    setSplitShares(Object.fromEntries(event.raffles.map((r) => [r.id, 1])));
-  }, [event.raffles]);
-
-  useEffect(() => {
-    if (!canSplitAcrossPools && poolChoice === "every") setPoolChoice("one");
-  }, [canSplitAcrossPools, poolChoice]);
+  function togglePool(id: string) {
+    setPoolSelected((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      const on = Object.values(next).filter(Boolean).length;
+      if (on === 0) return prev;
+      return next;
+    });
+  }
 
   function setBonus(id: string, v: boolean) {
     setBonusById((prev) => ({ ...prev, [id]: v }));
+    if (!v) {
+      setBonusProof((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+  }
+
+  function updateProof(ruleId: string, fieldId: string, value: string) {
+    setBonusProof((prev) => ({
+      ...prev,
+      [ruleId]: { ...(prev[ruleId] ?? {}), [fieldId]: value },
+    }));
   }
 
   const isDark = event.theme === "dark";
@@ -67,14 +99,20 @@ export function EventEntryClient({ event }: Props) {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    if (poolChoice === "one" && !raffleId) {
+    if (selectedIdsOrdered.length === 0) {
       setStatus("error");
-      setMessage("Choose a prize.");
+      setMessage("Choose at least one prize pool.");
       return;
     }
     if (!terms) {
       setStatus("error");
       setMessage("Please accept the official rules and terms.");
+      return;
+    }
+    const proofErr = validateBonusProof(bonusProof, bonusRules, bonusById);
+    if (proofErr) {
+      setStatus("error");
+      setMessage(proofErr);
       return;
     }
     setStatus("loading");
@@ -92,31 +130,17 @@ export function EventEntryClient({ event }: Props) {
         termsAccepted: terms,
         testMode,
       };
+      const trimmedProof = trimBonusProofForSubmit(bonusProof, bonusRules);
+      if (Object.keys(trimmedProof).length) baseBody.bonusProof = trimmedProof;
 
-      if (poolChoice === "one") {
+      if (selectedIdsOrdered.length === 1) {
         baseBody.ticketMode = "single";
-        baseBody.raffleId = raffleId;
-      } else if (!showCustomSplit) {
+        baseBody.raffleId = selectedIdsOrdered[0];
+      } else {
         baseBody.ticketMode = "split";
         baseBody.splitEvenly = true;
-        baseBody.raffleId = event.raffles[0]?.id ?? "";
-      } else {
-        const ids = event.raffles.map((r) => r.id);
-        const raw = Object.fromEntries(ids.map((id) => [id, Math.max(0, Number(splitShares[id]) || 0)]));
-        const sum = ids.reduce((s, id) => s + (raw[id] as number), 0);
-        baseBody.ticketMode = "split";
-        if (sum <= 0) {
-          baseBody.splitEvenly = true;
-          baseBody.raffleId = event.raffles[0]?.id ?? "";
-        } else {
-          baseBody.splitEvenly = false;
-          const ticketSplit: Record<string, number> = {};
-          for (const id of ids) {
-            ticketSplit[id] = ((raw[id] as number) / sum) * previewTickets;
-          }
-          baseBody.ticketSplit = ticketSplit;
-          baseBody.raffleId = event.raffles[0]?.id ?? "";
-        }
+        baseBody.splitRaffleIds = selectedIdsOrdered;
+        baseBody.raffleId = selectedIdsOrdered[0];
       }
 
       const res = await fetch("/api/entry", {
@@ -138,8 +162,8 @@ export function EventEntryClient({ event }: Props) {
       }
       setStatus("success");
       const splitNote =
-        poolChoice === "every" && typeof data.poolsEntered === "number"
-          ? ` Split across ${data.poolsEntered} prize pools.`
+        selectedIdsOrdered.length > 1 && typeof data.poolsEntered === "number"
+          ? ` Split evenly across ${data.poolsEntered} prize pool${data.poolsEntered === 1 ? "" : "s"}.`
           : "";
       setMessage(
         data.message ||
@@ -209,22 +233,24 @@ export function EventEntryClient({ event }: Props) {
         >
           <p className="text-sm font-semibold tracking-wide text-stone-900 dark:text-neutral-50">Free to enter</p>
           <p className="mt-2 text-pretty text-sm leading-relaxed text-stone-800 dark:text-neutral-200">
-            One submission per phone. Put all your tickets on <strong className="font-semibold">one</strong> prize, or share
-            them across <strong className="font-semibold">every</strong> pool for a shot at each drawing —{" "}
+            One submission per phone. Choose <strong className="font-semibold">one</strong> prize pool for all your tickets,
+            or check <strong className="font-semibold">several</strong> pools — your tickets are then{" "}
+            <strong className="font-semibold">split evenly</strong> only across the pools you picked (fractions allowed,
+            e.g. 1 ticket across 4 pools = 0.25 each).{" "}
             <span className="font-semibold" style={{ color: accent }}>
-              no purchase necessary
+              No purchase necessary
             </span>
             .
           </p>
           <p className="mt-3 text-pretty text-left text-[13px] leading-snug text-stone-600 dark:text-neutral-400">
-            Splitting divides your total tickets (including bonuses) across pools. How that works is spelled out in the{" "}
+            Each pool is drawn separately. Details are in the{" "}
             <Link
               href="/legal/rules#how-to-enter"
               className="font-semibold text-amber-800 underline decoration-amber-800/30 underline-offset-2 hover:underline dark:text-amber-300 dark:decoration-amber-300/30"
             >
-              Official Rules (§4)
+              Official Rules
             </Link>
-            . Each pool is drawn separately.
+            .
           </p>
         </div>
 
@@ -285,11 +311,93 @@ export function EventEntryClient({ event }: Props) {
           </section>
 
           <section className="rounded-3xl border border-stone-200 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80 sm:p-6 md:p-8">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-base font-semibold text-stone-900 dark:text-neutral-100 sm:text-lg">Extra entries</h2>
+                <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-neutral-400">
+                  Optional ways to stack tickets after the basics above. We save @handles and links so our team can verify
+                  follows, tags, and reviews before prizes — this form does not log into Instagram or Facebook for you.
+                </p>
+              </div>
+              <div className="shrink-0 rounded-2xl bg-stone-100 px-4 py-2 text-center dark:bg-neutral-800/90">
+                <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-neutral-500">Total now</p>
+                <p className="text-2xl font-semibold tabular-nums text-stone-900 dark:text-neutral-50">{previewTickets}</p>
+                <p className="text-xs text-stone-500 dark:text-neutral-500">tickets</p>
+              </div>
+            </div>
+            <div className="mt-5 space-y-5">
+              {bonusRules.map((r) => (
+                <div
+                  key={r.id}
+                  className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white/70 dark:border-neutral-800 dark:bg-neutral-950/40"
+                >
+                  <BonusToggle
+                    title={r.label}
+                    description={r.description || "Optional — we may verify before awarding prizes."}
+                    points={r.tickets}
+                    checked={Boolean(bonusById[r.id])}
+                    onChange={(v) => setBonus(r.id, v)}
+                  />
+                  {bonusById[r.id] ? (
+                    <div className="border-t border-stone-200/80 px-4 pb-4 pt-3 dark:border-neutral-800">
+                      {r.actionUrl ? (
+                        <a
+                          href={r.actionUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mb-4 inline-flex min-h-11 touch-manipulation items-center justify-center rounded-xl border px-4 text-sm font-semibold text-stone-900 shadow-sm dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100"
+                          style={{ borderColor: `${accent}66`, color: isDark ? "#fafaf9" : "#0c0a09" }}
+                        >
+                          {r.actionLabel ?? "Open link"}
+                        </a>
+                      ) : null}
+                      {r.proofFields?.length ? (
+                        <div className="space-y-4">
+                          {r.proofFields.map((f) => (
+                            <label key={f.id} className="block">
+                              <span className="text-sm font-medium text-stone-800 dark:text-neutral-200">
+                                {f.label}
+                                {f.requiredWhenBonus ? (
+                                  <span className="text-red-600 dark:text-red-400"> *</span>
+                                ) : null}
+                              </span>
+                              {f.input === "textarea" ? (
+                                <textarea
+                                  className="mt-2 min-h-[5.5rem] w-full touch-manipulation rounded-xl border border-stone-200 bg-white px-3 py-3 text-base text-stone-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
+                                  value={bonusProof[r.id]?.[f.id] ?? ""}
+                                  onChange={(e) => updateProof(r.id, f.id, e.target.value)}
+                                  placeholder={f.placeholder}
+                                  autoComplete="off"
+                                />
+                              ) : (
+                                <input
+                                  type={f.input === "url" ? "url" : "text"}
+                                  className="mt-2 min-h-12 w-full touch-manipulation rounded-xl border border-stone-200 bg-white px-3 py-3 text-base text-stone-900 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
+                                  value={bonusProof[r.id]?.[f.id] ?? ""}
+                                  onChange={(e) => updateProof(r.id, f.id, e.target.value)}
+                                  placeholder={f.placeholder}
+                                  autoComplete="off"
+                                />
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-stone-200 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80 sm:p-6 md:p-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 flex-1">
                 <h2 className="text-base font-semibold text-stone-900 dark:text-neutral-100 sm:text-lg">Your tickets</h2>
                 <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-neutral-400">
-                  Includes your base entry plus any bonuses you turn on below. Choose how those tickets count toward prizes.
+                  Includes your base entry plus any extras you turned on. Check every pool you want a chance in — one pool
+                  gets all tickets; several pools split your total <span className="font-medium">evenly</span> across only
+                  those lines.
                 </p>
               </div>
               <div className="flex shrink-0 items-center justify-between gap-3 rounded-2xl bg-stone-100 px-4 py-3 dark:bg-neutral-800/90 sm:flex-col sm:items-center sm:py-4">
@@ -299,116 +407,105 @@ export function EventEntryClient({ event }: Props) {
               </div>
             </div>
 
-            {canSplitAcrossPools ? (
-              <div
-                className="mt-6 flex flex-col gap-1.5 rounded-2xl border border-stone-200/80 bg-stone-50/90 p-1.5 dark:border-neutral-700 dark:bg-neutral-950/80 sm:flex-row sm:gap-1"
-                role="tablist"
-                aria-label="How to use your tickets"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={poolChoice === "one"}
-                  onClick={() => {
-                    setPoolChoice("one");
-                    setShowCustomSplit(false);
-                  }}
-                  className={[
-                    "min-h-[3rem] flex-1 touch-manipulation rounded-xl px-4 py-3 text-center text-sm font-semibold transition sm:min-h-[2.75rem]",
-                    poolChoice === "one"
-                      ? "bg-white text-stone-900 shadow-sm dark:bg-neutral-800 dark:text-neutral-50"
-                      : "text-stone-600 dark:text-neutral-500",
-                  ].join(" ")}
-                >
-                  One prize · all tickets here
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={poolChoice === "every"}
-                  onClick={() => setPoolChoice("every")}
-                  className={[
-                    "min-h-[3rem] flex-1 touch-manipulation rounded-xl px-4 py-3 text-center text-sm font-semibold transition sm:min-h-[2.75rem]",
-                    poolChoice === "every"
-                      ? "bg-white text-stone-900 shadow-sm dark:bg-neutral-800 dark:text-neutral-50"
-                      : "text-stone-600 dark:text-neutral-500",
-                  ].join(" ")}
-                >
-                  Every pool · tickets split
-                </button>
-              </div>
-            ) : null}
-
-            {poolChoice === "one" ? (
+            {multiPool ? (
               <>
                 <p className="mt-5 text-sm leading-relaxed text-stone-600 dark:text-neutral-400">
-                  Tap a card — big touch targets, easy on phones.
+                  <span className="font-semibold text-stone-900 dark:text-neutral-100">{selectedCount}</span> pool
+                  {selectedCount === 1 ? "" : "s"} selected
+                  {selectedCount >= 2 ? (
+                    <>
+                      {" "}
+                      — even split:{" "}
+                      <span className="font-semibold tabular-nums text-stone-900 dark:text-neutral-100">
+                        {formatTicketSlice(previewTickets, selectedCount)}
+                      </span>{" "}
+                      of your total per selected pool.
+                    </>
+                  ) : (
+                    <> — all {previewTickets} ticket{previewTickets === 1 ? "" : "s"} count in that drawing.</>
+                  )}
                 </p>
-                <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  {event.raffles.map((r) => (
-                    <RaffleCard
-                      key={r.id}
-                      raffle={r}
-                      selected={raffleId === r.id}
-                      onSelect={setRaffleId}
-                      accent={accent}
-                    />
-                  ))}
+                <div className="mt-4 space-y-3" role="group" aria-label="Prize pools">
+                  {event.raffles.map((r) => {
+                    const checked = Boolean(poolSelected[r.id]);
+                    const slice =
+                      selectedCount >= 2 && checked ? formatTicketSlice(previewTickets, selectedCount) : null;
+                    return (
+                      <label
+                        key={r.id}
+                        className={[
+                          "flex min-h-[5.5rem] cursor-pointer touch-manipulation gap-4 rounded-2xl border p-4 transition sm:min-h-[5rem] sm:p-5",
+                          checked
+                            ? "border-transparent ring-2 ring-offset-2 ring-offset-stone-50 dark:ring-offset-neutral-950"
+                            : "border-stone-200 bg-white/80 dark:border-neutral-800 dark:bg-neutral-900/75",
+                        ].join(" ")}
+                        style={
+                          checked
+                            ? ({
+                                boxShadow: `0 12px 40px -16px ${accent}66`,
+                                ["--tw-ring-color" as string]: accent,
+                              } as CSSProperties)
+                            : undefined
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => togglePool(r.id)}
+                          className="mt-1 h-6 w-6 shrink-0 rounded-md border-stone-300 text-amber-600 focus:ring-amber-500 dark:border-neutral-600 dark:bg-neutral-900"
+                        />
+                        <div className="relative h-[4.25rem] w-[4.25rem] shrink-0 overflow-hidden rounded-xl bg-stone-100 dark:bg-neutral-800">
+                          {r.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={r.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                          ) : (
+                            <div
+                              className="flex h-full w-full items-center justify-center text-lg font-bold text-white"
+                              style={{ background: `linear-gradient(135deg, ${accent}, #1c1917)` }}
+                            >
+                              {r.title.slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <p className="text-base font-bold leading-snug text-stone-900 dark:text-neutral-50">{r.title}</p>
+                            {slice != null ? (
+                              <span
+                                className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold tabular-nums text-stone-900 dark:text-neutral-50"
+                                style={{
+                                  backgroundColor: `${accent}22`,
+                                  border: `1px solid ${accent}55`,
+                                }}
+                              >
+                                {slice} each
+                              </span>
+                            ) : null}
+                          </div>
+                          {r.subtitle ? (
+                            <p className="mt-1 line-clamp-2 text-sm text-stone-600 dark:text-neutral-400">{r.subtitle}</p>
+                          ) : null}
+                          {r.valueLabel?.trim() ? (
+                            <p className="mt-2 text-xs font-semibold text-stone-600 dark:text-neutral-400">
+                              <span style={{ color: accent }}>{r.valueLabel.trim()}</span>
+                            </p>
+                          ) : null}
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
               </>
-            ) : (
-              <div className="mt-6 rounded-2xl border border-stone-200/80 bg-stone-50/50 px-4 py-5 dark:border-neutral-700 dark:bg-neutral-950/40">
-                <p className="text-sm leading-relaxed text-stone-700 dark:text-neutral-300">
-                  Your <span className="font-semibold text-stone-900 dark:text-white">{previewTickets}</span> tickets are divided
-                  across <span className="font-semibold">{event.raffles.length}</span> drawings (equal by default). You stay one
-                  entrant; each pool only counts its slice of your tickets.
-                </p>
-                <ul className="mt-4 space-y-2.5 text-sm text-stone-600 dark:text-neutral-400">
-                  {event.raffles.map((r) => (
-                    <li key={r.id} className="flex items-center gap-3">
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} aria-hidden />
-                      <span className="font-medium text-stone-800 dark:text-neutral-200">{r.title}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  onClick={() => setShowCustomSplit((v) => !v)}
-                  className="mt-5 min-h-11 touch-manipulation text-left text-sm font-semibold text-amber-800 underline decoration-amber-800/40 underline-offset-2 dark:text-amber-300 dark:decoration-amber-300/40"
-                >
-                  {showCustomSplit ? "Use equal split instead" : "Custom split (optional)"}
-                </button>
-                {showCustomSplit ? (
-                  <div className="mt-4 space-y-3 rounded-xl border border-stone-200 bg-white/90 p-4 dark:border-neutral-700 dark:bg-neutral-900/80">
-                    <p className="text-xs leading-relaxed text-stone-500 dark:text-neutral-500">
-                      Enter positive weights — we scale them to your {previewTickets} tickets. See rules for how draws use
-                      splits.
-                    </p>
-                    {event.raffles.map((r) => (
-                      <label key={r.id} className="flex min-h-12 items-center gap-3 text-sm">
-                        <span className="min-w-0 flex-1 font-medium text-stone-800 dark:text-neutral-200">{r.title}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          inputMode="decimal"
-                          className="min-h-12 w-[6.5rem] shrink-0 touch-manipulation rounded-xl border border-stone-200 bg-white px-3 text-right text-base tabular-nums text-stone-900 dark:border-neutral-600 dark:bg-neutral-950 dark:text-neutral-100"
-                          value={splitShares[r.id] ?? 0}
-                          onChange={(e) =>
-                            setSplitShares((prev) => ({
-                              ...prev,
-                              [r.id]: Math.max(0, Number(e.target.value) || 0),
-                            }))
-                          }
-                        />
-                      </label>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            )}
+            ) : null}
 
-            {poolChoice === "one" && selectedPrize ? (
+            {!multiPool ? (
+              <p className="mt-5 text-sm text-stone-600 dark:text-neutral-400">
+                All <span className="font-semibold text-stone-900 dark:text-neutral-100">{previewTickets}</span> ticket
+                {previewTickets === 1 ? "" : "s"} apply to this prize.
+              </p>
+            ) : null}
+
+            {selectedCount === 1 && selectedPrize ? (
               <div
                 className="mt-6 rounded-2xl border border-stone-200/90 p-4 sm:mt-8 sm:p-5 dark:border-neutral-700 dark:bg-neutral-950/30"
                 style={{
@@ -431,25 +528,6 @@ export function EventEntryClient({ event }: Props) {
                 )}
               </div>
             ) : null}
-          </section>
-
-          <section className="rounded-3xl border border-stone-200 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80 sm:p-6 md:p-8">
-            <h2 className="text-base font-semibold text-stone-900 dark:text-neutral-100 sm:text-lg">Bonus tickets</h2>
-            <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-neutral-400">
-              Optional — we may verify before prizes are awarded.
-            </p>
-            <div className="mt-5 space-y-2 sm:space-y-3">
-              {bonusRules.map((r) => (
-                <BonusToggle
-                  key={r.id}
-                  title={r.label}
-                  description={r.description || "We may verify before awarding prizes."}
-                  points={r.tickets}
-                  checked={Boolean(bonusById[r.id])}
-                  onChange={(v) => setBonus(r.id, v)}
-                />
-              ))}
-            </div>
           </section>
 
           {/* Honeypot */}

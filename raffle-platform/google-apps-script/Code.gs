@@ -22,11 +22,14 @@
  *   - valueLabel: short text shown on the entry page (e.g. "$450+ retail · No purchase necessary")
  *
  * Events — optional column:
- *   bonusRulesJson: JSON array of { "id": "instagram", "label": "…", "description": "…", "tickets": 2 }
- *   If blank, defaults are Instagram (+2), Review (+5), Referral (+3).
+ *   bonusRulesJson: JSON array of bonus rules. Each object may include:
+ *   id, label, description, tickets, actionUrl, actionLabel, proofFields (array of
+ *   { id, input: "text"|"url"|"textarea", label, placeholder, requiredWhenBonus }).
+ *   If blank, built-in defaults match the raffle app (Instagram, TikTok, Facebook, story tag, review, referral).
  *
  * Entries (created automatically in column order)
  *   timestamp, slug, name, phone, email, raffleId, bonusInstagram, bonusReview, bonusReferral, totalEntries, isTest, ip, userAgent, extrasJson
+ *   — extrasJson includes per-id bonus toggles plus optional __bonusProof (handles/links for staff verification).
  *   — totalEntries may be fractional when ticketMode is "split" (one sheet row per pool; weights sum to the entrant's full ticket count).
  *
  * Winners (optional but recommended)
@@ -89,12 +92,100 @@ function recordToObject_(headers, row) {
   return o;
 }
 
+var RAFFLE_DEFAULT_IG_ = 'https://www.instagram.com/spectrumoutfitters/';
+var RAFFLE_DEFAULT_TT_ = 'https://www.tiktok.com/@spectrumoutfitters';
+var RAFFLE_DEFAULT_FB_ = 'https://www.facebook.com/spectrumoutfitters';
+
 function getDefaultBonuses_() {
   return [
-    { id: 'instagram', label: 'Instagram follow or story mention', description: 'Follow us and tag the shop.', tickets: 2 },
-    { id: 'review', label: 'Leave a review', description: 'Google or Facebook review for the business.', tickets: 5 },
-    { id: 'referral', label: 'Refer a friend', description: 'Friend must mention your name on their entry.', tickets: 3 },
+    {
+      id: 'instagram',
+      label: 'Instagram — follow us',
+      description: 'Follow the shop, then leave your @ so we can match your account before prizes.',
+      tickets: 3,
+      actionUrl: RAFFLE_DEFAULT_IG_,
+      actionLabel: 'Open Instagram',
+      proofFields: [
+        { id: 'handle', input: 'text', label: 'Your Instagram @username', placeholder: '@yourhandle', requiredWhenBonus: true },
+      ],
+    },
+    {
+      id: 'tiktok',
+      label: 'TikTok — follow us',
+      description: 'Follow on TikTok for extra entries. We verify follows manually if you win.',
+      tickets: 2,
+      actionUrl: RAFFLE_DEFAULT_TT_,
+      actionLabel: 'Open TikTok',
+      proofFields: [
+        { id: 'handle', input: 'text', label: 'Your TikTok @username', placeholder: '@yourhandle', requiredWhenBonus: true },
+      ],
+    },
+    {
+      id: 'facebook',
+      label: 'Facebook — like our page',
+      description: 'Like Spectrum Outfitters on Facebook (public page). Optional note helps us verify.',
+      tickets: 2,
+      actionUrl: RAFFLE_DEFAULT_FB_,
+      actionLabel: 'Open Facebook',
+      proofFields: [
+        { id: 'note', input: 'text', label: 'First name on Facebook (optional)', placeholder: 'So we can spot your like', requiredWhenBonus: false },
+      ],
+    },
+    {
+      id: 'story_tag',
+      label: 'Story or reel — tag us',
+      description: 'Post a public story or reel tagging the shop. Link helps us verify faster.',
+      tickets: 4,
+      actionUrl: '',
+      actionLabel: '',
+      proofFields: [
+        { id: 'handle', input: 'text', label: 'Your @ on that post', placeholder: '@yourhandle', requiredWhenBonus: true },
+        { id: 'postUrl', input: 'url', label: 'Link to the post (optional)', placeholder: 'https://…', requiredWhenBonus: false },
+      ],
+    },
+    {
+      id: 'review',
+      label: 'Leave a review',
+      description: 'Google, Facebook, Yelp, etc. Tell us where and (if you can) paste the review link.',
+      tickets: 6,
+      actionUrl: '',
+      actionLabel: '',
+      proofFields: [
+        { id: 'platform', input: 'text', label: 'Where did you review?', placeholder: 'e.g. Google Maps, Facebook', requiredWhenBonus: true },
+        { id: 'reviewUrl', input: 'url', label: 'Link to your review (optional)', placeholder: 'https://…', requiredWhenBonus: false },
+      ],
+    },
+    {
+      id: 'referral',
+      label: 'Refer a friend',
+      description: 'They must submit their own entry and type your full name when asked.',
+      tickets: 4,
+      actionUrl: '',
+      actionLabel: '',
+      proofFields: [
+        { id: 'friendName', input: 'text', label: "Friend's full name (as they'll enter it)", placeholder: 'First Last', requiredWhenBonus: true },
+      ],
+    },
   ];
+}
+
+function cloneProofFieldsFromBonus_(b) {
+  if (!b || !Array.isArray(b.proofFields)) return [];
+  var out = [];
+  for (var i = 0; i < b.proofFields.length; i++) {
+    var f = b.proofFields[i];
+    if (!f || typeof f !== 'object') continue;
+    var id = String(f.id || '').trim();
+    if (!id) continue;
+    out.push({
+      id: id,
+      input: String(f.input || 'text'),
+      label: String(f.label || id),
+      placeholder: f.placeholder != null ? String(f.placeholder) : '',
+      requiredWhenBonus: Boolean(f.requiredWhenBonus),
+    });
+  }
+  return out;
 }
 
 function parseBonusRulesFromRow_(o) {
@@ -111,11 +202,16 @@ function parseBonusRulesFromRow_(o) {
       if (!id) continue;
       var tickets = Number(b.tickets);
       if (!tickets || tickets < 1 || tickets > 100) tickets = 1;
+      var actionUrl = b.actionUrl != null ? String(b.actionUrl).trim() : '';
+      var actionLabel = b.actionLabel != null ? String(b.actionLabel).trim() : '';
       out.push({
         id: id,
         label: String(b.label || id),
         description: String(b.description || ''),
         tickets: tickets,
+        actionUrl: actionUrl,
+        actionLabel: actionLabel,
+        proofFields: cloneProofFieldsFromBonus_(b),
       });
     }
     if (!out.length) return getDefaultBonuses_();
@@ -123,6 +219,58 @@ function parseBonusRulesFromRow_(o) {
   } catch (err) {
     return getDefaultBonuses_();
   }
+}
+
+function validateBonusProof_(proof, rules, bonusById) {
+  proof = proof && typeof proof === 'object' && !Array.isArray(proof) ? proof : {};
+  for (var i = 0; i < rules.length; i++) {
+    var rule = rules[i];
+    if (!bonusById[rule.id]) continue;
+    var fields = rule.proofFields || [];
+    for (var j = 0; j < fields.length; j++) {
+      var f = fields[j];
+      if (!f.requiredWhenBonus) continue;
+      var sub = proof[rule.id];
+      var v = sub && sub[f.id] != null ? String(sub[f.id]).trim() : '';
+      if (!v) {
+        return 'Please fill in "' + f.label + '" for ' + rule.label + ' (required for those bonus tickets).';
+      }
+    }
+    for (var k = 0; k < fields.length; k++) {
+      var ff = fields[k];
+      if (String(ff.input) !== 'url') continue;
+      var sub2 = proof[rule.id];
+      var v2 = sub2 && sub2[ff.id] != null ? String(sub2[ff.id]).trim() : '';
+      if (!v2) continue;
+      if (!/^https:\/\//i.test(v2)) {
+        return 'For ' + rule.label + ', use an https:// link in "' + ff.label + '".';
+      }
+    }
+  }
+  return null;
+}
+
+function trimBonusProofForSubmit_(proof, rules) {
+  proof = proof && typeof proof === 'object' && !Array.isArray(proof) ? proof : {};
+  var out = {};
+  for (var i = 0; i < rules.length; i++) {
+    var rule = rules[i];
+    var sub = proof[rule.id];
+    if (!sub || typeof sub !== 'object' || Array.isArray(sub)) continue;
+    var cleaned = {};
+    var fields = rule.proofFields || [];
+    for (var j = 0; j < fields.length; j++) {
+      var f = fields[j];
+      var v = sub[f.id] != null ? String(sub[f.id]).trim().slice(0, 500) : '';
+      if (v) cleaned[f.id] = v;
+    }
+    var keys = [];
+    for (var key in cleaned) {
+      if (cleaned.hasOwnProperty(key)) keys.push(key);
+    }
+    if (keys.length) out[rule.id] = cleaned;
+  }
+  return out;
 }
 
 function computeTicketsFromBonuses_(bonusById, rules) {
@@ -514,7 +662,7 @@ function legacyBonusBooleans_(bonusById) {
 }
 
 /** One Entries row; rowTickets can be fractional for split pools. extras merges bonus toggles + optional __split* audit fields. */
-function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta, testMode, ip, userAgent) {
+function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta, testMode, ip, userAgent, bonusProofTrimmed) {
   var b = bonusById || {};
   var extras = {};
   Object.keys(b).forEach(function (k) {
@@ -525,6 +673,10 @@ function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowT
     extras.__splitTotalTickets = splitMeta.totalAll;
     extras.__rowTickets = rowTickets;
     extras.__splitEvenly = splitMeta.evenly === true;
+  }
+  if (bonusProofTrimmed && typeof bonusProofTrimmed === 'object' && !Array.isArray(bonusProofTrimmed)) {
+    var pk = Object.keys(bonusProofTrimmed);
+    if (pk.length) extras.__bonusProof = bonusProofTrimmed;
   }
   var bb = legacyBonusBooleans_(b);
   appendEntry_([
@@ -546,30 +698,70 @@ function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowT
 }
 
 /**
- * ticketMode "split": one row per active pool with fractional tickets.
- * splitEvenly !== false with no valid ticketSplit → equal division.
- * splitEvenly === false → ticketSplit must sum to totalEntries (± tolerance).
+ * ticketMode "split": one row per pool with fractional tickets.
+ * - splitRaffleIds (array, length >= 2, each id active): equal split across that subset only.
+ * - Else splitEvenly !== false (or no ticketSplit): equal split across all active pools.
+ * - Else: legacy custom ticketSplit must sum to totalEntries (± tolerance).
  */
 function buildTicketSplitPlan_(p, raffles, totalEntries) {
-  var ids = [];
-  for (var i = 0; i < raffles.length; i++) ids.push(raffles[i].id);
-  if (!ids.length) return null;
-  if (ids.length < 2) {
-    throw new Error('Only one prize pool — use single-pool entry.');
+  var allIds = [];
+  for (var i = 0; i < raffles.length; i++) allIds.push(raffles[i].id);
+  if (!allIds.length) return null;
+
+  var targetIds = [];
+  var rawSplit = p.splitRaffleIds;
+  if (Array.isArray(rawSplit) && rawSplit.length) {
+    var seenPick = {};
+    for (var si = 0; si < rawSplit.length; si++) {
+      var rid = String(rawSplit[si] || '').trim();
+      if (!rid || seenPick[rid]) continue;
+      var foundR = false;
+      for (var t = 0; t < raffles.length; t++) {
+        if (raffles[t].id === rid) {
+          foundR = true;
+          break;
+        }
+      }
+      if (!foundR) throw new Error('Invalid pool in selection: ' + rid);
+      seenPick[rid] = true;
+      targetIds.push(rid);
+    }
+  } else {
+    targetIds = allIds.slice();
   }
-  var explicitCustom = p.splitEvenly === false && p.ticketSplit && typeof p.ticketSplit === 'object';
+
+  if (targetIds.length < 2) {
+    throw new Error('Split needs at least two prize pools — use single-pool entry for one pool.');
+  }
+
+  var explicitCustom =
+    (!Array.isArray(rawSplit) || !rawSplit.length) &&
+    p.splitEvenly === false &&
+    p.ticketSplit &&
+    typeof p.ticketSplit === 'object';
+
   if (!explicitCustom) {
-    var n = ids.length;
-    var each = totalEntries / n;
+    var n = targetIds.length;
     var rowsE = [];
-    for (var j = 0; j < n; j++) rowsE.push({ raffleId: ids[j], weight: each });
+    var acc = 0;
+    for (var j = 0; j < n; j++) {
+      var wj;
+      if (j === n - 1) {
+        wj = totalEntries - acc;
+      } else {
+        wj = totalEntries / n;
+        acc += wj;
+      }
+      rowsE.push({ raffleId: targetIds[j], weight: wj });
+    }
     return { rows: rowsE, evenly: true };
   }
+
   var raw = p.ticketSplit || {};
   var rowsC = [];
   var sum = 0;
-  for (var k = 0; k < ids.length; k++) {
-    var id = ids[k];
+  for (var k = 0; k < allIds.length; k++) {
+    var id = allIds[k];
     var w = Number(raw[id]);
     if (!(w >= 0) || isNaN(w)) w = 0;
     rowsC.push({ raffleId: id, weight: w });
@@ -679,7 +871,33 @@ function handleSubmitEntry_(data) {
 
   var raffles = getRafflesForSlug_(slug);
   if (ticketMode === 'split') {
-    if (raffles.length < 2) {
+    var srPick = p.splitRaffleIds;
+    if (Array.isArray(srPick) && srPick.length) {
+      var seenPick = {};
+      var nUnique = 0;
+      for (var pi = 0; pi < srPick.length; pi++) {
+        var pid = String(srPick[pi] || '').trim();
+        if (!pid || seenPick[pid]) continue;
+        seenPick[pid] = true;
+        var okPick = raffles.some(function (r) {
+          return r.id === pid;
+        });
+        if (!okPick) {
+          return jsonResponse({ ok: false, error: 'Unknown prize pool in selection.', code: 'raffle' }, 400);
+        }
+        nUnique++;
+      }
+      if (nUnique < 2) {
+        return jsonResponse(
+          {
+            ok: false,
+            error: 'Pick at least two prize pools to split tickets, or one pool for all tickets.',
+            code: 'split_pools',
+          },
+          400
+        );
+      }
+    } else if (raffles.length < 2) {
       return jsonResponse({ ok: false, error: 'Need at least two prize pools to split tickets.', code: 'split_pools' }, 400);
     }
   } else {
@@ -703,6 +921,13 @@ function handleSubmitEntry_(data) {
     bonusById.review = Boolean(p.bonusReview);
     bonusById.referral = Boolean(p.bonusReferral);
   }
+
+  var proofErr = validateBonusProof_(p.bonusProof, bonuses, bonusById);
+  if (proofErr) {
+    return jsonResponse({ ok: false, error: proofErr, code: 'bonus_proof' }, 400);
+  }
+  var bonusProofTrimmed = trimBonusProofForSubmit_(p.bonusProof, bonuses);
+
   var testMode = Boolean(p.testMode);
 
   var defaultTest =
@@ -756,7 +981,8 @@ function handleSubmitEntry_(data) {
           { split: true, totalAll: totalEntries, evenly: plan.evenly },
           testMode,
           ip,
-          ua
+          ua,
+          bonusProofTrimmed
         );
         written++;
       }
@@ -772,7 +998,7 @@ function handleSubmitEntry_(data) {
       });
     }
 
-    appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, totalEntries, null, testMode, ip, ua);
+    appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, totalEntries, null, testMode, ip, ua, bonusProofTrimmed);
     return jsonResponse({ ok: true, totalEntries: totalEntries, ticketMode: 'single', testMode: testMode });
   } catch (errSplit) {
     var msg = String(errSplit && errSplit.message ? errSplit.message : errSplit);

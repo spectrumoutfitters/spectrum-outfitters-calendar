@@ -8,12 +8,28 @@ export type RaffleOption = {
   sortOrder: number;
 };
 
+/** One optional field when a bonus is checked (for staff verification; stored in sheet `extrasJson.__bonusProof`). */
+export type BonusProofField = {
+  id: string;
+  label: string;
+  placeholder?: string;
+  /** default "text" */
+  input?: "text" | "textarea" | "url";
+  /** If true, entrant must fill this before submit when the bonus is on. */
+  requiredWhenBonus?: boolean;
+};
+
 /** Optional ticket multipliers — configure per event in Sheet column `bonusRulesJson` (JSON array). */
 export type BonusRule = {
   id: string;
   label: string;
   description?: string;
   tickets: number;
+  /** Shown when the bonus is checked; answers saved for manual verification (no Instagram API in this build). */
+  proofFields?: BonusProofField[];
+  /** Opens in a new tab — e.g. your Instagram profile. */
+  actionUrl?: string;
+  actionLabel?: string;
 };
 
 export type EventBranding = {
@@ -44,12 +60,19 @@ export type EntryPayload = {
   raffleId?: string;
   /** "single" = one pool (default). "split" = one sheet row per active pool with fractional tickets. */
   ticketMode?: "single" | "split";
-  /** With ticketMode "split": true = equal split across all pools; false = use ticketSplit. */
+  /** With ticketMode "split": true = equal split; false = use ticketSplit (legacy). */
   splitEvenly?: boolean;
+  /**
+   * When ticketMode is "split": optional subset of raffle ids to split across (even weights only).
+   * Omit to split across all active pools (legacy). Must include at least two valid ids when set.
+   */
+  splitRaffleIds?: string[];
   /** Pool id → ticket weight; must sum to full ticket count when splitEvenly is false. */
   ticketSplit?: Record<string, number>;
   /** Per bonus id from event rules — preferred for dynamic bonuses */
   bonusById?: Record<string, boolean>;
+  /** Optional answers keyed by bonus rule id, then proof field id. */
+  bonusProof?: Record<string, Record<string, string>>;
   bonusInstagram?: boolean;
   bonusReview?: boolean;
   bonusReferral?: boolean;

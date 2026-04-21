@@ -1,24 +1,129 @@
 import type { BonusRule } from "@/lib/types";
 
-/** Used when the Google Sheet Events row has no `bonusRulesJson`. */
+const IG =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_RAFFLE_INSTAGRAM_URL) ||
+  "https://www.instagram.com/spectrumoutfitters/";
+const TT =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_RAFFLE_TIKTOK_URL) ||
+  "https://www.tiktok.com/@spectrumoutfitters";
+const FB =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_RAFFLE_FACEBOOK_URL) ||
+  "https://www.facebook.com/spectrumoutfitters";
+
+/**
+ * Default bonus ladder when Events.bonusRulesJson is empty.
+ * Proof fields are stored for staff to verify (no OAuth to Meta/TikTok in this app — see Official Rules).
+ */
 export const DEFAULT_BONUS_RULES: BonusRule[] = [
   {
     id: "instagram",
-    label: "Instagram follow or story mention",
-    description: "Follow us and tag the shop.",
+    label: "Instagram — follow us",
+    description: "Follow the shop, then leave your @ so we can match your account before prizes.",
+    tickets: 3,
+    actionUrl: IG,
+    actionLabel: "Open Instagram",
+    proofFields: [
+      {
+        id: "handle",
+        input: "text",
+        label: "Your Instagram @username",
+        placeholder: "@yourhandle",
+        requiredWhenBonus: true,
+      },
+    ],
+  },
+  {
+    id: "tiktok",
+    label: "TikTok — follow us",
+    description: "Follow on TikTok for extra entries. We verify follows manually if you win.",
     tickets: 2,
+    actionUrl: TT,
+    actionLabel: "Open TikTok",
+    proofFields: [
+      {
+        id: "handle",
+        input: "text",
+        label: "Your TikTok @username",
+        placeholder: "@yourhandle",
+        requiredWhenBonus: true,
+      },
+    ],
+  },
+  {
+    id: "facebook",
+    label: "Facebook — like our page",
+    description: "Like Spectrum Outfitters on Facebook (public page). Optional note helps us verify.",
+    tickets: 2,
+    actionUrl: FB,
+    actionLabel: "Open Facebook",
+    proofFields: [
+      {
+        id: "note",
+        input: "text",
+        label: "First name on Facebook (optional)",
+        placeholder: "So we can spot your like",
+        requiredWhenBonus: false,
+      },
+    ],
+  },
+  {
+    id: "story_tag",
+    label: "Story or reel — tag us",
+    description: "Post a public story or reel tagging the shop. Link helps us verify faster.",
+    tickets: 4,
+    proofFields: [
+      {
+        id: "handle",
+        input: "text",
+        label: "Your @ on that post",
+        placeholder: "@yourhandle",
+        requiredWhenBonus: true,
+      },
+      {
+        id: "postUrl",
+        input: "url",
+        label: "Link to the post (optional)",
+        placeholder: "https://…",
+        requiredWhenBonus: false,
+      },
+    ],
   },
   {
     id: "review",
     label: "Leave a review",
-    description: "Google or Facebook review for the business.",
-    tickets: 5,
+    description: "Google, Facebook, Yelp, etc. Tell us where and (if you can) paste the review link.",
+    tickets: 6,
+    proofFields: [
+      {
+        id: "platform",
+        input: "text",
+        label: "Where did you review?",
+        placeholder: "e.g. Google Maps, Facebook",
+        requiredWhenBonus: true,
+      },
+      {
+        id: "reviewUrl",
+        input: "url",
+        label: "Link to your review (optional)",
+        placeholder: "https://…",
+        requiredWhenBonus: false,
+      },
+    ],
   },
   {
     id: "referral",
     label: "Refer a friend",
-    description: "Friend must mention your name on their entry.",
-    tickets: 3,
+    description: "They must submit their own entry and type your full name when asked.",
+    tickets: 4,
+    proofFields: [
+      {
+        id: "friendName",
+        input: "text",
+        label: "Friend's full name (as they'll enter it)",
+        placeholder: "First Last",
+        requiredWhenBonus: true,
+      },
+    ],
   },
 ];
 

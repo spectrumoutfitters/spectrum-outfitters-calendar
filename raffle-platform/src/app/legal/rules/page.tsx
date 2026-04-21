@@ -47,23 +47,29 @@ export default function RulesPage() {
       </p>
       <p>
         <strong className="text-neutral-100">One submission per phone number per event.</strong> You may either (a){" "}
-        <strong className="text-neutral-100">focus all of your tickets on a single prize pool</strong> you select on the
-        form, or (b) if the entry page offers it, <strong className="text-neutral-100">split your tickets across every active
-        prize pool</strong> for that event so you have a weighted chance in each pool’s drawing. When you split, your total
-        ticket count (including any bonus tickets you qualify for) is divided across pools as described on the entry page
-        (equal split by default, or optional custom weights you provide). Split entries may be recorded as fractional ticket
-        weights per pool; each pool’s drawing only includes tickets allocated to that pool.
+        <strong className="text-neutral-100">place all of your tickets on one prize pool</strong> you choose on the form,
+        or (b) if the entry page offers multiple pools, <strong className="text-neutral-100">select two or more pools</strong>{" "}
+        and have your total ticket count (including any bonus tickets you qualify for){" "}
+        <strong className="text-neutral-100">divided evenly only across the pools you selected</strong>. Weights may be
+        fractional (for example, one total ticket split across four selected pools may be recorded as 0.25 toward each of
+        those four drawings). Each pool is drawn separately and only includes tickets allocated to that pool.
       </p>
 
       <h2 className="mt-8 scroll-mt-4 text-lg font-semibold text-neutral-50 sm:mt-10 sm:text-xl">5. Bonus tickets</h2>
       <p>
-        Participants may claim additional raffle tickets by completing optional bonus actions:
+        Participants may claim additional raffle tickets by completing optional bonus actions listed on each event’s
+        entry page (for example following the sponsor on social platforms, tagging the sponsor in a public story or reel,
+        leaving an online review, or referring a friend who submits a separate qualifying entry). Ticket values for each
+        action are shown on that event’s form.
       </p>
-      <ul className="list-disc space-y-2 pl-5">
-        <li><strong className="text-neutral-100">Instagram follow or story mention (+2 tickets)</strong> — Follow @spectrumoutfitters and/or tag us in a story. Verification may be required before prize award.</li>
-        <li><strong className="text-neutral-100">Leave a review (+5 tickets)</strong> — Post a Google or Facebook review for Spectrum Outfitters. Your review must be live at the time of prize verification.</li>
-        <li><strong className="text-neutral-100">Refer a friend (+3 tickets)</strong> — A referred friend must enter the same event and mention your name. Referrals that cannot be confirmed will not be awarded.</li>
-      </ul>
+      <p>
+        The entry form may ask for your social handle, a link to a public post, where you left a review, or similar
+        details so our staff can confirm the action before prizes are awarded.{" "}
+        <strong className="text-neutral-100">
+          This process does not use automated logins or official APIs to Meta, TikTok, or other platforms
+        </strong>
+        ; verification is performed manually using the information you submit and what is publicly visible online.
+      </p>
       <p>
         Spectrum Outfitters reserves the right to verify any bonus claim and to disqualify entries where claimed bonuses
         cannot be confirmed.
