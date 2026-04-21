@@ -79,6 +79,19 @@ jobs:
             raffle-platform/ \
             root@165.245.137.192:/opt/spectrum-raffle/raffle-platform/
 
+      # Optional: add repo secret RAFFLE_APPS_SCRIPT_URL = your Google Apps Script web app URL (…/exec).
+      # Writes /etc/spectrum-raffle.env on the droplet so the entry page and APIs work after deploy.
+      - name: Raffle — optional Apps Script URL (secret → /etc/spectrum-raffle.env)
+        env:
+          APPS_URL: ${{ secrets.RAFFLE_APPS_SCRIPT_URL }}
+        run: |
+          if [ -z "${APPS_URL:-}" ]; then
+            echo "RAFFLE_APPS_SCRIPT_URL secret not set — keep existing /etc/spectrum-raffle.env or create it on the server."
+            exit 0
+          fi
+          printf '%s\n%s\n' "APPS_SCRIPT_URL=${APPS_URL}" "NODE_ENV=production" | ssh root@165.245.137.192 'umask 077; cat > /etc/spectrum-raffle.env; chmod 600 /etc/spectrum-raffle.env'
+          echo "Wrote /etc/spectrum-raffle.env from GitHub secret RAFFLE_APPS_SCRIPT_URL."
+
       - name: Raffle — install, build, restart PM2
         run: |
           ssh root@165.245.137.192 bash -s <<'ENDSSH'

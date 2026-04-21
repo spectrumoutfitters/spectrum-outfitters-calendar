@@ -52,8 +52,10 @@ const GrandOpeningDay = () => {
           <h3 className="text-sm font-semibold text-amber-950 dark:text-amber-100">Admin · Setup (not shown to employees)</h3>
           <ul className="list-disc pl-5 text-sm text-amber-950/90 dark:text-amber-100/90 space-y-1.5">
             <li>
-              Server env: <code className="rounded bg-black/10 dark:bg-black/30 px-1">/etc/spectrum-raffle.env</code> with{' '}
-              <code className="rounded bg-black/10 dark:bg-black/30 px-1">APPS_SCRIPT_URL</code> (Google Apps Script web app URL).
+              <strong>APPS_SCRIPT_URL</strong> (Google Apps Script web app URL): either add repo secret{' '}
+              <code className="rounded bg-black/10 dark:bg-black/30 px-1">RAFFLE_APPS_SCRIPT_URL</code> (Actions writes{' '}
+              <code className="rounded bg-black/10 dark:bg-black/30 px-1">/etc/spectrum-raffle.env</code> on deploy) or create that file on the droplet manually, then redeploy or{' '}
+              <code className="rounded bg-black/10 dark:bg-black/30 px-1">pm2 restart spectrum-raffle</code>.
             </li>
             <li>Deploy: push to <code className="rounded bg-black/10 dark:bg-black/30 px-1">main</code> — GitHub Actions ships the raffle app and nginx.</li>
             <li>

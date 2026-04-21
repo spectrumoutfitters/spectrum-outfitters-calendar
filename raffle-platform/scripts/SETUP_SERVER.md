@@ -48,6 +48,8 @@ git sparse-checkout set raffle-platform
 
 ## 4. Create the env file on the server
 
+**Alternative (recommended for CI):** In GitHub → **Settings → Secrets and variables → Actions**, add **`RAFFLE_APPS_SCRIPT_URL`** with the same Apps Script URL. Each deploy to `main` will write **`/etc/spectrum-raffle.env`** on the droplet automatically (no SSH edit needed).
+
 ```bash
 nano /etc/spectrum-raffle.env
 ```
