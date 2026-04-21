@@ -1,0 +1,26 @@
+/* Bundled with /admin/* — readable shell even if Tailwind fails or CSP blocks inline styles. */
+.admin-shell {
+  min-height: 100vh;
+  box-sizing: border-box;
+  background-color: #0a0a0a;
+  color: #fafafa;
+}
+
+.admin-shell a {
+  color: #fcd34d;
+}
+
+.admin-shell a:hover {
+  color: #fde68a;
+}
+
+.admin-shell nav {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #27272a;
+}
+
+/* Client dashboard root — inherits readable colors from stylesheet. */
+.admin-shell .admin-dashboard {
+  background-color: #0a0a0a;
+  color: #fafafa;
+}

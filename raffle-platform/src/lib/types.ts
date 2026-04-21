@@ -3,6 +3,8 @@ export type RaffleOption = {
   title: string;
   subtitle?: string;
   imageUrl?: string;
+  /** Shown on the entry page (e.g. "$450+ retail · No purchase necessary"). */
+  valueLabel?: string;
   sortOrder: number;
 };
 
@@ -61,6 +63,33 @@ export type AdminStats = {
   uniqueParticipants: number;
   entriesByRaffle: Record<string, { raffleTitle: string; tickets: number; people: number }>;
   lastUpdated: string;
+};
+
+/** Editable raffle row returned by getAdminEventConfig / saveEventConfig. */
+export type AdminRaffleRow = {
+  id: string;
+  raffleId: string;
+  title: string;
+  subtitle: string;
+  imageUrl: string;
+  /** Prize “sticker” value — what entrants could win (free). */
+  valueLabel: string;
+  sortOrder: number;
+  active: boolean;
+};
+
+/** Event fields editable from admin (no adminKey). */
+export type AdminEventEditable = {
+  name: string;
+  description: string;
+  logoUrl: string;
+  primaryColor: string;
+  secondaryColor: string;
+  theme: "dark" | "light";
+  active: boolean;
+  defaultTestMode: boolean;
+  blockTestWrite: boolean;
+  bonusRulesJson: string;
 };
 
 export type DrawWinnerResult =
