@@ -84,6 +84,15 @@ jobs:
           ssh root@165.245.137.192 bash -s <<'ENDSSH'
           set -euo pipefail
           mkdir -p /var/log/spectrum-raffle
+          # Next.js 16+ requires Node >= 20.9; droplet may still be on 18 for legacy apps
+          NODE_MAJOR=$(node -p "parseInt(process.versions.node.split('.')[0],10)" 2>/dev/null || echo 0)
+          if [ "$NODE_MAJOR" -lt 20 ]; then
+            echo "Raffle: installing Node.js 20.x (current: $(node -v 2>/dev/null || echo none))"
+            export DEBIAN_FRONTEND=noninteractive
+            curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            apt-get install -y nodejs
+          fi
+          node -v
           cd /opt/spectrum-raffle/raffle-platform
           if [ -f /etc/spectrum-raffle.env ]; then
             cp /etc/spectrum-raffle.env .env.local

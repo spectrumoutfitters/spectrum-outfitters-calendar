@@ -65,11 +65,11 @@ Save: `Ctrl+O`, `Enter`, `Ctrl+X`
 ## 5. Install Node.js (if not already installed)
 
 ```bash
-# Check first
-node -v   # should be 18+ 
+# Check first (raffle / Next.js 16 needs Node 20.9+)
+node -v
 npm -v
 
-# If not installed:
+# If not installed or older than 20:
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt-get install -y nodejs
 ```
