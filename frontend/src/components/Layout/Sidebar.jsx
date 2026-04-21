@@ -8,7 +8,6 @@ import api from '../../utils/api';
 const DEFAULT_NAV_ORDER = [
   'dashboard',
   'dispatch',
-  'mylist',
   'tasks',
   'time',
   'schedule',
@@ -17,7 +16,6 @@ const DEFAULT_NAV_ORDER = [
   'crm',
   'profile',
   'admin',
-  'shop_financing',
 ];
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -29,7 +27,6 @@ const Sidebar = ({ isOpen, onClose }) => {
   const allNavItems = [
     { path: '/dashboard', key: 'dashboard', label: 'Dashboard' },
     { path: '/dispatch', key: 'dispatch', label: 'Dispatch', adminOnly: true },
-    { path: '/my-list', key: 'mylist', label: 'My List' },
     { path: '/tasks', label: 'Tasks', key: 'tasks' },
     { path: '/time', label: 'Time Clock', key: 'time' },
     { path: '/schedule', label: 'Schedule', key: 'schedule' },
@@ -38,7 +35,6 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/crm', label: 'Customers', key: 'crm' },
     { path: '/profile', label: 'Profile', key: 'profile' },
     { path: '/admin', label: 'Admin', key: 'admin', adminOnly: true },
-    { path: '/admin/shop-financing', label: 'Shop financing', key: 'shop_financing', adminOnly: true },
   ];
 
   useEffect(() => {

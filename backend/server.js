@@ -34,9 +34,9 @@ import complianceRoutes from './routes/compliance.js';
 import updatesRoutes from './routes/updates.js';
 import dashboardConfigRoutes from './routes/dashboardConfig.js';
 import settingsRoutes from './routes/settings.js';
-import plaidRoutes from './routes/plaid.js';
-import { runPlaidTransactionsSync } from './routes/plaid.js';
-import { isPlaidConfigured } from './utils/plaidClient.js';
+// import plaidRoutes from './routes/plaid.js'; // DISABLED — not in active use
+// import { runPlaidTransactionsSync } from './routes/plaid.js'; // DISABLED — not in active use
+// import { isPlaidConfigured } from './utils/plaidClient.js'; // DISABLED — not in active use
 import financeRoutes from './routes/finance.js';
 import securityRoutes from './routes/security.js';
 import geocodeRoutes from './routes/geocode.js';
@@ -51,15 +51,16 @@ import paymentProcessorRoutes from './routes/paymentProcessor.js';
 import paymentsRoutes, { handleStripePaymentsWebhook } from './routes/payments.js';
 import { handleStripeWebhook } from './routes/paymentProcessor.js';
 import { syncShopMonkeyRevenue } from './routes/shopmonkey.js';
-import { syncStripeRevenue, syncValorPayRevenue, syncPaymentProcessorRevenue } from './routes/paymentProcessor.js';
-import { isConfigured as isValorConfigured } from './utils/valorPayRevenue.js';
+import { syncStripeRevenue, syncPaymentProcessorRevenue } from './routes/paymentProcessor.js';
+// import { syncValorPayRevenue } from './routes/paymentProcessor.js'; // DISABLED — not in active use
+// import { isConfigured as isValorConfigured } from './utils/valorPayRevenue.js'; // DISABLED — not in active use
 import { authenticateToken, requireAdmin } from './middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { pullChangesFromGoogle } from './utils/googleCalendarService.js';
 import { getSocketClientIP, startSession, endSession, heartbeatSession } from './utils/security.js';
 import shortLinksRoutes from './routes/shortLinks.js';
 import publicInvoicesRoutes from './routes/publicInvoices.js';
-import affiliatesRoutes from './routes/affiliates.js';
+// import affiliatesRoutes from './routes/affiliates.js'; // DISABLED — not in active use
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -623,8 +624,14 @@ app.use(cookieParser());
 app.post('/api/payment-processor/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
 app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), handleStripePaymentsWebhook);
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Default body limits — keep small so random endpoints can't be used to flood memory.
+// Routes that genuinely need large payloads (photos, PDF uploads) get their own limit below.
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Large-payload routes: task photos and PDF parser can receive base64 images / file buffers
+app.use('/api/tasks', express.json({ limit: '50mb' }));
+app.use('/api/pdf',   express.json({ limit: '50mb' }));
 
 // Do not mount express.static before /api routes — a matching file under dist/ can shadow API paths.
 // Production static + SPA fallback is registered after all API routes (see bottom of this file).
@@ -763,7 +770,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/payroll', payrollRoutes);
-// Shop financing plans (admin). Use /api/admin/shop-financing — not /api/employee-* (avoids any path clash with /api/employee).
+// Shop financing plans (admin).
 app.use('/api/admin/shop-financing', employeeFinancingRoutes);
 app.use('/api/admin/worklist', adminWorkListRoutes);
 app.use('/api/my-worklist', myWorklistRoutes);
@@ -771,7 +778,7 @@ app.use('/api/compliance', complianceRoutes);
 app.use('/api/updates', updatesRoutes);
 app.use('/api/dashboard-config', dashboardConfigRoutes);
 app.use('/api/settings', settingsRoutes);
-app.use('/api/plaid', plaidRoutes);
+// app.use('/api/plaid', plaidRoutes); // DISABLED — not in active use
 app.use('/api/finance', financeRoutes);
 app.use('/api/payment-processor', paymentProcessorRoutes);
 app.use('/api/payments', paymentsRoutes);
@@ -784,7 +791,7 @@ app.use('/api/customer-status', customerStatusRoutes);
 app.use('/api/admin/dispatch', dispatchRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use(shortLinksRoutes);
-app.use('/api/affiliates', affiliatesRoutes);
+// app.use('/api/affiliates', affiliatesRoutes); // DISABLED — not in active use
 
 // Serve uploaded files
 const uploadsPath = process.env.UPLOADS_PATH || path.join(__dirname, 'uploads');
@@ -828,13 +835,41 @@ if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
   const basePath = (process.env.BASE_PATH || '').replace(/\/+$/, '');
   const indexPath = path.join(frontendDist, 'index.html');
+
+  /** Stops browsers/CDNs from serving a stale index.html (users always get latest chunk references). */
+  const setSpaIndexHeaders = (res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  };
+
+  const frontendStaticOpts = {
+    setHeaders: (res, filePath) => {
+      const norm = String(filePath || '').replace(/\\/g, '/');
+      if (norm.endsWith('/index.html') || norm.endsWith('index.html')) {
+        setSpaIndexHeaders(res);
+      } else if (norm.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  };
+
   if (basePath) {
-    app.use(basePath, express.static(frontendDist));
-    app.get(basePath, (req, res) => res.sendFile(indexPath));
-    app.get(`${basePath}/*`, (req, res) => res.sendFile(indexPath));
+    app.use(basePath, express.static(frontendDist, frontendStaticOpts));
+    app.get(basePath, (req, res) => {
+      setSpaIndexHeaders(res);
+      res.sendFile(indexPath);
+    });
+    app.get(`${basePath}/*`, (req, res) => {
+      setSpaIndexHeaders(res);
+      res.sendFile(indexPath);
+    });
   } else {
-    app.use(express.static(frontendDist));
-    app.get('*', (req, res) => res.sendFile(indexPath));
+    app.use(express.static(frontendDist, frontendStaticOpts));
+    app.get('*', (req, res) => {
+      setSpaIndexHeaders(res);
+      res.sendFile(indexPath);
+    });
   }
 } else {
   // 404 handler for API routes in development
@@ -842,6 +877,27 @@ if (process.env.NODE_ENV === 'production') {
     res.status(404).json({ error: 'Route not found' });
   });
 }
+
+// ─── Graceful shutdown ───────────────────────────────────────────────────────
+// Handles SIGTERM (sent by systemd, Docker, Kubernetes) and SIGINT (Ctrl+C).
+// Stops accepting new connections, waits for in-flight requests to finish,
+// then exits cleanly. Force-quits after 10 s if connections don't drain.
+function gracefulShutdown(signal) {
+  console.log(`\n${signal} received — shutting down gracefully...`);
+  httpServer.close(() => {
+    console.log('✅ HTTP server closed. Goodbye!');
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error('⚠️  Shutdown timeout — forcing exit');
+    process.exit(1);
+  }, 10_000).unref(); // .unref() so the timer doesn't keep the process alive on its own
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Test database connection on startup
 db.getAsync('SELECT 1')
@@ -921,22 +977,10 @@ function startBackgroundJobs() {
     console.log('📊 ShopMonkey revenue auto-sync enabled (every 5 minutes)');
   }
 
-  if (isValorConfigured()) {
-    let valorSyncRunning = false;
-    const VALOR_SYNC_INTERVAL = 5 * 60 * 1000;
-    const runValorSync = () => {
-      if (valorSyncRunning) return;
-      valorSyncRunning = true;
-      const sevenDays = new Date();
-      sevenDays.setDate(sevenDays.getDate() - 7);
-      syncValorPayRevenue(sevenDays.toISOString().split('T')[0])
-        .catch(err => console.warn('Valor Pay revenue auto-sync failed:', err?.message || err))
-        .finally(() => { valorSyncRunning = false; });
-    };
-    runValorSync();
-    setInterval(runValorSync, VALOR_SYNC_INTERVAL);
-    console.log('💳 Valor Pay revenue auto-sync enabled (every 5 minutes)');
-  } else if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_')) {
+  // Valor Pay sync disabled — not in active use.
+  // if (isValorConfigured()) { ... syncValorPayRevenue ... }
+
+  if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_')) {
     let stripeSyncRunning = false;
     const STRIPE_SYNC_INTERVAL = 5 * 60 * 1000;
     const runStripeSync = () => {
@@ -953,23 +997,8 @@ function startBackgroundJobs() {
     console.log('💳 Stripe revenue auto-sync enabled (every 5 minutes)');
   }
 
-  if (isPlaidConfigured()) {
-    let plaidSyncRunning = false;
-    const PLAID_SYNC_INTERVAL = 30 * 60 * 1000; // 30 minutes
-    const runPlaidSync = () => {
-      if (plaidSyncRunning) return;
-      plaidSyncRunning = true;
-      runPlaidTransactionsSync()
-        .then(({ synced_count }) => {
-          if (synced_count > 0) console.log('Plaid: synced', synced_count, 'transaction(s)');
-        })
-        .catch(err => console.warn('Plaid expenses auto-sync failed:', err?.message || err))
-        .finally(() => { plaidSyncRunning = false; });
-    };
-    runPlaidSync();
-    setInterval(runPlaidSync, PLAID_SYNC_INTERVAL);
-    console.log('🏦 Plaid bank/credit card expenses auto-sync enabled (every 30 minutes)');
-  }
+  // Plaid sync disabled — not in active use.
+  // if (isPlaidConfigured()) { ... runPlaidTransactionsSync ... }
 
   const pollIntervalMs = parseInt(process.env.GOOGLE_CALENDAR_POLL_INTERVAL_MS || '300000', 10);
   let googleSyncRunning = false;

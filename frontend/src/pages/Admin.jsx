@@ -26,15 +26,14 @@ const GOLD = '#D4A017';
 // Tab definitions
 const MAIN_TABS = [
   { id: 'overview', label: 'Overview' },
-  { id: 'team', label: 'Team' },
-  { id: 'shop', label: 'Shop' },
+  { id: 'people', label: 'People' },
+  { id: 'inventory', label: 'Inventory' },
   { id: 'finance', label: 'Finance' },
-  { id: 'insights', label: 'Insights' },
   { id: 'settings', label: 'Settings' },
 ];
 
 const SUB_TABS = {
-  team: [
+  people: [
     { id: 'status', label: 'Status' },
     { id: 'schedule', label: 'Schedule' },
     { id: 'time', label: 'Time' },
@@ -42,20 +41,18 @@ const SUB_TABS = {
     { id: 'worklist', label: 'Worklist' },
     { id: 'history', label: 'History' },
   ],
-  shop: [
+  inventory: [
     { id: 'inventory', label: 'Inventory' },
     { id: 'orders', label: 'Orders' },
     { id: 'products', label: 'Products' },
   ],
   finance: [
     { id: 'payroll', label: 'Payroll' },
-    { id: 'shop_financing', label: 'Shop financing' },
-    { id: 'finance', label: 'P&L / summary' },
-    { id: 'compliance', label: 'Compliance' },
-  ],
-  insights: [
+    { id: 'shop_financing', label: 'Shop Financing' },
+    { id: 'finance', label: 'P&L / Summary' },
     { id: 'analytics', label: 'Analytics' },
     { id: 'reports', label: 'Reports' },
+    { id: 'compliance', label: 'Compliance' },
   ],
   settings: [
     { id: 'general', label: 'General' },
@@ -126,18 +123,19 @@ function SubTabBar({ tabs, activeId, onSelect }) {
 const Admin = () => {
   const navigate = useNavigate();
 
-  // Restore last tab from localStorage
-  const savedMain = localStorage.getItem('admin_main_tab') || 'overview';
+  // Restore last tab from localStorage — migrate old tab names to new ones
+  const TAB_MIGRATION = { team: 'people', shop: 'inventory', insights: 'finance' };
+  const rawSavedMain = localStorage.getItem('admin_main_tab') || 'overview';
+  const savedMain = TAB_MIGRATION[rawSavedMain] || rawSavedMain;
   const savedSubs = (() => {
     try { return JSON.parse(localStorage.getItem('admin_sub_tabs') || '{}'); } catch { return {}; }
   })();
 
   const [mainTab, setMainTab] = useState(savedMain);
   const [subTabs, setSubTabs] = useState({
-    team: savedSubs.team || 'status',
-    shop: savedSubs.shop || 'inventory',
+    people: savedSubs.people || savedSubs.team || 'status',
+    inventory: savedSubs.inventory || savedSubs.shop || 'inventory',
     finance: savedSubs.finance || 'payroll',
-    insights: savedSubs.insights || 'analytics',
     settings: savedSubs.settings || 'general',
   });
 
@@ -150,9 +148,9 @@ const Admin = () => {
     tasksInReview: 0,
     clockedInEmployees: 0,
     totalEmployees: 0,
+    pendingReorderRequests: 0,
     upcomingCompliance: [],
     overdueCompliance: [],
-    pendingReorderRequests: 0
   });
   const [loading, setLoading] = useState(true);
 
@@ -162,6 +160,7 @@ const Admin = () => {
   const [shortUrlResult, setShortUrlResult] = useState(null);
   const [shortUrlLoading, setShortUrlLoading] = useState(false);
   const [shortUrlError, setShortUrlError] = useState('');
+
 
   const selectMainTab = (id) => {
     setMainTab(id);
@@ -213,9 +212,9 @@ const Admin = () => {
         tasksInReview: tasksReview,
         clockedInEmployees: employees.filter(e => e.status === 'clocked_in' || e.status === 'on_lunch').length,
         totalEmployees: employees.length,
+        pendingReorderRequests,
         upcomingCompliance: compliance.upcoming || [],
         overdueCompliance: compliance.overdue || [],
-        pendingReorderRequests
       });
     } catch (error) {
       console.error('Error loading dashboard:', error);
@@ -233,15 +232,12 @@ const Admin = () => {
       const body = { target_url: shortUrlInput.trim() };
       if (shortUrlSlug.trim()) body.custom_slug = shortUrlSlug.trim();
       const res = await api.post('/links/shorten', body);
-      const path = res.data.path || `/secure/${res.data.slug}`;
+      const linkPath = res.data.path || `/secure/${res.data.slug}`;
       const apiFull = res.data.full_url;
       const origin = window.location.origin;
       const base = apiFull && typeof apiFull === 'string' ? '' : origin;
-      const fullUrl = apiFull || `${base}${path}`;
-      setShortUrlResult({
-        ...res.data,
-        fullUrl,
-      });
+      const fullUrl = apiFull || `${base}${linkPath}`;
+      setShortUrlResult({ ...res.data, fullUrl });
     } catch (err) {
       setShortUrlError(err.response?.data?.error || 'Failed to create short link');
       setShortUrlResult(null);
@@ -250,7 +246,7 @@ const Admin = () => {
     }
   };
 
-  // Pending approvals badge count for Team tab
+  // Pending approvals badge count for People tab
   const teamBadgeCount = dashboardData.pendingTimeOff + dashboardData.unapprovedTimeEntries + dashboardData.tasksInReview;
 
   const renderOverview = () => {
@@ -265,19 +261,19 @@ const Admin = () => {
 
     const urgentItems = [];
     if (dashboardData.overdueCompliance?.length > 0) {
-      urgentItems.push({ type: 'error', icon: '🚨', message: `${dashboardData.overdueCompliance.length} overdue tax obligation(s)!`, action: () => { selectMainTab('finance'); selectSubTab('finance', 'compliance'); } });
+      urgentItems.push({ type: 'error', icon: '🚨', message: `${dashboardData.overdueCompliance.length} overdue compliance item(s)!`, action: () => { selectMainTab('finance'); selectSubTab('finance', 'compliance'); } });
     }
     if (dashboardData.pendingTimeOff > 0) {
-      urgentItems.push({ type: 'warning', icon: '🏖️', message: `${dashboardData.pendingTimeOff} time off request(s) pending`, action: () => { selectMainTab('team'); selectSubTab('team', 'time'); } });
+      urgentItems.push({ type: 'warning', icon: '🏖️', message: `${dashboardData.pendingTimeOff} time off request(s) pending`, action: () => { selectMainTab('people'); selectSubTab('people', 'time'); } });
     }
     if (dashboardData.unapprovedTimeEntries > 0) {
-      urgentItems.push({ type: 'warning', icon: '⏰', message: `${dashboardData.unapprovedTimeEntries} time entries need approval`, action: () => { selectMainTab('team'); selectSubTab('team', 'time'); } });
+      urgentItems.push({ type: 'warning', icon: '⏰', message: `${dashboardData.unapprovedTimeEntries} time entries need approval`, action: () => { selectMainTab('people'); selectSubTab('people', 'time'); } });
     }
     if (dashboardData.tasksInReview > 0) {
       urgentItems.push({ type: 'info', icon: '✅', message: `${dashboardData.tasksInReview} task(s) waiting for review`, action: () => navigate('/tasks?status=review') });
     }
     if (dashboardData.pendingReorderRequests > 0) {
-      urgentItems.push({ type: 'warning', icon: '📦', message: `${dashboardData.pendingReorderRequests} reorder request(s) pending`, action: () => { selectMainTab('shop'); selectSubTab('shop', 'inventory'); } });
+      urgentItems.push({ type: 'warning', icon: '📦', message: `${dashboardData.pendingReorderRequests} reorder request(s) pending`, action: () => { selectMainTab('inventory'); selectSubTab('inventory', 'inventory'); } });
     }
 
     const allClear = urgentItems.length === 0 && dashboardData.worklistCompleted === dashboardData.worklistTotal;
@@ -345,7 +341,7 @@ const Admin = () => {
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">📋 Today&apos;s Tasks</h3>
             <button
-              onClick={() => { selectMainTab('team'); selectSubTab('team', 'worklist'); }}
+              onClick={() => { selectMainTab('people'); selectSubTab('people', 'worklist'); }}
               className="text-primary hover:text-primary/80 text-sm font-medium"
             >
               View full list →
@@ -373,140 +369,92 @@ const Admin = () => {
           )}
         </div>
 
-        {/* Upcoming compliance */}
+        {/* Upcoming compliance deadlines */}
         {dashboardData.upcomingCompliance?.length > 0 && (
           <div className="bg-white dark:bg-neutral-950 rounded-xl border border-gray-200 dark:border-neutral-700 p-5">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">🏛️ Upcoming Tax Deadlines</h3>
-              <button onClick={() => { selectMainTab('finance'); selectSubTab('finance', 'compliance'); }} className="text-primary hover:text-primary-dark text-sm font-medium">
-                View All →
+              <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">📅 Upcoming Tax Deadlines</h3>
+              <button
+                onClick={() => { selectMainTab('finance'); selectSubTab('finance', 'compliance'); }}
+                className="text-primary hover:text-primary/80 text-sm font-medium"
+              >
+                View all →
               </button>
             </div>
-            <div className="space-y-2">
-              {dashboardData.upcomingCompliance.slice(0, 3).map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-neutral-950 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-800 dark:text-neutral-100 text-sm">{item.obligation_name}</p>
-                    <p className="text-xs text-gray-500 dark:text-neutral-100">Due: {new Date(item.due_date).toLocaleDateString()}</p>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${item.days_until_due <= 7 ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : 'bg-primary-subtle dark:bg-primary/20 text-primary'}`}>
-                    {item.days_until_due} days
-                  </span>
-                </div>
+            <ul className="space-y-2">
+              {dashboardData.upcomingCompliance.slice(0, 5).map((item, idx) => (
+                <li key={idx} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800">
+                  <span className="text-sm text-gray-800 dark:text-neutral-100">{item.title || item.name}</span>
+                  <span className="text-xs text-amber-600 dark:text-amber-400 font-medium ml-2 flex-shrink-0">{item.due_date || item.dueDate}</span>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         )}
 
         {/* Invoice Link Shortener */}
-        <div className="bg-white dark:bg-neutral-950 rounded-xl border border-gray-200 dark:border-neutral-700 p-5 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-            <div>
-              <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100">
-                Invoice Link Shortener
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
-                Paste the full payment or invoice URL and get a short link that looks like it&apos;s from your Spectrum domain.
-              </p>
-            </div>
-          </div>
+        <div className="bg-white dark:bg-neutral-950 rounded-xl border border-gray-200 dark:border-neutral-700 p-5">
+          <h3 className="text-base font-semibold text-gray-800 dark:text-neutral-100 mb-3">🔗 Invoice Link Shortener</h3>
           <form onSubmit={handleCreateShortLink} className="space-y-2">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-600 dark:text-neutral-300">
-                Full invoice / payment URL
-              </label>
+            <input
+              type="url"
+              value={shortUrlInput}
+              onChange={(e) => setShortUrlInput(e.target.value)}
+              placeholder="Paste invoice URL to shorten..."
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-neutral-700 rounded-lg bg-gray-50 dark:bg-neutral-900 text-gray-800 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              required
+            />
+            <div className="flex gap-2">
               <input
-                type="url"
-                value={shortUrlInput}
-                onChange={(e) => setShortUrlInput(e.target.value)}
-                placeholder="https://payments.provider.com/invoice/123..."
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-sm text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500"
-                required
+                type="text"
+                value={shortUrlSlug}
+                onChange={(e) => setShortUrlSlug(e.target.value)}
+                placeholder="Custom slug (optional)"
+                className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-neutral-700 rounded-lg bg-gray-50 dark:bg-neutral-900 text-gray-800 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-600 dark:text-neutral-300">
-                Custom short code (optional)
-              </label>
-              <div className="flex items-center gap-1">
-                <span className="hidden md:inline text-xs text-gray-400">
-                  /pay/
-                </span>
-                <input
-                  type="text"
-                  value={shortUrlSlug}
-                  onChange={(e) => setShortUrlSlug(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === ' ') {
-                      e.preventDefault();
-                      const input = e.target;
-                      const start = input.selectionStart ?? shortUrlSlug.length;
-                      const end = input.selectionEnd ?? start;
-                      const before = shortUrlSlug.slice(0, start);
-                      const after = shortUrlSlug.slice(end);
-                      const next = before + '-' + after;
-                      setShortUrlSlug(next);
-                      requestAnimationFrame(() => {
-                        const newPos = start + 1;
-                        input.setSelectionRange(newPos, newPos);
-                      });
-                    }
-                  }}
-                  placeholder="truck-deposit-jan24"
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-sm text-gray-900 dark:text-neutral-100 placeholder-gray-400 dark:placeholder-neutral-500"
-                />
-              </div>
-              <p className="text-[10px] text-gray-400 mt-0.5">
-                Letters, numbers, and dashes only. Leave blank to auto‑generate.
-              </p>
-            </div>
-            {shortUrlError && (
-              <p className="text-xs text-red-600 dark:text-red-400">
-                {shortUrlError}
-              </p>
-            )}
-            <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
               <button
                 type="submit"
-                disabled={shortUrlLoading || !shortUrlInput.trim()}
-                className="w-full sm:w-auto px-4 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={shortUrlLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
-                {shortUrlLoading ? 'Creating link…' : 'Create short link'}
+                {shortUrlLoading ? '...' : 'Shorten'}
               </button>
-              {shortUrlResult && (
-                <div className="flex-1 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-                  <input
-                    type="text"
-                    readOnly
-                    value={shortUrlResult.fullUrl}
-                    className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 text-xs text-gray-900 dark:text-neutral-100"
-                    onFocus={(e) => e.target.select()}
-                  />
+            </div>
+            {shortUrlError && <p className="text-xs text-red-500">{shortUrlError}</p>}
+            {shortUrlResult && (
+              <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <p className="text-xs text-gray-500 dark:text-neutral-400 mb-1">Short link created:</p>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={shortUrlResult.fullUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary break-all hover:underline flex-1"
+                  >
+                    {shortUrlResult.fullUrl}
+                  </a>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (navigator.clipboard && shortUrlResult.fullUrl) {
-                        navigator.clipboard.writeText(shortUrlResult.fullUrl).catch(() => {});
-                      }
-                    }}
-                    className="px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-700 text-xs font-medium text-gray-700 dark:text-neutral-100 hover:bg-gray-50 dark:hover:bg-neutral-800"
+                    onClick={() => navigator.clipboard.writeText(shortUrlResult.fullUrl)}
+                    className="text-xs px-2 py-1 bg-gray-100 dark:bg-neutral-800 rounded hover:bg-gray-200 dark:hover:bg-neutral-700 transition-colors flex-shrink-0"
                   >
                     Copy
                   </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </form>
         </div>
+
       </div>
     );
   };
 
-  const renderTeam = () => {
-    const sub = subTabs.team;
+  const renderPeople = () => {
+    const sub = subTabs.people;
     return (
       <>
-        <SubTabBar tabs={SUB_TABS.team} activeId={sub} onSelect={(id) => selectSubTab('team', id)} />
+        <SubTabBar tabs={SUB_TABS.people} activeId={sub} onSelect={(id) => selectSubTab('people', id)} />
         {sub === 'status' && <EmployeeStatus />}
         {sub === 'schedule' && <ScheduleCalendar />}
         {sub === 'time' && <TimeApproval />}
@@ -517,11 +465,11 @@ const Admin = () => {
     );
   };
 
-  const renderShop = () => {
-    const sub = subTabs.shop;
+  const renderInventory = () => {
+    const sub = subTabs.inventory;
     return (
       <>
-        <SubTabBar tabs={SUB_TABS.shop} activeId={sub} onSelect={(id) => selectSubTab('shop', id)} />
+        <SubTabBar tabs={SUB_TABS.inventory} activeId={sub} onSelect={(id) => selectSubTab('inventory', id)} />
         {sub === 'inventory' && <InventoryManagement />}
         {sub === 'orders' && <OrderManagement />}
         {sub === 'products' && <ProductManagement />}
@@ -537,18 +485,9 @@ const Admin = () => {
         {sub === 'payroll' && <PayrollManagement />}
         {sub === 'shop_financing' && <EmployeeShopFinancing />}
         {sub === 'finance' && <FinanceDashboard />}
-        {sub === 'compliance' && <ComplianceCenter />}
-      </>
-    );
-  };
-
-  const renderInsights = () => {
-    const sub = subTabs.insights;
-    return (
-      <>
-        <SubTabBar tabs={SUB_TABS.insights} activeId={sub} onSelect={(id) => selectSubTab('insights', id)} />
         {sub === 'analytics' && <Analytics />}
         {sub === 'reports' && <Reports />}
+        {sub === 'compliance' && <ComplianceCenter />}
       </>
     );
   };
@@ -583,16 +522,15 @@ const Admin = () => {
         tabs={MAIN_TABS}
         activeId={mainTab}
         onSelect={selectMainTab}
-        badge={{ tabId: 'team', count: teamBadgeCount }}
+        badge={{ tabId: 'people', count: teamBadgeCount }}
       />
 
       {/* Tab content */}
       <div className="pt-4">
         {mainTab === 'overview' && renderOverview()}
-        {mainTab === 'team' && renderTeam()}
-        {mainTab === 'shop' && renderShop()}
+        {mainTab === 'people' && renderPeople()}
+        {mainTab === 'inventory' && renderInventory()}
         {mainTab === 'finance' && renderFinance()}
-        {mainTab === 'insights' && renderInsights()}
         {mainTab === 'settings' && renderSettings()}
       </div>
     </div>

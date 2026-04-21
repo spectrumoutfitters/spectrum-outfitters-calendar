@@ -10,7 +10,6 @@ import Dashboard from './pages/Dashboard';
 import Tasks from './pages/Tasks';
 import TimeEntries from './pages/TimeEntries';
 import Admin from './pages/Admin';
-import EmployeeShopFinancing from './components/Admin/EmployeeShopFinancing';
 import Profile from './pages/Profile';
 import Schedule from './pages/Schedule';
 import Products from './pages/Products';
@@ -29,8 +28,8 @@ import DispatchBoard from './pages/DispatchBoard';
 import Layout from './components/Layout/Layout';
 import FloatingActions from './components/Layout/FloatingActions';
 import Logo from './components/Logo';
-import AffiliatesAdmin from './pages/AffiliatesAdmin';
-import AffiliateQuote from './pages/AffiliateQuote';
+// import AffiliatesAdmin from './pages/AffiliatesAdmin'; // DISABLED — not in active use
+// import AffiliateQuote from './pages/AffiliateQuote'; // DISABLED — not in active use
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -130,16 +129,8 @@ function AppRoutes() {
           </AdminRoute>
         }
       />
-      <Route
-        path="/admin/shop-financing"
-        element={
-          <AdminRoute>
-            <Layout>
-              <EmployeeShopFinancing />
-            </Layout>
-          </AdminRoute>
-        }
-      />
+      {/* /admin/shop-financing disabled — redirect to admin */}
+      <Route path="/admin/shop-financing" element={<Navigate to="/admin" />} />
       <Route
         path="/crm"
         element={
@@ -230,16 +221,8 @@ function AppRoutes() {
           </PrivateRoute>
         }
       />
-      <Route
-        path="/my-list"
-        element={
-          <PrivateRoute>
-            <Layout>
-              <MyWorkList />
-            </Layout>
-          </PrivateRoute>
-        }
-      />
+      {/* /my-list is now consolidated into /tasks — redirect for any old bookmarks */}
+      <Route path="/my-list" element={<Navigate to="/tasks" />} />
       <Route
         path="/dispatch"
         element={
@@ -251,17 +234,10 @@ function AppRoutes() {
         }
       />
       <Route path="/status/:token" element={<CustomerStatus />} />
-      <Route path="/affiliates/:token" element={<AffiliateQuote />} />
-      <Route
-        path="/admin/affiliates"
-        element={
-          <AdminRoute>
-            <Layout>
-              <AffiliatesAdmin />
-            </Layout>
-          </AdminRoute>
-        }
-      />
+      {/* /affiliates/:token disabled — affiliate feature not in active use */}
+      {/* <Route path="/affiliates/:token" element={<AffiliateQuote />} /> */}
+      {/* /admin/affiliates disabled — affiliate feature not in active use */}
+      {/* <Route path="/admin/affiliates" element={<AdminRoute><Layout><AffiliatesAdmin /></Layout></AdminRoute>} /> */}
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
   );
