@@ -40,8 +40,9 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
 
-        # Timeouts
-        proxy_read_timeout 30s;
-        proxy_connect_timeout 5s;
+        # Apps Script can exceed 30s on cold start — avoid nginx 504 while Next proxies
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+        proxy_connect_timeout 15s;
     }
 }

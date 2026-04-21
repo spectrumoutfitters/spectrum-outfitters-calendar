@@ -250,6 +250,11 @@ export function AdminDashboardClient({ slug }: Props) {
                 Unique phones:{" "}
                 <span className="font-semibold text-neutral-100">{stats.uniqueParticipants}</span>
               </p>
+              {typeof stats.entryRowCount === "number" && stats.entryRowCount > stats.uniqueParticipants ? (
+                <p className="mt-2 text-xs text-neutral-500">
+                  Sheet rows: {stats.entryRowCount} (higher when entrants split tickets across pools)
+                </p>
+              ) : null}
               <p className="mt-4 text-xs text-neutral-500">
                 Last sync: {new Date(stats.lastUpdated).toLocaleString()}
               </p>

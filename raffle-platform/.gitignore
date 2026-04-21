@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Raffle admin uploads (keep folder via .gitkeep)
+public/raffle-images/*
+!public/raffle-images/.gitkeep

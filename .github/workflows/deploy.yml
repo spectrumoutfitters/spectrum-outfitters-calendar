@@ -76,6 +76,7 @@ jobs:
             --exclude='node_modules' \
             --exclude='.next' \
             --exclude='.env.local' \
+            --exclude='public/raffle-images/' \
             raffle-platform/ \
             root@165.245.137.192:/opt/spectrum-raffle/raffle-platform/
 

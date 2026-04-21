@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -12,12 +12,19 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
   title: {
     default: "Spectrum Outfitters Raffle",
     template: "%s · Spectrum Outfitters",
   },
-  description: "Enter Spectrum Outfitters giveaways and raffles. One entry per phone number.",
+  description:
+    "Enter Spectrum Outfitters giveaways and raffles. One submission per phone number; optional ticket split across prize pools.",
   openGraph: {
     siteName: "Spectrum Outfitters",
     locale: "en_US",

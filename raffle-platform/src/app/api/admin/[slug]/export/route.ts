@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 
 export async function POST(
@@ -16,11 +17,7 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "server_misconfigured" }, { status: 503 });
   }
   try {
-    const res = await fetch(base, {
-      method: "POST",
-      body: JSON.stringify({ action: "exportEntries", slug, adminKey }),
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-    });
+    const res = await fetchAppsScriptPost(base, { action: "exportEntries", slug, adminKey });
     const text = await res.text();
     let data: { ok?: boolean; csv?: string; error?: string };
     try {
@@ -40,7 +37,11 @@ export async function POST(
         "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });
-  } catch {
+  } catch (e: unknown) {
+    const name = e instanceof Error ? e.name : "";
+    if (name === "TimeoutError" || name === "AbortError") {
+      return NextResponse.json({ ok: false, error: "apps_script_timeout" }, { status: 504 });
+    }
     return NextResponse.json({ ok: false, error: "upstream_unreachable" }, { status: 502 });
   }
 }

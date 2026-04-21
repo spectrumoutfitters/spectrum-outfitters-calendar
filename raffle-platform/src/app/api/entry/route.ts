@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getClientIpFromRequest } from "@/lib/clientIp";
 import type { EntryPayload } from "@/lib/types";
@@ -62,11 +63,7 @@ export async function POST(request: Request) {
   };
 
   try {
-    const res = await fetch(base, {
-      method: "POST",
-      body: JSON.stringify(forward),
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-    });
+    const res = await fetchAppsScriptPost(base, forward);
     const text = await res.text();
     let data: unknown;
     try {
@@ -75,7 +72,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "upstream_not_json" }, { status: 502 });
     }
     return NextResponse.json(data, { status: res.ok ? 200 : res.status });
-  } catch {
+  } catch (e: unknown) {
+    const name = e instanceof Error ? e.name : "";
+    if (name === "TimeoutError" || name === "AbortError") {
+      return NextResponse.json({ ok: false, error: "apps_script_timeout", code: "timeout" }, { status: 504 });
+    }
     return NextResponse.json({ ok: false, error: "upstream_unreachable" }, { status: 502 });
   }
 }

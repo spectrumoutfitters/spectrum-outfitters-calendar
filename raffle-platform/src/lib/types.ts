@@ -40,7 +40,14 @@ export type EntryPayload = {
   name: string;
   phone: string;
   email: string;
-  raffleId: string;
+  /** Required when ticketMode is "single" (or omitted). */
+  raffleId?: string;
+  /** "single" = one pool (default). "split" = one sheet row per active pool with fractional tickets. */
+  ticketMode?: "single" | "split";
+  /** With ticketMode "split": true = equal split across all pools; false = use ticketSplit. */
+  splitEvenly?: boolean;
+  /** Pool id → ticket weight; must sum to full ticket count when splitEvenly is false. */
+  ticketSplit?: Record<string, number>;
   /** Per bonus id from event rules — preferred for dynamic bonuses */
   bonusById?: Record<string, boolean>;
   bonusInstagram?: boolean;
@@ -61,6 +68,8 @@ export type AdminStats = {
   totalParticipants: number;
   /** Distinct people (by phone) */
   uniqueParticipants: number;
+  /** Rows in Entries for this slug (can exceed participants when tickets are split across pools). */
+  entryRowCount?: number;
   entriesByRaffle: Record<string, { raffleTitle: string; tickets: number; people: number }>;
   lastUpdated: string;
 };
