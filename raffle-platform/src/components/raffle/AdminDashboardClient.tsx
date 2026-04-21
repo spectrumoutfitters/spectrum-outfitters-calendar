@@ -135,7 +135,10 @@ export function AdminDashboardClient({ slug }: Props) {
   }
 
   return (
-    <div className="dark min-h-screen bg-neutral-950 text-neutral-50">
+    <div
+      className="min-h-screen bg-neutral-950 text-neutral-50"
+      style={{ backgroundColor: "#0a0a0a", color: "#fafafa" }}
+    >
       <div className="mx-auto max-w-screen-lg px-4 py-10 md:px-6 lg:max-w-6xl lg:px-8">
         <header className="mb-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>

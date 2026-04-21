@@ -16,9 +16,8 @@ server {
     # Certbot will add the HTTPS block below automatically.
     # For now, HTTP works — run certbot to upgrade.
 
-    # Security headers
+    # Security headers (do not set X-Frame-Options SAMEORIGIN — staff app embeds /admin/* in an iframe from login.*)
     add_header X-Content-Type-Options "nosniff" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     # Next.js static assets — long cache
