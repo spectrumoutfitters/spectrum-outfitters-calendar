@@ -329,7 +329,7 @@ export function EventEntryClient({ event }: Props) {
               {bonusRules.map((r) => (
                 <div
                   key={r.id}
-                  className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white/70 dark:border-neutral-800 dark:bg-neutral-950/40"
+                  className="rounded-2xl border border-stone-200/80 bg-white/70 dark:border-neutral-800 dark:bg-neutral-950/40"
                 >
                   <BonusToggle
                     title={r.label}

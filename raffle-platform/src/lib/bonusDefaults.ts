@@ -127,6 +127,32 @@ export const DEFAULT_BONUS_RULES: BonusRule[] = [
   },
 ];
 
+const DEFAULT_BONUS_BY_ID: Record<string, BonusRule> = Object.fromEntries(
+  DEFAULT_BONUS_RULES.map((r) => [r.id, r]),
+);
+
+/**
+ * Sheet / admin JSON often sends only id, label, tickets. Fill proofFields, actionUrl, and actionLabel
+ * from the built-in template for that id so the entry form can show inputs and links.
+ */
+export function mergeBonusRulesWithDefaults(rules: BonusRule[]): BonusRule[] {
+  return rules.map((r) => {
+    const d = DEFAULT_BONUS_BY_ID[r.id];
+    if (!d) return r;
+    const hasOwnProof = Array.isArray(r.proofFields) && r.proofFields.length > 0;
+    return {
+      ...d,
+      ...r,
+      label: r.label?.trim() ? r.label : d.label,
+      description: r.description != null && String(r.description).trim() !== "" ? r.description : d.description,
+      tickets: Number.isFinite(r.tickets) && r.tickets >= 1 ? r.tickets : d.tickets,
+      proofFields: hasOwnProof ? r.proofFields! : d.proofFields,
+      actionUrl: r.actionUrl?.trim() ? r.actionUrl : d.actionUrl,
+      actionLabel: r.actionLabel?.trim() ? r.actionLabel : d.actionLabel,
+    };
+  });
+}
+
 /**
  * Events sheet often still has the original JSON: exactly instagram + review + referral, no proofFields.
  * That should not override the current default ladder (TikTok, Facebook, story tag, verification fields).
@@ -141,11 +167,14 @@ export function isLegacyBonusRulesFingerprint(rules: BonusRule[]): boolean {
 
 export function resolveBonusRules(event: { bonuses?: BonusRule[] | null }): BonusRule[] {
   const b = event.bonuses;
+  let rules: BonusRule[];
   if (Array.isArray(b) && b.length > 0) {
-    if (isLegacyBonusRulesFingerprint(b)) return DEFAULT_BONUS_RULES;
-    return b;
+    if (isLegacyBonusRulesFingerprint(b)) rules = DEFAULT_BONUS_RULES;
+    else rules = b;
+  } else {
+    rules = DEFAULT_BONUS_RULES;
   }
-  return DEFAULT_BONUS_RULES;
+  return mergeBonusRulesWithDefaults(rules);
 }
 
 export function computeTicketsFromBonuses(

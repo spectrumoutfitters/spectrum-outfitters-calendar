@@ -209,6 +209,34 @@ function isLegacyThreeRuleBonusConfig_(out) {
   return seen.instagram && seen.review && seen.referral;
 }
 
+function getDefaultBonusById_(id) {
+  var defs = getDefaultBonuses_();
+  for (var di = 0; di < defs.length; di++) {
+    if (defs[di].id === id) return defs[di];
+  }
+  return null;
+}
+
+/** Sheet JSON often omits proofFields / actionUrl — merge from getDefaultBonuses_ when id matches. */
+function mergeParsedBonusWithDefaults_(rule) {
+  var d = getDefaultBonusById_(rule.id);
+  if (!d) return rule;
+  var hasPf = rule.proofFields && rule.proofFields.length;
+  var pf = hasPf ? rule.proofFields : cloneProofFieldsFromBonus_(d);
+  var tickets = Number(rule.tickets);
+  if (!tickets || tickets < 1 || tickets > 100) tickets = Number(d.tickets) || 1;
+  return {
+    id: rule.id,
+    label: String(rule.label || d.label),
+    description:
+      rule.description != null && String(rule.description) !== '' ? String(rule.description) : String(d.description || ''),
+    tickets: tickets,
+    actionUrl: rule.actionUrl ? String(rule.actionUrl).trim() : d.actionUrl,
+    actionLabel: rule.actionLabel ? String(rule.actionLabel).trim() : d.actionLabel,
+    proofFields: pf,
+  };
+}
+
 function parseBonusRulesFromRow_(o) {
   var raw = String(o.bonusRulesJson || o.bonus_rules_json || '').trim();
   if (!raw) return getDefaultBonuses_();
@@ -237,7 +265,9 @@ function parseBonusRulesFromRow_(o) {
     }
     if (!out.length) return getDefaultBonuses_();
     if (isLegacyThreeRuleBonusConfig_(out)) return getDefaultBonuses_();
-    return out;
+    var merged = [];
+    for (var mi = 0; mi < out.length; mi++) merged.push(mergeParsedBonusWithDefaults_(out[mi]));
+    return merged;
   } catch (err) {
     return getDefaultBonuses_();
   }
