@@ -92,7 +92,7 @@ function recordToObject_(headers, row) {
   return o;
 }
 
-var RAFFLE_DEFAULT_IG_ = 'https://www.instagram.com/spectrumoutfitters/';
+var RAFFLE_DEFAULT_IG_ = 'https://www.instagram.com/spectrum.outfitters/';
 var RAFFLE_DEFAULT_TT_ = 'https://www.tiktok.com/@spectrumoutfitters';
 var RAFFLE_DEFAULT_FB_ = 'https://www.facebook.com/spectrumoutfitters';
 

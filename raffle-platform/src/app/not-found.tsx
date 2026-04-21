@@ -3,6 +3,14 @@ import Link from "next/link";
 export default function NotFound() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-stone-50 px-4 text-center dark:bg-neutral-950">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/brand/spectrum-outfitters-icon.png"
+        alt=""
+        width={56}
+        height={56}
+        className="mb-6 h-14 w-14 object-contain"
+      />
       <p className="text-sm font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">404</p>
       <h1 className="mt-2 text-2xl font-semibold text-stone-900 dark:text-neutral-50">This page is unavailable</h1>
       <p className="mt-3 max-w-md text-sm text-stone-600 dark:text-neutral-400">

@@ -18,13 +18,12 @@ export default function Home() {
         />
         <div className="relative mx-auto flex max-w-4xl flex-col items-center gap-8 px-4 pb-16 pt-12 text-center sm:pt-16 md:px-8">
           <div className="flex w-full max-w-md flex-col items-center gap-5">
-            {/* Official wordmark from frontend/public/logo.svg (inverted for black background) */}
             <img
-              src="/logo.svg"
+              src="/brand/spectrum-outfitters-logo.png"
               alt="Spectrum Outfitters"
-              width={440}
-              height={160}
-              className="h-auto w-full max-w-[min(100%,22rem)] object-contain brightness-0 invert"
+              width={880}
+              height={320}
+              className="h-auto w-full max-w-[min(100%,26rem)] object-contain"
             />
             <p className="text-balance text-lg text-neutral-300 sm:text-xl">
               Giveaways &amp; raffles — one entry per phone number. Bonus tickets for Instagram, reviews, and referrals.

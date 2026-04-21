@@ -2,7 +2,7 @@ import type { BonusRule } from "@/lib/types";
 
 const IG =
   (typeof process !== "undefined" && process.env.NEXT_PUBLIC_RAFFLE_INSTAGRAM_URL) ||
-  "https://www.instagram.com/spectrumoutfitters/";
+  "https://www.instagram.com/spectrum.outfitters/";
 const TT =
   (typeof process !== "undefined" && process.env.NEXT_PUBLIC_RAFFLE_TIKTOK_URL) ||
   "https://www.tiktok.com/@spectrumoutfitters";

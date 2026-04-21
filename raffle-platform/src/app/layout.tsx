@@ -25,6 +25,10 @@ export const metadata: Metadata = {
   },
   description:
     "Enter Spectrum Outfitters giveaways and raffles. One submission per phone number; optional ticket split across prize pools.",
+  icons: {
+    icon: "/brand/spectrum-outfitters-icon.png",
+    apple: "/brand/spectrum-outfitters-icon.png",
+  },
   openGraph: {
     siteName: "Spectrum Outfitters",
     locale: "en_US",

@@ -194,21 +194,21 @@ export function EventEntryClient({ event }: Props) {
     >
       <div className="mx-auto max-w-lg px-3 pt-6 sm:px-5 sm:pt-8 md:max-w-xl">
         <header className="mb-8 flex flex-col items-center text-center sm:mb-10">
-          <div className="mb-4 flex h-[4.5rem] w-[4.5rem] items-center justify-center overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-            {event.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
+          {event.logoUrl ? (
+            <div className="mb-4 flex h-[4.5rem] w-[4.5rem] items-center justify-center overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={event.logoUrl} alt="" className="max-h-full max-w-full object-contain p-2" />
-            ) : (
-              <span
-                className="grid h-full w-full place-items-center text-2xl font-bold text-white"
-                style={{
-                  background: `linear-gradient(135deg, ${accent}, ${secondary})`,
-                }}
-              >
-                {event.name.slice(0, 1)}
-              </span>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="mb-4 w-full max-w-xs px-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/spectrum-outfitters-logo.png"
+                alt="Spectrum Outfitters"
+                className="mx-auto h-auto w-full object-contain"
+              />
+            </div>
+          )}
           <h1 className="text-balance text-2xl font-semibold tracking-tight text-stone-900 dark:text-neutral-50 sm:text-3xl md:text-4xl">
             {event.name}
           </h1>

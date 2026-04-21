@@ -34,11 +34,11 @@ function MissingAppsScriptConfig() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-black px-4 text-center">
       <img
-        src="/logo.svg"
+        src="/brand/spectrum-outfitters-logo.png"
         alt="Spectrum Outfitters"
-        width={360}
-        height={120}
-        className="mb-8 h-auto w-full max-w-xs object-contain brightness-0 invert"
+        width={720}
+        height={240}
+        className="mb-8 h-auto w-full max-w-sm object-contain"
       />
       <h1 className="text-xl font-semibold text-white sm:text-2xl">Giveaway is almost ready</h1>
       <p className="mt-4 max-w-md text-sm leading-relaxed text-neutral-400">
