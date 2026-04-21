@@ -188,6 +188,27 @@ function cloneProofFieldsFromBonus_(b) {
   return out;
 }
 
+/**
+ * Old workbooks stored bonusRulesJson as exactly three rules (instagram, review, referral) with no proofFields.
+ * Those rows should use the current default ladder (TikTok, Facebook, story tag, proof fields, etc.).
+ */
+function isLegacyThreeRuleBonusConfig_(out) {
+  if (!out || out.length !== 3) return false;
+  var seen = { instagram: false, review: false, referral: false };
+  for (var i = 0; i < out.length; i++) {
+    var id = String(out[i].id || '').trim();
+    if (id === 'instagram' || id === 'review' || id === 'referral') {
+      if (seen[id]) return false;
+      seen[id] = true;
+    } else {
+      return false;
+    }
+    var pf = out[i].proofFields;
+    if (pf && pf.length) return false;
+  }
+  return seen.instagram && seen.review && seen.referral;
+}
+
 function parseBonusRulesFromRow_(o) {
   var raw = String(o.bonusRulesJson || o.bonus_rules_json || '').trim();
   if (!raw) return getDefaultBonuses_();
@@ -215,6 +236,7 @@ function parseBonusRulesFromRow_(o) {
       });
     }
     if (!out.length) return getDefaultBonuses_();
+    if (isLegacyThreeRuleBonusConfig_(out)) return getDefaultBonuses_();
     return out;
   } catch (err) {
     return getDefaultBonuses_();

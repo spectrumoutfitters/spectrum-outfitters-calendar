@@ -127,9 +127,24 @@ export const DEFAULT_BONUS_RULES: BonusRule[] = [
   },
 ];
 
+/**
+ * Events sheet often still has the original JSON: exactly instagram + review + referral, no proofFields.
+ * That should not override the current default ladder (TikTok, Facebook, story tag, verification fields).
+ */
+export function isLegacyBonusRulesFingerprint(rules: BonusRule[]): boolean {
+  if (!Array.isArray(rules) || rules.length !== 3) return false;
+  const ids = new Set(rules.map((r) => String(r.id || "").trim()));
+  if (!ids.has("instagram") || !ids.has("review") || !ids.has("referral")) return false;
+  if (ids.size !== 3) return false;
+  return !rules.some((r) => (r.proofFields?.length ?? 0) > 0);
+}
+
 export function resolveBonusRules(event: { bonuses?: BonusRule[] | null }): BonusRule[] {
   const b = event.bonuses;
-  if (Array.isArray(b) && b.length > 0) return b;
+  if (Array.isArray(b) && b.length > 0) {
+    if (isLegacyBonusRulesFingerprint(b)) return DEFAULT_BONUS_RULES;
+    return b;
+  }
   return DEFAULT_BONUS_RULES;
 }
 
