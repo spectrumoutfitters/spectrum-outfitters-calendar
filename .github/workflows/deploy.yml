@@ -70,6 +70,7 @@ jobs:
       # setup: /etc/spectrum-raffle.env + nginx (see raffle-platform/scripts/SETUP_SERVER.md).
       - name: Deploy raffle platform (rsync)
         run: |
+          ssh root@165.245.137.192 "mkdir -p /opt/spectrum-raffle/raffle-platform"
           rsync -avz --delete \
             --exclude='.git' \
             --exclude='node_modules' \
