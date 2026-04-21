@@ -156,7 +156,7 @@ After this, **https://raffle.spectrumoutfitters.com** is live with SSL. ✅
 
 ## Future deploys
 
-**Default:** pushing to `main` runs GitHub Actions, which rsyncs `raffle-platform/` to this droplet, runs `npm ci` / `npm run build`, and restarts PM2 (`spectrum-raffle`). No manual step needed.
+**Default:** pushing to `main` runs GitHub Actions, which rsyncs `raffle-platform/` to this droplet, runs `npm ci` / `npm run build`, restarts PM2 (`spectrum-raffle`), and **installs the nginx `spectrum-raffle` site the first time** (reverse proxy to port 3001). No manual step needed for that. Run **Certbot** once for HTTPS if you have not already.
 
 If you use a **full git clone** at `/opt/spectrum-raffle`, you can also deploy from the server:
 

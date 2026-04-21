@@ -110,6 +110,26 @@ jobs:
           pm2 save
           ENDSSH
 
+      # Without this, raffle.* hits default_server → static 404. Installs proxy to :3001 once.
+      - name: Raffle — enable nginx site (first time or broken symlink)
+        run: |
+          ssh root@165.245.137.192 bash -s <<'ENDSSH'
+          set -euo pipefail
+          SRC=/opt/spectrum-raffle/raffle-platform/scripts/raffle.nginx
+          AV=/etc/nginx/sites-available/spectrum-raffle
+          EN=/etc/nginx/sites-enabled/spectrum-raffle
+          if [ ! -f "$SRC" ]; then echo "Missing $SRC"; exit 1; fi
+          if [ -L "$EN" ] && [ ! -e "$EN" ]; then rm -f "$EN"; fi
+          if [ -L "$EN" ] && [ -e "$EN" ]; then
+            echo "Raffle nginx site already enabled: $EN"
+          else
+            echo "Installing raffle nginx reverse proxy (HTTP → 127.0.0.1:3001)..."
+            cp "$SRC" "$AV"
+            ln -sf "$AV" "$EN"
+          fi
+          nginx -t
+          ENDSSH
+
       - name: Reload nginx
         run: |
           ssh root@165.245.137.192 "touch /var/www/spectrum-outfitters/frontend/dist/index.html 2>/dev/null || true; systemctl reload nginx"
