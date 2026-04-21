@@ -32,6 +32,8 @@
  *
  * Performance: 500+ concurrent readers are fine; writes serialize per spreadsheet. For very high write volume,
  * shard events across spreadsheets or add a queue (e.g. Form → Sheet → batch processor).
+ *
+ * New workbook from scratch: see CreateSpreadsheet.gs in this folder (createSpectrumRaffleSpreadsheet).
  */
 
 var SHEET_EVENTS = 'Events';
