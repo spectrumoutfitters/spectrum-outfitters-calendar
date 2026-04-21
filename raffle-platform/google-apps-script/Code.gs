@@ -17,9 +17,14 @@
  *   - adminKey: secret for /admin API; if blank, ADMIN_MASTER_KEY is used
  *   - blockTestWrite: TRUE skips writing test rows (returns success message only)
  *
+ * Script Properties (optional):
+ *   ENTRY_BASE_URL — public raffle site origin, no trailing slash (e.g. https://raffle.example.com).
+ *   Used to email magic links so entrants can view/update tickets until 10 minutes before each pool’s drawAt.
+ *
  * Raffles
- *   slug, raffleId, title, subtitle, imageUrl, valueLabel, sortOrder, active
+ *   slug, raffleId, title, subtitle, imageUrl, valueLabel, sortOrder, active, drawAt (optional)
  *   - valueLabel: short text shown on the entry page (e.g. "$450+ retail · No purchase necessary")
+ *   - drawAt: optional ISO datetime (event local time as text) when that pool is drawn; locks ticket edits at T−10 minutes
  *
  * Events — optional column:
  *   bonusRulesJson: JSON array of bonus rules. Each object may include:
@@ -29,7 +34,7 @@
  *
  * Entries (created automatically in column order)
  *   timestamp, slug, name, phone, email, raffleId, bonusInstagram, bonusReview, bonusReferral, totalEntries, isTest, ip, userAgent, extrasJson
- *   — extrasJson includes per-id bonus toggles plus optional __bonusProof (handles/links for staff verification).
+ *   — extrasJson includes per-id bonus toggles, optional __bonusProof, __entryToken (magic link), __splitRaffleIds.
  *   — totalEntries may be fractional when ticketMode is "split" (one sheet row per pool; weights sum to the entrant's full ticket count).
  *
  * Winners (optional but recommended)
@@ -359,6 +364,7 @@ function getRafflesForSlug_(slug) {
   var colValue = headers.indexOf('valueLabel');
   var colSort = headers.indexOf('sortOrder');
   var colActive = headers.indexOf('active');
+  var colDrawAt = headers.indexOf('drawAt');
   if (colSlug < 0 || colId < 0 || colTitle < 0) {
     throw new Error('Raffles sheet needs slug, raffleId, title columns');
   }
@@ -375,6 +381,7 @@ function getRafflesForSlug_(slug) {
       imageUrl: colImage < 0 ? '' : String(row[colImage] || ''),
       valueLabel: colValue < 0 ? '' : String(row[colValue] || ''),
       sortOrder: colSort < 0 ? r : Number(row[colSort]) || r,
+      drawAt: colDrawAt < 0 ? '' : String(row[colDrawAt] || '').trim(),
     });
   }
   list.sort(function (a, b) {
@@ -398,6 +405,7 @@ function getRafflesAllForSlug_(slug) {
   var colValue = headers.indexOf('valueLabel');
   var colSort = headers.indexOf('sortOrder');
   var colActive = headers.indexOf('active');
+  var colDrawAt = headers.indexOf('drawAt');
   if (colSlug < 0 || colId < 0 || colTitle < 0) {
     throw new Error('Raffles sheet needs slug, raffleId, title columns');
   }
@@ -415,6 +423,7 @@ function getRafflesAllForSlug_(slug) {
       valueLabel: colValue < 0 ? '' : String(row[colValue] || ''),
       sortOrder: colSort < 0 ? r : Number(row[colSort]) || r,
       active: active,
+      drawAt: colDrawAt < 0 ? '' : String(row[colDrawAt] || '').trim(),
     });
   }
   list.sort(function (a, b) {
@@ -460,6 +469,7 @@ function buildRaffleRowArray_(headers, slug, r) {
     else if (h === 'valueLabel') out.push(valueLabel);
     else if (h === 'sortOrder') out.push(sortOrder);
     else if (h === 'active') out.push(active ? 'TRUE' : 'FALSE');
+    else if (h === 'drawAt') out.push(String(r.drawAt != null ? r.drawAt : '').trim().slice(0, 50));
     else out.push('');
   }
   return out;
@@ -485,10 +495,24 @@ function ensureValueLabelColumn_(sh) {
   }
 }
 
+function ensureDrawAtColumn_(sh) {
+  var lastCol = sh.getLastColumn();
+  if (lastCol < 1) return;
+  var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  var names = [];
+  var j;
+  for (j = 0; j < headers.length; j++) {
+    names.push(String(headers[j]).trim());
+  }
+  if (names.indexOf('drawAt') >= 0) return;
+  sh.getRange(1, lastCol + 1).setValue('drawAt');
+}
+
 function replaceRafflesForSlug_(slug, raffles) {
   var sh = getSpreadsheet_().getSheetByName(SHEET_RAFFLES);
   if (!sh) throw new Error('Missing sheet: ' + SHEET_RAFFLES);
   ensureValueLabelColumn_(sh);
+  ensureDrawAtColumn_(sh);
   var values = sh.getDataRange().getValues();
   if (!values.length) throw new Error('Raffles sheet is empty');
   var headers = values[0];
@@ -626,6 +650,15 @@ function handleSaveEventConfig_(data) {
     if (String(rr.valueLabel || '').length > 160) {
       return jsonResponse({ ok: false, error: 'invalid_raffle_value_label', raffleIndex: i }, 400);
     }
+    if (rr.drawAt != null && String(rr.drawAt).trim().length > 50) {
+      return jsonResponse({ ok: false, error: 'invalid_raffle_draw_at', raffleIndex: i }, 400);
+    }
+    if (rr.drawAt != null && String(rr.drawAt).trim() !== '') {
+      var dms = new Date(String(rr.drawAt).trim()).getTime();
+      if (isNaN(dms)) {
+        return jsonResponse({ ok: false, error: 'invalid_raffle_draw_at', raffleIndex: i }, 400);
+      }
+    }
   }
 
   try {
@@ -697,6 +730,127 @@ function phoneExistsForSlug_(slug, phoneNorm) {
   return false;
 }
 
+function generateEntryToken_() {
+  return Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+}
+
+function getEntryBaseUrl_() {
+  var p = PropertiesService.getScriptProperties().getProperty('ENTRY_BASE_URL');
+  return p ? String(p).trim().replace(/\/$/, '') : '';
+}
+
+function trySendManageEntryEmail_(email, entrantName, eventName, slug, token) {
+  var base = getEntryBaseUrl_();
+  if (!base || !email) return false;
+  var path = '/e/' + encodeURIComponent(slug) + '/my-entry?token=' + encodeURIComponent(token);
+  var url = base + path;
+  var subject = 'Your raffle entry — ' + String(eventName || 'Event');
+  var body =
+    'Hi ' +
+    String(entrantName || 'there') +
+    ',\n\nUse this private link to see your tickets and change how they are split across prize pools (until 10 minutes before each scheduled draw, when set):\n\n' +
+    url +
+    '\n\nIf you did not enter this raffle, you can ignore this email.\n\n— Spectrum Outfitters';
+  try {
+    MailApp.sendEmail({ to: String(email).trim(), subject: subject, body: body });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function getEntriesExtrasColumnIndex_() {
+  var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
+  if (!sh) return 13;
+  var h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  for (var i = 0; i < h.length; i++) {
+    if (String(h[i]).trim() === 'extrasJson') return i;
+  }
+  return Math.max(0, h.length - 1);
+}
+
+function parseEntryExtrasJson_(jsonStr) {
+  try {
+    var o = JSON.parse(String(jsonStr || '{}'));
+    return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function readEntryRowsByToken_(slug, token) {
+  var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var lastCol = Math.max(13, sh.getLastColumn());
+  var values = sh.getRange(2, 1, sh.getLastRow(), lastCol).getValues();
+  var need = String(token || '').trim();
+  var exCol = getEntriesExtrasColumnIndex_();
+  var out = [];
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][1] || '').trim() !== String(slug).trim()) continue;
+    var ex = parseEntryExtrasJson_(values[i][exCol]);
+    if (String(ex.__entryToken || '') !== need) continue;
+    out.push({
+      sheetRow: i + 2,
+      name: String(values[i][2] || ''),
+      phoneNorm: normalizePhone_(values[i][3]),
+      email: String(values[i][4] || ''),
+      raffleId: String(values[i][5] || ''),
+      tickets: Number(values[i][9]) || 0,
+      extras: ex,
+    });
+  }
+  return out;
+}
+
+function deleteEntrySheetRowsDescending_(rowNumbersHighToLow) {
+  var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
+  if (!sh) return;
+  for (var i = 0; i < rowNumbersHighToLow.length; i++) {
+    sh.deleteRow(rowNumbersHighToLow[i]);
+  }
+}
+
+function getRaffleDrawAtMsMapForSlug_(slug) {
+  var all = getRafflesAllForSlug_(slug);
+  var map = {};
+  for (var i = 0; i < all.length; i++) {
+    var rid = String(all[i].id || all[i].raffleId || '').trim();
+    if (!rid) continue;
+    var raw = all[i].drawAt != null ? String(all[i].drawAt).trim() : '';
+    if (!raw) {
+      map[rid] = null;
+      continue;
+    }
+    var ms = new Date(raw).getTime();
+    map[rid] = isNaN(ms) ? null : ms;
+  }
+  return map;
+}
+
+function entryUpdateLockedForRaffleIds_(slug, raffleIds) {
+  var map = getRaffleDrawAtMsMapForSlug_(slug);
+  var now = Date.now();
+  var margin = 10 * 60 * 1000;
+  for (var i = 0; i < raffleIds.length; i++) {
+    var rid = String(raffleIds[i] || '').trim();
+    if (!rid) continue;
+    var ms = map[rid];
+    if (ms != null && now >= ms - margin) return true;
+  }
+  return false;
+}
+
+function maskEmail_(email) {
+  var e = String(email || '').trim();
+  var at = e.indexOf('@');
+  if (at < 1) return e ? e.charAt(0) + '***' : '';
+  var left = e.substring(0, at);
+  var right = e.substring(at + 1);
+  var show = left.length <= 2 ? left.charAt(0) : left.substring(0, 2);
+  return show + '***@' + right;
+}
+
 /** Entries columns: …, userAgent, extrasJson (JSON map of bonus toggles) */
 function appendEntry_(row) {
   var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
@@ -714,7 +868,7 @@ function legacyBonusBooleans_(bonusById) {
 }
 
 /** One Entries row; rowTickets can be fractional for split pools. extras merges bonus toggles + optional __split* audit fields. */
-function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta, testMode, ip, userAgent, bonusProofTrimmed) {
+function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta, testMode, ip, userAgent, bonusProofTrimmed, entryToken) {
   var b = bonusById || {};
   var extras = {};
   Object.keys(b).forEach(function (k) {
@@ -725,7 +879,9 @@ function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowT
     extras.__splitTotalTickets = splitMeta.totalAll;
     extras.__rowTickets = rowTickets;
     extras.__splitEvenly = splitMeta.evenly === true;
+    if (splitMeta.poolIds && splitMeta.poolIds.length) extras.__splitRaffleIds = splitMeta.poolIds.slice();
   }
+  if (entryToken) extras.__entryToken = String(entryToken);
   if (bonusProofTrimmed && typeof bonusProofTrimmed === 'object' && !Array.isArray(bonusProofTrimmed)) {
     var pk = Object.keys(bonusProofTrimmed);
     if (pk.length) extras.__bonusProof = bonusProofTrimmed;
@@ -806,7 +962,7 @@ function buildTicketSplitPlan_(p, raffles, totalEntries) {
       }
       rowsE.push({ raffleId: targetIds[j], weight: wj });
     }
-    return { rows: rowsE, evenly: true };
+    return { rows: rowsE, evenly: true, poolIds: targetIds.slice() };
   }
 
   var raw = p.ticketSplit || {};
@@ -828,7 +984,11 @@ function buildTicketSplitPlan_(p, raffles, totalEntries) {
     if (rowsC[h].weight > 0) hasAny = true;
   }
   if (!hasAny) return null;
-  return { rows: rowsC, evenly: false };
+  var poolIdsC = [];
+  for (var pc = 0; pc < rowsC.length; pc++) {
+    if (rowsC[pc].weight > 0) poolIdsC.push(rowsC[pc].raffleId);
+  }
+  return { rows: rowsC, evenly: false, poolIds: poolIdsC };
 }
 
 function doGet(e) {
@@ -878,6 +1038,8 @@ function doPost(e) {
   try {
     var action = data.action;
     if (action === 'submitEntry') return handleSubmitEntry_(data);
+    if (action === 'getEntryByToken') return handleGetEntryByToken_(data);
+    if (action === 'updateEntryByToken') return handleUpdateEntryByToken_(data);
     if (action === 'getAdminStats') return handleAdminStats_(data);
     if (action === 'drawWinner') return handleDrawWinner_(data);
     if (action === 'exportEntries') return handleExportEntries_(data);
@@ -886,6 +1048,86 @@ function doPost(e) {
     return jsonResponse({ ok: false, error: 'unknown_action' }, 400);
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err && err.message ? err.message : err) }, 500);
+  }
+}
+
+/**
+ * Writes entry rows after validation. Sends magic-link email when sendMagicEmail is true and not test.
+ * Returns JSON response object (already wrapped semantics — caller returns jsonResponse(...)).
+ */
+function runEntryWritesAndMaybeEmail_(
+  slug,
+  name,
+  phoneNorm,
+  email,
+  p,
+  ev,
+  bonuses,
+  bonusById,
+  bonusProofTrimmed,
+  totalEntries,
+  ticketMode,
+  raffleId,
+  raffles,
+  testMode,
+  ip,
+  ua,
+  entryToken,
+  sendMagicEmail
+) {
+  var userAgentStr = String(ua || '');
+  var magicSent = false;
+  try {
+    if (ticketMode === 'split') {
+      var plan = buildTicketSplitPlan_(p, raffles, totalEntries);
+      if (!plan || !plan.rows.length) {
+        return jsonResponse({ ok: false, error: 'Could not build ticket split.', code: 'split' }, 400);
+      }
+      var written = 0;
+      for (var s = 0; s < plan.rows.length; s++) {
+        var part = plan.rows[s];
+        if (!(part.weight > 0)) continue;
+        appendEntryRow_(
+          slug,
+          name,
+          phoneNorm,
+          email,
+          part.raffleId,
+          bonusById,
+          part.weight,
+          { split: true, totalAll: totalEntries, evenly: plan.evenly, poolIds: plan.poolIds },
+          testMode,
+          ip,
+          userAgentStr,
+          bonusProofTrimmed,
+          entryToken
+        );
+        written++;
+      }
+      if (!written) {
+        return jsonResponse({ ok: false, error: 'No ticket weight in split — check pools.', code: 'split' }, 400);
+      }
+      if (sendMagicEmail && !testMode) {
+        magicSent = trySendManageEntryEmail_(email, name, String(ev.name || 'Giveaway'), slug, entryToken);
+      }
+      return jsonResponse({
+        ok: true,
+        totalEntries: totalEntries,
+        ticketMode: 'split',
+        poolsEntered: written,
+        testMode: testMode,
+        magicLinkSent: magicSent,
+      });
+    }
+
+    appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, totalEntries, null, testMode, ip, userAgentStr, bonusProofTrimmed, entryToken);
+    if (sendMagicEmail && !testMode) {
+      magicSent = trySendManageEntryEmail_(email, name, String(ev.name || 'Giveaway'), slug, entryToken);
+    }
+    return jsonResponse({ ok: true, totalEntries: totalEntries, ticketMode: 'single', testMode: testMode, magicLinkSent: magicSent });
+  } catch (errSplit) {
+    var msg = String(errSplit && errSplit.message ? errSplit.message : errSplit);
+    return jsonResponse({ ok: false, error: msg, code: 'split' }, 400);
   }
 }
 
@@ -1011,51 +1253,268 @@ function handleSubmitEntry_(data) {
   }
 
   var ua = String(p.userAgent || '');
+  var entryToken = generateEntryToken_();
 
-  try {
-    if (ticketMode === 'split') {
-      var plan = buildTicketSplitPlan_(p, raffles, totalEntries);
-      if (!plan || !plan.rows.length) {
-        return jsonResponse({ ok: false, error: 'Could not build ticket split.', code: 'split' }, 400);
+  return runEntryWritesAndMaybeEmail_(
+    slug,
+    name,
+    phoneNorm,
+    email,
+    p,
+    ev,
+    bonuses,
+    bonusById,
+    bonusProofTrimmed,
+    totalEntries,
+    ticketMode,
+    raffleId,
+    raffles,
+    testMode,
+    ip,
+    ua,
+    entryToken,
+    true
+  );
+}
+
+function handleGetEntryByToken_(data) {
+  var p = data.payload || {};
+  var slug = String(p.slug || '');
+  var token = String(p.token || '').trim();
+  if (!slug || !token) return jsonResponse({ ok: false, error: 'missing_fields', code: 'fields' }, 400);
+  var ip = String(p.clientIp || 'unknown');
+  if (!rateLimitOk_(ip)) {
+    return jsonResponse({ ok: false, error: 'Rate limited', code: 'rate_limited' }, 429);
+  }
+
+  var found = findEventRow_(slug);
+  if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
+  var ev = recordToObject_(found.headers, found.record);
+  var active = String(ev.active || '').toUpperCase() === 'TRUE' || ev.active === true;
+  if (!active) return jsonResponse({ ok: false, error: 'event_inactive' }, 403);
+
+  var rows = readEntryRowsByToken_(slug, token);
+  if (!rows.length) return jsonResponse({ ok: false, error: 'entry_not_found', code: 'token' }, 404);
+
+  var raffles = getRafflesForSlug_(slug);
+  var titleById = {};
+  var drawById = {};
+  for (var ri = 0; ri < raffles.length; ri++) {
+    titleById[raffles[ri].id] = raffles[ri].title;
+    drawById[raffles[ri].id] = raffles[ri].drawAt || '';
+  }
+
+  var raffleIdsSeen = [];
+  var byRid = {};
+  for (var j = 0; j < rows.length; j++) {
+    var rid = rows[j].raffleId;
+    if (!byRid[rid]) {
+      byRid[rid] = 0;
+      raffleIdsSeen.push(rid);
+    }
+    byRid[rid] += Number(rows[j].tickets) || 0;
+  }
+
+  var pools = [];
+  for (var k = 0; k < raffleIdsSeen.length; k++) {
+    var rid2 = raffleIdsSeen[k];
+    pools.push({
+      raffleId: rid2,
+      title: titleById[rid2] || rid2,
+      tickets: byRid[rid2],
+      drawAt: drawById[rid2] || '',
+    });
+  }
+
+  var ex0 = rows[0].extras || {};
+  var ticketMode = ex0.__split ? 'split' : 'single';
+  var splitRaffleIds = Array.isArray(ex0.__splitRaffleIds) ? ex0.__splitRaffleIds.map(String) : raffleIdsSeen.slice();
+  var totalTickets = 0;
+  for (var t = 0; t < rows.length; t++) totalTickets += Number(rows[t].tickets) || 0;
+
+  var bonusByIdOut = {};
+  Object.keys(ex0).forEach(function (key) {
+    if (key.indexOf('__') === 0) return;
+    if (typeof ex0[key] === 'boolean') bonusByIdOut[key] = ex0[key];
+  });
+
+  var bonuses = parseBonusRulesFromRow_(ev);
+  var locked = entryUpdateLockedForRaffleIds_(slug, raffleIdsSeen);
+
+  return jsonResponse({
+    ok: true,
+    entry: {
+      slug: slug,
+      eventName: String(ev.name || 'Event'),
+      name: String(rows[0].name || ''),
+      emailMasked: maskEmail_(rows[0].email),
+      phoneLast4: String(rows[0].phoneNorm || '').slice(-4),
+      ticketMode: ticketMode,
+      splitRaffleIds: ticketMode === 'split' ? splitRaffleIds : [],
+      singleRaffleId: ticketMode === 'single' ? String(rows[0].raffleId || '') : '',
+      pools: pools,
+      totalTickets: totalTickets,
+      bonusById: bonusByIdOut,
+      bonusProof: ex0.__bonusProof || {},
+      editLocked: locked,
+      bonuses: bonuses,
+    },
+  });
+}
+
+function handleUpdateEntryByToken_(data) {
+  var p = data.payload || {};
+  var slug = String(p.slug || '');
+  var token = String(p.token || '').trim();
+  if (!slug || !token) return jsonResponse({ ok: false, error: 'missing_fields', code: 'fields' }, 400);
+
+  var ip = String(p.clientIp || 'unknown');
+  if (!rateLimitOk_(ip)) {
+    return jsonResponse({ ok: false, error: 'Rate limited', code: 'rate_limited' }, 429);
+  }
+
+  var found = findEventRow_(slug);
+  if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
+  var ev = recordToObject_(found.headers, found.record);
+  var active = String(ev.active || '').toUpperCase() === 'TRUE' || ev.active === true;
+  if (!active) return jsonResponse({ ok: false, error: 'event_inactive' }, 403);
+
+  var rows = readEntryRowsByToken_(slug, token);
+  if (!rows.length) return jsonResponse({ ok: false, error: 'entry_not_found', code: 'token' }, 404);
+
+  var raffleIdsForLock = [];
+  for (var rli = 0; rli < rows.length; rli++) {
+    raffleIdsForLock.push(rows[rli].raffleId);
+  }
+  if (entryUpdateLockedForRaffleIds_(slug, raffleIdsForLock)) {
+    return jsonResponse(
+      { ok: false, error: 'Edits are locked within 10 minutes of a scheduled draw for your pools.', code: 'locked' },
+      409
+    );
+  }
+
+  var name = String(p.name || '').trim();
+  var email = String(p.email || '').trim();
+  var phone = String(p.phone || '').trim();
+  var phoneNorm = normalizePhone_(phone);
+  if (phoneNorm !== rows[0].phoneNorm || email !== String(rows[0].email || '').trim() || name !== String(rows[0].name || '').trim()) {
+    return jsonResponse({ ok: false, error: 'Details do not match this entry.', code: 'identity' }, 403);
+  }
+
+  if (!p.termsAccepted) {
+    return jsonResponse({ ok: false, error: 'Terms not accepted', code: 'terms' }, 400);
+  }
+
+  var raffleId = String(p.raffleId || '').trim();
+  var ticketMode = String(p.ticketMode || 'single');
+  var raffles = getRafflesForSlug_(slug);
+  if (ticketMode === 'split') {
+    var srPick2 = p.splitRaffleIds;
+    if (Array.isArray(srPick2) && srPick2.length) {
+      var seenPick2 = {};
+      var nUnique2 = 0;
+      for (var pi2 = 0; pi2 < srPick2.length; pi2++) {
+        var pid2 = String(srPick2[pi2] || '').trim();
+        if (!pid2 || seenPick2[pid2]) continue;
+        seenPick2[pid2] = true;
+        var okPick2 = raffles.some(function (r) {
+          return r.id === pid2;
+        });
+        if (!okPick2) {
+          return jsonResponse({ ok: false, error: 'Unknown prize pool in selection.', code: 'raffle' }, 400);
+        }
+        nUnique2++;
       }
-      var written = 0;
-      for (var s = 0; s < plan.rows.length; s++) {
-        var part = plan.rows[s];
-        if (!(part.weight > 0)) continue;
-        appendEntryRow_(
-          slug,
-          name,
-          phoneNorm,
-          email,
-          part.raffleId,
-          bonusById,
-          part.weight,
-          { split: true, totalAll: totalEntries, evenly: plan.evenly },
-          testMode,
-          ip,
-          ua,
-          bonusProofTrimmed
+      if (nUnique2 < 2) {
+        return jsonResponse(
+          {
+            ok: false,
+            error: 'Pick at least two prize pools to split tickets, or one pool for all tickets.',
+            code: 'split_pools',
+          },
+          400
         );
-        written++;
       }
-      if (!written) {
-        return jsonResponse({ ok: false, error: 'No ticket weight in split — check pools.', code: 'split' }, 400);
-      }
+    } else if (raffles.length < 2) {
+      return jsonResponse({ ok: false, error: 'Need at least two prize pools to split tickets.', code: 'split_pools' }, 400);
+    }
+  } else {
+    if (!raffleId) {
+      return jsonResponse({ ok: false, error: 'Missing required fields', code: 'fields' }, 400);
+    }
+    var okRaffle2 = raffles.some(function (r) {
+      return r.id === raffleId;
+    });
+    if (!okRaffle2) return jsonResponse({ ok: false, error: 'Invalid raffle', code: 'raffle' }, 400);
+  }
+
+  var bonuses = parseBonusRulesFromRow_(ev);
+  var bonusById = {};
+  if (p.bonusById && typeof p.bonusById === 'object' && !Array.isArray(p.bonusById)) {
+    Object.keys(p.bonusById).forEach(function (k) {
+      bonusById[String(k)] = Boolean(p.bonusById[k]);
+    });
+  } else {
+    bonusById.instagram = Boolean(p.bonusInstagram);
+    bonusById.review = Boolean(p.bonusReview);
+    bonusById.referral = Boolean(p.bonusReferral);
+  }
+
+  var proofErr2 = validateBonusProof_(p.bonusProof, bonuses, bonusById);
+  if (proofErr2) {
+    return jsonResponse({ ok: false, error: proofErr2, code: 'bonus_proof' }, 400);
+  }
+  var bonusProofTrimmed = trimBonusProofForSubmit_(p.bonusProof, bonuses);
+
+  var totalEntries = computeTicketsFromBonuses_(bonusById, bonuses);
+
+  var testMode = Boolean(p.testMode);
+  var defaultTest2 =
+    String(ev.defaultTestMode || '').toUpperCase() === 'TRUE' || ev.defaultTestMode === true;
+  testMode = Boolean(p.testMode) || defaultTest2;
+
+  if (testMode) {
+    var block2 = String(ev.blockTestWrite || '').toUpperCase() === 'TRUE';
+    if (block2) {
       return jsonResponse({
         ok: true,
         totalEntries: totalEntries,
-        ticketMode: 'split',
-        poolsEntered: written,
-        testMode: testMode,
+        message: 'Test mode: update not stored (blockTestWrite)',
+        testMode: true,
       });
     }
-
-    appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, totalEntries, null, testMode, ip, ua, bonusProofTrimmed);
-    return jsonResponse({ ok: true, totalEntries: totalEntries, ticketMode: 'single', testMode: testMode });
-  } catch (errSplit) {
-    var msg = String(errSplit && errSplit.message ? errSplit.message : errSplit);
-    return jsonResponse({ ok: false, error: msg, code: 'split' }, 400);
   }
+
+  var rowNums = rows.map(function (x) {
+    return x.sheetRow;
+  });
+  rowNums.sort(function (a, b) {
+    return b - a;
+  });
+  deleteEntrySheetRowsDescending_(rowNums);
+
+  var ua = String(p.userAgent || '');
+
+  return runEntryWritesAndMaybeEmail_(
+    slug,
+    name,
+    phoneNorm,
+    email,
+    p,
+    ev,
+    bonuses,
+    bonusById,
+    bonusProofTrimmed,
+    totalEntries,
+    ticketMode,
+    raffleId,
+    raffles,
+    testMode,
+    ip,
+    ua,
+    token,
+    false
+  );
 }
 
 function readEntriesForSlug_(slug) {

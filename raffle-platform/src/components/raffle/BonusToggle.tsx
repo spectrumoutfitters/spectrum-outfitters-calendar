@@ -6,14 +6,23 @@ type Props = {
   points: number;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 };
 
-export function BonusToggle({ title, description, points, checked, onChange }: Props) {
+export function BonusToggle({ title, description, points, checked, onChange, disabled }: Props) {
   return (
-    <label className="flex min-h-[3.25rem] cursor-pointer touch-manipulation items-center gap-4 rounded-2xl border border-stone-200 bg-white/70 px-4 py-3.5 transition active:bg-stone-50 hover:border-stone-300 dark:border-neutral-800 dark:bg-neutral-900/70 dark:hover:border-neutral-700 dark:active:bg-neutral-900">
+    <label
+      className={[
+        "flex min-h-[3.25rem] touch-manipulation items-center gap-4 rounded-2xl border border-stone-200 bg-white/70 px-4 py-3.5 transition dark:border-neutral-800 dark:bg-neutral-900/70",
+        disabled
+          ? "cursor-not-allowed opacity-60"
+          : "cursor-pointer active:bg-stone-50 hover:border-stone-300 dark:hover:border-neutral-700 dark:active:bg-neutral-900",
+      ].join(" ")}
+    >
       <input
         type="checkbox"
-        className="h-6 w-6 shrink-0 rounded-md border-stone-300 text-amber-600 focus:ring-amber-500 dark:border-neutral-600 dark:bg-neutral-900"
+        disabled={disabled}
+        className="h-6 w-6 shrink-0 rounded-md border-stone-300 text-amber-600 focus:ring-amber-500 disabled:cursor-not-allowed dark:border-neutral-600 dark:bg-neutral-900"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
       />

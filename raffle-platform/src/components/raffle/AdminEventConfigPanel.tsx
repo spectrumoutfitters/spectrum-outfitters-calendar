@@ -44,8 +44,27 @@ function normalizeRaffle(r: Partial<AdminRaffleRow> & { id?: string; raffleId?: 
     valueLabel: String(r.valueLabel ?? "").trim().slice(0, 160),
     sortOrder: Number.isFinite(Number(r.sortOrder)) ? Number(r.sortOrder) : 0,
     active: r.active !== false && String(r.active).toUpperCase() !== "FALSE",
+    drawAt: String(r.drawAt ?? "").trim().slice(0, 50),
     _clientListKey: existingKey || newClientListKey(),
   };
+}
+
+/** `datetime-local` value in local time; empty if invalid or blank. */
+function drawAtToDatetimeLocal(iso: string): string {
+  const t = String(iso || "").trim();
+  if (!t) return "";
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function datetimeLocalToIso(local: string): string {
+  const v = String(local || "").trim();
+  if (!v) return "";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString();
 }
 
 function formatConfigSaveError(code: string | undefined): string {
@@ -66,6 +85,8 @@ function formatConfigSaveError(code: string | undefined): string {
       return "Image URL must be empty or start with https://";
     case "invalid_raffle_value_label":
       return "Prize value text is too long (max 160 characters).";
+    case "invalid_raffle_draw_at":
+      return "Draw date/time is invalid or too long — use a real date/time or leave it blank.";
     case "invalid_bonus_rules_json":
       return "Bonus rules must be valid JSON or empty.";
     case "unauthorized":
@@ -155,6 +176,7 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
             valueLabel: r.valueLabel.trim().slice(0, 160),
             sortOrder: r.sortOrder || i + 1,
             active: r.active,
+            drawAt: r.drawAt.trim().slice(0, 50),
           })),
         }),
       });
@@ -507,6 +529,23 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
                                 className="mt-1 h-10 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-2 text-sm text-neutral-100"
                                 value={row.subtitle}
                                 onChange={(e) => updateRaffle(i, { subtitle: e.target.value.slice(0, 500) })}
+                              />
+                            </label>
+                            <label className="block sm:col-span-2">
+                              <span className="text-xs text-neutral-500">
+                                Scheduled draw (optional) — magic-link edits lock 10 minutes before this time
+                              </span>
+                              <input
+                                type="datetime-local"
+                                className="mt-1 h-10 w-full max-w-md rounded-lg border border-neutral-700 bg-neutral-950 px-2 text-sm text-neutral-100"
+                                value={drawAtToDatetimeLocal(row.drawAt)}
+                                onChange={(e) =>
+                                  updateRaffle(i, {
+                                    drawAt: e.target.value.trim()
+                                      ? datetimeLocalToIso(e.target.value).slice(0, 50)
+                                      : "",
+                                  })
+                                }
                               />
                             </label>
                             <div className="flex flex-wrap items-center gap-4">

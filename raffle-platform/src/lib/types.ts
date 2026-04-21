@@ -6,6 +6,8 @@ export type RaffleOption = {
   /** Shown on the entry page (e.g. "$450+ retail · No purchase necessary"). */
   valueLabel?: string;
   sortOrder: number;
+  /** Optional ISO datetime when this pool is drawn (locks magic-link edits at T−10 minutes). */
+  drawAt?: string;
 };
 
 /** One optional field when a bonus is checked (for staff verification; stored in sheet `extrasJson.__bonusProof`). */
@@ -83,8 +85,41 @@ export type EntryPayload = {
 };
 
 export type SubmitEntryResult =
-  | { ok: true; totalEntries: number; message?: string }
+  | {
+      ok: true;
+      totalEntries: number;
+      message?: string;
+      magicLinkSent?: boolean;
+      poolsEntered?: number;
+      ticketMode?: string;
+      testMode?: boolean;
+    }
   | { ok: false; error: string; code?: string };
+
+/** Row returned by getEntryByToken (magic link). */
+export type MyEntryPoolRow = {
+  raffleId: string;
+  title: string;
+  tickets: number;
+  drawAt: string;
+};
+
+export type MyEntrySnapshot = {
+  slug: string;
+  eventName: string;
+  name: string;
+  emailMasked: string;
+  phoneLast4: string;
+  ticketMode: "single" | "split";
+  splitRaffleIds: string[];
+  singleRaffleId: string;
+  pools: MyEntryPoolRow[];
+  totalTickets: number;
+  bonusById: Record<string, boolean>;
+  bonusProof: Record<string, Record<string, string>>;
+  editLocked: boolean;
+  bonuses?: BonusRule[];
+};
 
 export type AdminStats = {
   slug: string;
@@ -108,6 +143,8 @@ export type AdminRaffleRow = {
   valueLabel: string;
   sortOrder: number;
   active: boolean;
+  /** ISO datetime text when this pool is drawn (optional). */
+  drawAt: string;
   /**
    * Stable key for React lists only — not sent to the sheet API.
    * Must not change when the user edits `raffleId`, or inputs lose focus.

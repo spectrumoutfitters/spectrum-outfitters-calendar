@@ -1,25 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import type { EventConfig } from "@/lib/types";
 import { trimBonusProofForSubmit, validateBonusProof } from "@/lib/bonusProof";
 import { computeTicketsFromBonuses, resolveBonusRules } from "@/lib/entryMath";
+import {
+  countPositivePools,
+  defaultPoolTickets,
+  reconcilePoolTickets,
+  sumPoolTickets,
+} from "@/lib/poolTicketAlloc";
 import { BonusToggle } from "./BonusToggle";
 
 type Props = {
   event: EventConfig;
 };
-
-/** Even split share for display (e.g. 1 ticket ÷ 4 pools → 0.25). */
-function formatTicketSlice(total: number, pools: number): string {
-  if (pools < 1) return "—";
-  const v = total / pools;
-  if (Number.isInteger(v)) return String(v);
-  const s = v.toFixed(6);
-  return s.replace(/\.?0+$/, "");
-}
 
 export function EventEntryClient({ event }: Props) {
   const searchParams = useSearchParams();
@@ -28,15 +25,19 @@ export function EventEntryClient({ event }: Props) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  /** Which prize pool(s) get tickets — at least one must stay on. Order follows event list for API. */
-  const [poolSelected, setPoolSelected] = useState<Record<string, boolean>>(() => {
-    const init: Record<string, boolean> = Object.fromEntries(event.raffles.map((r) => [r.id, false]));
-    if (event.raffles[0]) init[event.raffles[0].id] = true;
-    return init;
-  });
   const bonusRules = useMemo(() => resolveBonusRules(event), [event]);
   const [bonusById, setBonusById] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(bonusRules.map((r) => [r.id, false])),
+  );
+  const orderedIds = useMemo(() => event.raffles.map((r) => r.id), [event.raffles]);
+  const [poolTickets, setPoolTickets] = useState<Record<string, number>>(() =>
+    defaultPoolTickets(
+      event.raffles.map((r) => r.id),
+      computeTicketsFromBonuses(
+        Object.fromEntries(bonusRules.map((r) => [r.id, false])),
+        bonusRules,
+      ),
+    ),
   );
   const [bonusProof, setBonusProof] = useState<Record<string, Record<string, string>>>({});
   const [terms, setTerms] = useState(false);
@@ -54,9 +55,14 @@ export function EventEntryClient({ event }: Props) {
     [bonusById, bonusRules],
   );
 
+  useEffect(() => {
+    setPoolTickets((prev) => reconcilePoolTickets(orderedIds, prev, previewTickets));
+  }, [orderedIds, previewTickets]);
+
+  const assignedTotal = useMemo(() => sumPoolTickets(orderedIds, poolTickets), [orderedIds, poolTickets]);
   const selectedIdsOrdered = useMemo(
-    () => event.raffles.map((r) => r.id).filter((id) => poolSelected[id]),
-    [event.raffles, poolSelected],
+    () => orderedIds.filter((id) => (poolTickets[id] ?? 0) > 0),
+    [orderedIds, poolTickets],
   );
   const selectedCount = selectedIdsOrdered.length;
 
@@ -67,13 +73,10 @@ export function EventEntryClient({ event }: Props) {
 
   const multiPool = event.raffles.length >= 2;
 
-  function togglePool(id: string) {
-    setPoolSelected((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
-      const on = Object.values(next).filter(Boolean).length;
-      if (on === 0) return prev;
-      return next;
-    });
+  function setPoolTicketCount(id: string, raw: string) {
+    const n = raw === "" ? 0 : Number(raw);
+    const v = Number.isFinite(n) ? Math.max(0, Math.min(previewTickets, Math.floor(n))) : 0;
+    setPoolTickets((prev) => ({ ...prev, [id]: v }));
   }
 
   function setBonus(id: string, v: boolean) {
@@ -99,9 +102,17 @@ export function EventEntryClient({ event }: Props) {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    if (selectedIdsOrdered.length === 0) {
+    const poolSum = sumPoolTickets(orderedIds, poolTickets);
+    if (countPositivePools(orderedIds, poolTickets) < 1) {
       setStatus("error");
-      setMessage("Choose at least one prize pool.");
+      setMessage("Give at least one ticket to a prize pool (use the number next to each pool).");
+      return;
+    }
+    if (poolSum !== previewTickets) {
+      setStatus("error");
+      setMessage(
+        `Tickets per pool must add up to ${previewTickets} (you have ${poolSum} assigned). Use the arrows or type the numbers.`,
+      );
       return;
     }
     if (!terms) {
@@ -133,13 +144,14 @@ export function EventEntryClient({ event }: Props) {
       const trimmedProof = trimBonusProofForSubmit(bonusProof, bonusRules);
       if (Object.keys(trimmedProof).length) baseBody.bonusProof = trimmedProof;
 
+      const ticketSplit = Object.fromEntries(orderedIds.map((id) => [id, poolTickets[id] ?? 0]));
       if (selectedIdsOrdered.length === 1) {
         baseBody.ticketMode = "single";
         baseBody.raffleId = selectedIdsOrdered[0];
       } else {
         baseBody.ticketMode = "split";
-        baseBody.splitEvenly = true;
-        baseBody.splitRaffleIds = selectedIdsOrdered;
+        baseBody.splitEvenly = false;
+        baseBody.ticketSplit = ticketSplit;
         baseBody.raffleId = selectedIdsOrdered[0];
       }
 
@@ -154,6 +166,7 @@ export function EventEntryClient({ event }: Props) {
         poolsEntered?: number;
         error?: string;
         message?: string;
+        magicLinkSent?: boolean;
       };
       if (!res.ok || !data.ok) {
         setStatus("error");
@@ -163,13 +176,19 @@ export function EventEntryClient({ event }: Props) {
       setStatus("success");
       const splitNote =
         selectedIdsOrdered.length > 1 && typeof data.poolsEntered === "number"
-          ? ` Split evenly across ${data.poolsEntered} prize pool${data.poolsEntered === 1 ? "" : "s"}.`
+          ? ` Recorded across ${data.poolsEntered} prize pool${data.poolsEntered === 1 ? "" : "s"} with your ticket split.`
           : "";
+      const emailManageNote =
+        !testMode && data.magicLinkSent
+          ? " Check your email for a private link to view or change your ticket split until shortly before each scheduled draw."
+          : !testMode
+            ? " If email is configured for this giveaway, you may receive a link to manage your entry from the same address you entered with."
+            : "";
       setMessage(
         data.message ||
           (testMode
             ? `Test entry recorded (${data.totalEntries ?? previewTickets} tickets).${splitNote}`
-            : `You’re in! ${data.totalEntries ?? previewTickets} total tickets.${splitNote}`),
+            : `You’re in! ${data.totalEntries ?? previewTickets} total tickets.${splitNote}${emailManageNote}`),
       );
     } catch {
       setStatus("error");
@@ -233,10 +252,9 @@ export function EventEntryClient({ event }: Props) {
         >
           <p className="text-sm font-semibold tracking-wide text-stone-900 dark:text-neutral-50">Free to enter</p>
           <p className="mt-2 text-pretty text-sm leading-relaxed text-stone-800 dark:text-neutral-200">
-            One submission per phone. Choose <strong className="font-semibold">one</strong> prize pool for all your tickets,
-            or check <strong className="font-semibold">several</strong> pools — your tickets are then{" "}
-            <strong className="font-semibold">split evenly</strong> only across the pools you picked (fractions allowed,
-            e.g. 1 ticket across 4 pools = 0.25 each).{" "}
+            One submission per phone. Put <strong className="font-semibold">all</strong> your tickets in one prize pool,
+            or <strong className="font-semibold">divide them across several pools</strong> using the number boxes on each
+            line — the amounts must add up to your ticket total.{" "}
             <span className="font-semibold" style={{ color: accent }}>
               No purchase necessary
             </span>
@@ -395,9 +413,8 @@ export function EventEntryClient({ event }: Props) {
               <div className="min-w-0 flex-1">
                 <h2 className="text-base font-semibold text-stone-900 dark:text-neutral-100 sm:text-lg">Your tickets</h2>
                 <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-neutral-400">
-                  Includes your base entry plus any extras you turned on. Check every pool you want a chance in — one pool
-                  gets all tickets; several pools split your total <span className="font-medium">evenly</span> across only
-                  those lines.
+                  Includes your base entry plus any extras you turned on. Use the number next to each pool to decide how
+                  many tickets count in that drawing — whole numbers only, and they must add up to your total.
                 </p>
               </div>
               <div className="flex shrink-0 items-center justify-between gap-3 rounded-2xl bg-stone-100 px-4 py-3 dark:bg-neutral-800/90 sm:flex-col sm:items-center sm:py-4">
@@ -409,38 +426,38 @@ export function EventEntryClient({ event }: Props) {
 
             {multiPool ? (
               <>
-                <p className="mt-5 text-sm leading-relaxed text-stone-600 dark:text-neutral-400">
-                  <span className="font-semibold text-stone-900 dark:text-neutral-100">{selectedCount}</span> pool
-                  {selectedCount === 1 ? "" : "s"} selected
-                  {selectedCount >= 2 ? (
+                <p
+                  className={[
+                    "mt-5 text-sm leading-relaxed tabular-nums",
+                    assignedTotal === previewTickets
+                      ? "text-stone-600 dark:text-neutral-400"
+                      : "font-medium text-amber-900 dark:text-amber-100",
+                  ].join(" ")}
+                >
+                  <span className="font-semibold text-stone-900 dark:text-neutral-100">{assignedTotal}</span> /{" "}
+                  {previewTickets} tickets assigned
+                  {selectedCount > 0 ? (
                     <>
                       {" "}
-                      — even split:{" "}
-                      <span className="font-semibold tabular-nums text-stone-900 dark:text-neutral-100">
-                        {formatTicketSlice(previewTickets, selectedCount)}
-                      </span>{" "}
-                      of your total per selected pool.
+                      · {selectedCount} pool{selectedCount === 1 ? "" : "s"} with tickets
                     </>
-                  ) : (
-                    <> — all {previewTickets} ticket{previewTickets === 1 ? "" : "s"} count in that drawing.</>
-                  )}
+                  ) : null}
                 </p>
                 <div className="mt-4 space-y-3" role="group" aria-label="Prize pools">
                   {event.raffles.map((r) => {
-                    const checked = Boolean(poolSelected[r.id]);
-                    const slice =
-                      selectedCount >= 2 && checked ? formatTicketSlice(previewTickets, selectedCount) : null;
+                    const n = poolTickets[r.id] ?? 0;
+                    const active = n > 0;
                     return (
-                      <label
+                      <div
                         key={r.id}
                         className={[
-                          "flex min-h-[5.5rem] cursor-pointer touch-manipulation gap-4 rounded-2xl border p-4 transition sm:min-h-[5rem] sm:p-5",
-                          checked
+                          "flex min-h-[5.5rem] touch-manipulation gap-4 rounded-2xl border p-4 sm:min-h-[5rem] sm:p-5",
+                          active
                             ? "border-transparent ring-2 ring-offset-2 ring-offset-stone-50 dark:ring-offset-neutral-950"
                             : "border-stone-200 bg-white/80 dark:border-neutral-800 dark:bg-neutral-900/75",
                         ].join(" ")}
                         style={
-                          checked
+                          active
                             ? ({
                                 boxShadow: `0 12px 40px -16px ${accent}66`,
                                 ["--tw-ring-color" as string]: accent,
@@ -448,12 +465,6 @@ export function EventEntryClient({ event }: Props) {
                             : undefined
                         }
                       >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => togglePool(r.id)}
-                          className="mt-1 h-6 w-6 shrink-0 rounded-md border-stone-300 text-amber-600 focus:ring-amber-500 dark:border-neutral-600 dark:bg-neutral-900"
-                        />
                         <div className="relative h-[4.25rem] w-[4.25rem] shrink-0 overflow-hidden rounded-xl bg-stone-100 dark:bg-neutral-800">
                           {r.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -468,20 +479,7 @@ export function EventEntryClient({ event }: Props) {
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <p className="text-base font-bold leading-snug text-stone-900 dark:text-neutral-50">{r.title}</p>
-                            {slice != null ? (
-                              <span
-                                className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold tabular-nums text-stone-900 dark:text-neutral-50"
-                                style={{
-                                  backgroundColor: `${accent}22`,
-                                  border: `1px solid ${accent}55`,
-                                }}
-                              >
-                                {slice} each
-                              </span>
-                            ) : null}
-                          </div>
+                          <p className="text-base font-bold leading-snug text-stone-900 dark:text-neutral-50">{r.title}</p>
                           {r.subtitle ? (
                             <p className="mt-1 line-clamp-2 text-sm text-stone-600 dark:text-neutral-400">{r.subtitle}</p>
                           ) : null}
@@ -491,7 +489,26 @@ export function EventEntryClient({ event }: Props) {
                             </p>
                           ) : null}
                         </div>
-                      </label>
+                        <div className="flex shrink-0 flex-col items-end justify-center gap-1 self-center">
+                          <label htmlFor={`pool-tickets-${r.id}`} className="sr-only">
+                            Tickets in {r.title}
+                          </label>
+                          <input
+                            id={`pool-tickets-${r.id}`}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={previewTickets}
+                            step={1}
+                            value={n}
+                            onChange={(e) => setPoolTicketCount(r.id, e.target.value)}
+                            className="h-11 w-[4.5rem] rounded-xl border border-stone-300 bg-white px-1 text-center text-base font-semibold tabular-nums text-stone-900 shadow-inner outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/30 dark:border-neutral-600 dark:bg-neutral-950 dark:text-neutral-100"
+                          />
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:text-neutral-500">
+                            tickets
+                          </span>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

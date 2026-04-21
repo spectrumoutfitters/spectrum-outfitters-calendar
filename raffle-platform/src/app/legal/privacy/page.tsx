@@ -32,6 +32,10 @@ export default function PrivacyPage() {
       <h2 className="mt-10 text-xl font-semibold text-neutral-50">How we use your information</h2>
       <ul className="list-disc space-y-2 pl-5">
         <li>To administer the promotion and draw winners.</li>
+        <li>
+          To send a transactional email with a private link so you can review your entry or adjust how tickets are split
+          across prize pools before scheduled draws, when that feature is enabled for the promotion.
+        </li>
         <li>To contact you if you win a prize.</li>
         <li>To detect and prevent duplicate entries, fraud, and abuse.</li>
         <li>To contact you about future Spectrum Outfitters promotions, events, and offers (you may opt out at any time).</li>

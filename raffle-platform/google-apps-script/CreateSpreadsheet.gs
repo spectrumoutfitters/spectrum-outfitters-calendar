@@ -31,7 +31,7 @@ var EVENT_HEADERS = [
   'bonusRulesJson',
 ];
 
-var RAFFLE_HEADERS = ['slug', 'raffleId', 'title', 'subtitle', 'imageUrl', 'valueLabel', 'sortOrder', 'active'];
+var RAFFLE_HEADERS = ['slug', 'raffleId', 'title', 'subtitle', 'imageUrl', 'valueLabel', 'sortOrder', 'active', 'drawAt'];
 
 var ENTRY_HEADERS = [
   'timestamp',
@@ -195,9 +195,9 @@ function writeHeadersAndSamples_(ss) {
   clearSheetContent_(shRf, RAFFLE_HEADERS.length);
 
   var raffleSampleRows = [
-    ['grand-opening', 'grand-prize', 'Grand prize bundle', 'Top prize pool — multiple items', '', '$500+ retail value · No purchase necessary', 1, true],
-    ['grand-opening', 'runner-up', 'Runner-up package', 'Second-draw pool', '', '$150+ in gear', 2, true],
-    ['grand-opening', 'door-prize', 'Door prizes', 'Random draws throughout the day', '', 'Surprise bundles', 3, true],
+    ['grand-opening', 'grand-prize', 'Grand prize bundle', 'Top prize pool — multiple items', '', '$500+ retail value · No purchase necessary', 1, true, ''],
+    ['grand-opening', 'runner-up', 'Runner-up package', 'Second-draw pool', '', '$150+ in gear', 2, true, ''],
+    ['grand-opening', 'door-prize', 'Door prizes', 'Random draws throughout the day', '', 'Surprise bundles', 3, true, ''],
   ];
   for (var ri = 0; ri < raffleSampleRows.length; ri++) {
     if (raffleSampleRows[ri].length !== RAFFLE_HEADERS.length) {
