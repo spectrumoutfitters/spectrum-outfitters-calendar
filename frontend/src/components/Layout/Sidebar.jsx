@@ -16,6 +16,7 @@ const DEFAULT_NAV_ORDER = [
   'crm',
   'profile',
   'admin',
+  'grand_opening',
 ];
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -35,6 +36,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/crm', label: 'Customers', key: 'crm' },
     { path: '/profile', label: 'Profile', key: 'profile' },
     { path: '/admin', label: 'Admin', key: 'admin', adminOnly: true },
+    { path: '/admin', label: 'Grand Opening Day', key: 'grand_opening', employeeGrandOpening: true },
   ];
 
   useEffect(() => {
@@ -59,7 +61,11 @@ const Sidebar = ({ isOpen, onClose }) => {
     return () => { cancelled = true; };
   }, []);
 
-  let navItems = allNavItems.filter((item) => !item.adminOnly || isAdmin);
+  let navItems = allNavItems.filter((item) => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (item.employeeGrandOpening && isAdmin) return false;
+    return true;
+  });
   navItems = [...navItems].sort((a, b) => {
     const i = navOrder.indexOf(a.key);
     const j = navOrder.indexOf(b.key);
@@ -108,7 +114,7 @@ const Sidebar = ({ isOpen, onClose }) => {
               const to = item.tab ? `${item.path}?tab=${item.tab}` : item.path;
               const isActive = location.pathname === item.path && (!item.tab || searchParams.get('tab') === item.tab);
               return (
-                <li key={item.tab ? item.path + item.tab : item.path}>
+                <li key={item.key}>
                   <Link to={to} onClick={handleLinkClick} className={navLinkClass(isActive)}>
                     <NavIcon name={item.key} />
                     <span>{item.label}</span>
@@ -148,7 +154,7 @@ const Sidebar = ({ isOpen, onClose }) => {
               const to = item.tab ? `${item.path}?tab=${item.tab}` : item.path;
               const isActive = location.pathname === item.path && (!item.tab || searchParams.get('tab') === item.tab);
               return (
-                <li key={item.tab ? item.path + item.tab : item.path}>
+                <li key={item.key}>
                   <Link to={to} className={navLinkClass(isActive)}>
                     <NavIcon name={item.key} />
                     <span>{item.label}</span>

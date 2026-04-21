@@ -73,6 +73,13 @@ export const IconMyList = () => (
   </svg>
 );
 
+export const IconGrandOpening = () => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M12 3v1M12 20v1M4.22 4.22l.7.7M18.36 18.36l.7.7M1 12h1M22 12h1M4.22 19.78l.7-.7M18.36 5.64l.7-.7" />
+    <circle cx="12" cy="12" r="4" />
+  </svg>
+);
+
 export const IconAdmin = () => (
   <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <circle cx="12" cy="12" r="3" />
@@ -101,6 +108,7 @@ const iconMap = {
   crm: IconCRM,
   profile: IconProfile,
   admin: IconAdmin,
+  grand_opening: IconGrandOpening,
 };
 
 export function NavIcon({ name }) {

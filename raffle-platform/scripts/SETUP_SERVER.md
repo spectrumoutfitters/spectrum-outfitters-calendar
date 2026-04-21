@@ -150,7 +150,7 @@ After this, **https://raffle.spectrumoutfitters.com** is live with SSL. ✅
 | `https://raffle.spectrumoutfitters.com` | Spectrum Outfitters homepage |
 | `https://raffle.spectrumoutfitters.com/e/grand-opening` | Entry form |
 | `https://raffle.spectrumoutfitters.com/admin/grand-opening` | Admin panel (enter your admin key) |
-| `https://raffle.spectrumoutfitters.com/setup` | Step-by-step setup guide |
+| `https://login.spectrumoutfitters.com/admin` (Grand Opening Day tab) | Staff setup & live raffle (admins see setup notes) |
 
 ---
 

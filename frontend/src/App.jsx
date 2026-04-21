@@ -122,11 +122,11 @@ function AppRoutes() {
       <Route
         path="/admin"
         element={
-          <AdminRoute>
+          <PrivateRoute>
             <Layout>
               <Admin />
             </Layout>
-          </AdminRoute>
+          </PrivateRoute>
         }
       />
       {/* /admin/shop-financing disabled — redirect to admin */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 import UserManagement from '../components/Admin/UserManagement';
 import TimeApproval from '../components/Admin/TimeApproval';
 import Reports from '../components/Admin/Reports';
@@ -20,17 +21,20 @@ import SystemUpdates from '../components/Admin/SystemUpdates';
 import SecuritySessions from '../components/Admin/SecuritySessions';
 import AdminHistory from '../components/Admin/AdminHistory';
 import AdminBroadcastNotification from '../components/Notifications/AdminBroadcastNotification';
+import GrandOpeningDay from '../components/Admin/GrandOpeningDay';
 
 const GOLD = '#D4A017';
 
-// Tab definitions
-const MAIN_TABS = [
+const MAIN_TABS_ADMIN = [
   { id: 'overview', label: 'Overview' },
+  { id: 'grand_opening', label: 'Grand Opening Day' },
   { id: 'people', label: 'People' },
   { id: 'inventory', label: 'Inventory' },
   { id: 'finance', label: 'Finance' },
   { id: 'settings', label: 'Settings' },
 ];
+
+const MAIN_TABS_EMPLOYEE = [{ id: 'grand_opening', label: 'Grand Opening Day' }];
 
 const SUB_TABS = {
   people: [
@@ -122,6 +126,8 @@ function SubTabBar({ tabs, activeId, onSelect }) {
 
 const Admin = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { isAdmin } = useAuth();
 
   // Restore last tab from localStorage — migrate old tab names to new ones
   const TAB_MIGRATION = { team: 'people', shop: 'inventory', insights: 'finance' };
@@ -131,7 +137,8 @@ const Admin = () => {
     try { return JSON.parse(localStorage.getItem('admin_sub_tabs') || '{}'); } catch { return {}; }
   })();
 
-  const [mainTab, setMainTab] = useState(savedMain);
+  const initialMain = !isAdmin ? 'grand_opening' : savedMain;
+  const [mainTab, setMainTab] = useState(initialMain);
   const [subTabs, setSubTabs] = useState({
     people: savedSubs.people || savedSubs.team || 'status',
     inventory: savedSubs.inventory || savedSubs.shop || 'inventory',
@@ -163,6 +170,7 @@ const Admin = () => {
 
 
   const selectMainTab = (id) => {
+    if (!isAdmin && id !== 'grand_opening') return;
     setMainTab(id);
     localStorage.setItem('admin_main_tab', id);
   };
@@ -176,6 +184,21 @@ const Admin = () => {
   useEffect(() => {
     if (mainTab === 'overview') loadDashboardData();
   }, [mainTab]);
+
+  useEffect(() => {
+    if (searchParams.get('raffleSetup') !== '1') return;
+    setMainTab('grand_opening');
+    localStorage.setItem('admin_main_tab', 'grand_opening');
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!isAdmin && mainTab !== 'grand_opening') {
+      setMainTab('grand_opening');
+    }
+  }, [isAdmin, mainTab]);
+
+  const MAIN_TABS = isAdmin ? MAIN_TABS_ADMIN : MAIN_TABS_EMPLOYEE;
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -508,30 +531,35 @@ const Admin = () => {
     <div className="space-y-0">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">Admin</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">
+          {isAdmin ? 'Admin' : 'Grand Opening Day'}
+        </h1>
         <div className="flex items-center gap-3">
           <p className="text-gray-500 dark:text-neutral-100 text-sm hidden sm:block">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
-          <AdminBroadcastNotification />
+          {isAdmin && <AdminBroadcastNotification />}
         </div>
       </div>
 
-      {/* Main tab bar */}
-      <TabBar
-        tabs={MAIN_TABS}
-        activeId={mainTab}
-        onSelect={selectMainTab}
-        badge={{ tabId: 'people', count: teamBadgeCount }}
-      />
+      {/* Main tab bar — full admin tabs for admins only */}
+      {isAdmin && (
+        <TabBar
+          tabs={MAIN_TABS}
+          activeId={mainTab}
+          onSelect={selectMainTab}
+          badge={{ tabId: 'people', count: teamBadgeCount }}
+        />
+      )}
 
-      {/* Tab content */}
+      {/* Tab content — non-admins can only render Grand Opening (guards localStorage tampering) */}
       <div className="pt-4">
-        {mainTab === 'overview' && renderOverview()}
-        {mainTab === 'people' && renderPeople()}
-        {mainTab === 'inventory' && renderInventory()}
-        {mainTab === 'finance' && renderFinance()}
-        {mainTab === 'settings' && renderSettings()}
+        {mainTab === 'overview' && isAdmin && renderOverview()}
+        {mainTab === 'grand_opening' && <GrandOpeningDay />}
+        {mainTab === 'people' && isAdmin && renderPeople()}
+        {mainTab === 'inventory' && isAdmin && renderInventory()}
+        {mainTab === 'finance' && isAdmin && renderFinance()}
+        {mainTab === 'settings' && isAdmin && renderSettings()}
       </div>
     </div>
   );
