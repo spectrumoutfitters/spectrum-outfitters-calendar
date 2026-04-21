@@ -25,8 +25,16 @@ function defaultEvent(): AdminEventEditable {
   };
 }
 
+function newClientListKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `rk-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
 function normalizeRaffle(r: Partial<AdminRaffleRow> & { id?: string; raffleId?: string }): AdminRaffleRow {
   const id = String(r.raffleId || r.id || "").trim() || "new-prize";
+  const existingKey = typeof r._clientListKey === "string" && r._clientListKey.length > 0 ? r._clientListKey : "";
   return {
     id,
     raffleId: id,
@@ -36,6 +44,7 @@ function normalizeRaffle(r: Partial<AdminRaffleRow> & { id?: string; raffleId?: 
     valueLabel: String(r.valueLabel ?? "").trim().slice(0, 160),
     sortOrder: Number.isFinite(Number(r.sortOrder)) ? Number(r.sortOrder) : 0,
     active: r.active !== false && String(r.active).toUpperCase() !== "FALSE",
+    _clientListKey: existingKey || newClientListKey(),
   };
 }
 
@@ -185,7 +194,20 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
   }
 
   function updateRaffle(i: number, patch: Partial<AdminRaffleRow>) {
-    setRaffles((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch, raffleId: patch.raffleId ?? r.raffleId, id: patch.raffleId ?? patch.id ?? r.id } : r)));
+    setRaffles((prev) =>
+      prev.map((r, j) => {
+        if (j !== i) return r;
+        const nextRaffleId = String(patch.raffleId ?? r.raffleId).trim() || "new-prize";
+        const nextId = String(patch.id ?? patch.raffleId ?? r.id).trim() || nextRaffleId;
+        return {
+          ...r,
+          ...patch,
+          raffleId: nextRaffleId,
+          id: nextId,
+          _clientListKey: r._clientListKey,
+        };
+      }),
+    );
   }
 
   function addRaffle() {
@@ -395,7 +417,7 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
                 const thumb = row.imageUrl?.trim();
                 return (
                   <div
-                    key={i + "-" + row.raffleId}
+                    key={row._clientListKey}
                     className="overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/50"
                   >
                     <button

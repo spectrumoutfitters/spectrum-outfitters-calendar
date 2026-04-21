@@ -85,6 +85,11 @@ export type AdminRaffleRow = {
   valueLabel: string;
   sortOrder: number;
   active: boolean;
+  /**
+   * Stable key for React lists only — not sent to the sheet API.
+   * Must not change when the user edits `raffleId`, or inputs lose focus.
+   */
+  _clientListKey: string;
 };
 
 /** Event fields editable from admin (no adminKey). */
