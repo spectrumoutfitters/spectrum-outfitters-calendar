@@ -6,6 +6,14 @@ export type RaffleOption = {
   sortOrder: number;
 };
 
+/** Optional ticket multipliers — configure per event in Sheet column `bonusRulesJson` (JSON array). */
+export type BonusRule = {
+  id: string;
+  label: string;
+  description?: string;
+  tickets: number;
+};
+
 export type EventBranding = {
   name: string;
   description?: string;
@@ -21,6 +29,8 @@ export type EventConfig = EventBranding & {
   active: boolean;
   defaultTestMode: boolean;
   raffles: RaffleOption[];
+  /** From Apps Script when Events.bonusRulesJson is set; else client uses defaults. */
+  bonuses?: BonusRule[];
 };
 
 export type EntryPayload = {
@@ -29,9 +39,11 @@ export type EntryPayload = {
   phone: string;
   email: string;
   raffleId: string;
-  bonusInstagram: boolean;
-  bonusReview: boolean;
-  bonusReferral: boolean;
+  /** Per bonus id from event rules — preferred for dynamic bonuses */
+  bonusById?: Record<string, boolean>;
+  bonusInstagram?: boolean;
+  bonusReview?: boolean;
+  bonusReferral?: boolean;
   /** Honeypot — must be empty */
   company?: string;
   termsAccepted: boolean;

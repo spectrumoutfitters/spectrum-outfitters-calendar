@@ -20,8 +20,12 @@
  * Raffles
  *   slug, raffleId, title, subtitle, imageUrl, sortOrder, active
  *
+ * Events — optional column:
+ *   bonusRulesJson: JSON array of { "id": "instagram", "label": "…", "description": "…", "tickets": 2 }
+ *   If blank, defaults are Instagram (+2), Review (+5), Referral (+3).
+ *
  * Entries (created automatically in column order)
- *   timestamp, slug, name, phone, email, raffleId, bonusInstagram, bonusReview, bonusReferral, totalEntries, isTest, ip, userAgent
+ *   timestamp, slug, name, phone, email, raffleId, bonusInstagram, bonusReview, bonusReferral, totalEntries, isTest, ip, userAgent, extrasJson
  *
  * Winners (optional but recommended)
  *   drawId, timestamp, slug, raffleId, winnerName, winnerPhone, winnerEmail, ticketsInPool, isTest
@@ -72,6 +76,51 @@ function recordToObject_(headers, row) {
     o[String(headers[i]).trim()] = row[i];
   }
   return o;
+}
+
+function getDefaultBonuses_() {
+  return [
+    { id: 'instagram', label: 'Instagram follow or story mention', description: 'Follow us and tag the shop.', tickets: 2 },
+    { id: 'review', label: 'Leave a review', description: 'Google or Facebook review for the business.', tickets: 5 },
+    { id: 'referral', label: 'Refer a friend', description: 'Friend must mention your name on their entry.', tickets: 3 },
+  ];
+}
+
+function parseBonusRulesFromRow_(o) {
+  var raw = String(o.bonusRulesJson || o.bonus_rules_json || '').trim();
+  if (!raw) return getDefaultBonuses_();
+  try {
+    var arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || !arr.length) return getDefaultBonuses_();
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var b = arr[i];
+      if (!b || typeof b !== 'object') continue;
+      var id = String(b.id || '').trim();
+      if (!id) continue;
+      var tickets = Number(b.tickets);
+      if (!tickets || tickets < 1 || tickets > 100) tickets = 1;
+      out.push({
+        id: id,
+        label: String(b.label || id),
+        description: String(b.description || ''),
+        tickets: tickets,
+      });
+    }
+    if (!out.length) return getDefaultBonuses_();
+    return out;
+  } catch (err) {
+    return getDefaultBonuses_();
+  }
+}
+
+function computeTicketsFromBonuses_(bonusById, rules) {
+  var n = 1;
+  for (var i = 0; i < rules.length; i++) {
+    var id = rules[i].id;
+    if (bonusById[id]) n += Number(rules[i].tickets) || 0;
+  }
+  return n;
 }
 
 function validateAdminKey_(slug, adminKey) {
@@ -154,8 +203,8 @@ function phoneExistsForSlug_(slug, phoneNorm) {
   if (!sh) return false;
   var last = sh.getLastRow();
   if (last < 2) return false;
-  // Columns fixed order for performance (header row defines indices once)
-  var values = sh.getRange(2, 1, last, 13).getValues();
+  var lastCol = Math.max(13, sh.getLastColumn());
+  var values = sh.getRange(2, 1, last, lastCol).getValues();
   for (var i = 0; i < values.length; i++) {
     var rowSlug = String(values[i][1] || '');
     var rowPhone = normalizePhone_(values[i][3]);
@@ -164,7 +213,7 @@ function phoneExistsForSlug_(slug, phoneNorm) {
   return false;
 }
 
-/** Entries columns: timestamp, slug, name, phone, email, raffleId, bi, br, bf, totalEntries, isTest, ip, ua */
+/** Entries columns: …, userAgent, extrasJson (JSON map of bonus toggles) */
 function appendEntry_(row) {
   var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
   if (!sh) throw new Error('Missing sheet: ' + SHEET_ENTRIES);
@@ -187,6 +236,7 @@ function doGet(e) {
     if (!active) return jsonResponse({ ok: false, error: 'event_inactive' }, 403);
 
     var raffles = getRafflesForSlug_(slug);
+    var bonuses = parseBonusRulesFromRow_(o);
     var event = {
       slug: slug,
       name: String(o.name || o.eventName || 'Event'),
@@ -199,6 +249,7 @@ function doGet(e) {
       defaultTestMode:
         String(o.defaultTestMode || '').toUpperCase() === 'TRUE' || o.defaultTestMode === true,
       raffles: raffles,
+      bonuses: bonuses,
     };
     return jsonResponse({ ok: true, event: event });
   } catch (err) {
@@ -223,14 +274,6 @@ function doPost(e) {
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err && err.message ? err.message : err) }, 500);
   }
-}
-
-function computeTickets_(bonusInstagram, bonusReview, bonusReferral) {
-  var n = 1;
-  if (bonusInstagram) n += 2;
-  if (bonusReview) n += 5;
-  if (bonusReferral) n += 3;
-  return n;
 }
 
 function handleSubmitEntry_(data) {
@@ -269,9 +312,17 @@ function handleSubmitEntry_(data) {
   });
   if (!okRaffle) return jsonResponse({ ok: false, error: 'Invalid raffle', code: 'raffle' }, 400);
 
-  var bonusInstagram = Boolean(p.bonusInstagram);
-  var bonusReview = Boolean(p.bonusReview);
-  var bonusReferral = Boolean(p.bonusReferral);
+  var bonuses = parseBonusRulesFromRow_(ev);
+  var bonusById = {};
+  if (p.bonusById && typeof p.bonusById === 'object' && !Array.isArray(p.bonusById)) {
+    Object.keys(p.bonusById).forEach(function (k) {
+      bonusById[String(k)] = Boolean(p.bonusById[k]);
+    });
+  } else {
+    bonusById.instagram = Boolean(p.bonusInstagram);
+    bonusById.review = Boolean(p.bonusReview);
+    bonusById.referral = Boolean(p.bonusReferral);
+  }
   var testMode = Boolean(p.testMode);
 
   var defaultTest =
@@ -286,7 +337,7 @@ function handleSubmitEntry_(data) {
     return jsonResponse({ ok: false, error: 'This phone is already entered for this event.', code: 'duplicate_phone' }, 409);
   }
 
-  var totalEntries = computeTickets_(bonusInstagram, bonusReview, bonusReferral);
+  var totalEntries = computeTicketsFromBonuses_(bonusById, bonuses);
 
   if (testMode) {
     // Flag only — still written for QA; optional block: return without append
@@ -309,13 +360,14 @@ function handleSubmitEntry_(data) {
     phoneNorm,
     email,
     raffleId,
-    bonusInstagram ? 'TRUE' : 'FALSE',
-    bonusReview ? 'TRUE' : 'FALSE',
-    bonusReferral ? 'TRUE' : 'FALSE',
+    bonusById.instagram ? 'TRUE' : 'FALSE',
+    bonusById.review ? 'TRUE' : 'FALSE',
+    bonusById.referral ? 'TRUE' : 'FALSE',
     totalEntries,
     testMode ? 'TRUE' : 'FALSE',
     ip,
     String(p.userAgent || ''),
+    JSON.stringify(bonusById),
   ];
   appendEntry_(row);
   return jsonResponse({ ok: true, totalEntries: totalEntries, testMode: testMode });
@@ -324,7 +376,8 @@ function handleSubmitEntry_(data) {
 function readEntriesForSlug_(slug) {
   var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
   if (!sh || sh.getLastRow() < 2) return [];
-  var range = sh.getRange(2, 1, sh.getLastRow(), 13);
+  var lastCol = Math.max(13, sh.getLastColumn());
+  var range = sh.getRange(2, 1, sh.getLastRow(), lastCol);
   return range.getValues();
 }
 
@@ -495,6 +548,7 @@ function handleExportEntries_(data) {
       'isTest',
       'ip',
       'userAgent',
+      'extrasJson',
     ].join(','),
   ];
   for (var i = 0; i < rows.length; i++) {
@@ -513,6 +567,7 @@ function handleExportEntries_(data) {
       rows[i][10],
       rows[i][11],
       rows[i][12],
+      rows[i][13] != null ? rows[i][13] : '',
     ].map(function (c) {
       var s = String(c == null ? '' : c);
       if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0) {

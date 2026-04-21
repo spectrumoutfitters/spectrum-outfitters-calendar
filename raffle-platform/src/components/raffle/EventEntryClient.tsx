@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { EventConfig } from "@/lib/types";
-import { BONUS_WEIGHTS, computeTicketCount } from "@/lib/entryMath";
+import { computeTicketsFromBonuses, resolveBonusRules } from "@/lib/entryMath";
 import { BonusToggle } from "./BonusToggle";
 import { RaffleCard } from "./RaffleCard";
 
@@ -20,9 +20,10 @@ export function EventEntryClient({ event }: Props) {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [raffleId, setRaffleId] = useState(event.raffles[0]?.id ?? "");
-  const [ig, setIg] = useState(false);
-  const [review, setReview] = useState(false);
-  const [referral, setReferral] = useState(false);
+  const bonusRules = useMemo(() => resolveBonusRules(event), [event]);
+  const [bonusById, setBonusById] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(bonusRules.map((r) => [r.id, false])),
+  );
   const [terms, setTerms] = useState(false);
   const [company, setCompany] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -34,9 +35,13 @@ export function EventEntryClient({ event }: Props) {
   const secondary = event.secondaryColor || "#1c1917";
 
   const previewTickets = useMemo(
-    () => computeTicketCount({ bonusInstagram: ig, bonusReview: review, bonusReferral: referral }),
-    [ig, review, referral],
+    () => computeTicketsFromBonuses(bonusById, bonusRules),
+    [bonusById, bonusRules],
   );
+
+  function setBonus(id: string, v: boolean) {
+    setBonusById((prev) => ({ ...prev, [id]: v }));
+  }
 
   const isDark = event.theme === "dark";
 
@@ -64,9 +69,10 @@ export function EventEntryClient({ event }: Props) {
           phone,
           email,
           raffleId,
-          bonusInstagram: ig,
-          bonusReview: review,
-          bonusReferral: referral,
+          bonusById,
+          bonusInstagram: Boolean(bonusById.instagram),
+          bonusReview: Boolean(bonusById.review),
+          bonusReferral: Boolean(bonusById.referral),
           company,
           termsAccepted: terms,
           testMode,
@@ -226,27 +232,16 @@ export function EventEntryClient({ event }: Props) {
               Complete any bonus — we may verify before awarding prizes.
             </p>
             <div className="mt-6 space-y-3">
-              <BonusToggle
-                title="Instagram follow or story mention"
-                description="Follow us and tag the shop — quick visibility boost."
-                points={BONUS_WEIGHTS.instagram}
-                checked={ig}
-                onChange={setIg}
-              />
-              <BonusToggle
-                title="Leave a review"
-                description="Google or Facebook review for the business."
-                points={BONUS_WEIGHTS.review}
-                checked={review}
-                onChange={setReview}
-              />
-              <BonusToggle
-                title="Refer a friend"
-                description="Friend must mention your name on their entry."
-                points={BONUS_WEIGHTS.referral}
-                checked={referral}
-                onChange={setReferral}
-              />
+              {bonusRules.map((r) => (
+                <BonusToggle
+                  key={r.id}
+                  title={r.label}
+                  description={r.description || "We may verify before awarding prizes."}
+                  points={r.tickets}
+                  checked={Boolean(bonusById[r.id])}
+                  onChange={(v) => setBonus(r.id, v)}
+                />
+              ))}
             </div>
           </section>
 
