@@ -9,10 +9,12 @@ import { computeTicketsFromBonuses, resolveBonusRules } from "@/lib/entryMath";
 import {
   countPositivePools,
   defaultPoolTickets,
+  maxTicketsForPool,
   reconcilePoolTickets,
   sumPoolTickets,
 } from "@/lib/poolTicketAlloc";
 import { BonusToggle } from "./BonusToggle";
+import { PoolTicketField } from "./PoolTicketField";
 
 type Props = {
   event: EventConfig;
@@ -73,12 +75,6 @@ export function EventEntryClient({ event }: Props) {
 
   const multiPool = event.raffles.length >= 2;
 
-  function setPoolTicketCount(id: string, raw: string) {
-    const n = raw === "" ? 0 : Number(raw);
-    const v = Number.isFinite(n) ? Math.max(0, Math.min(previewTickets, Math.floor(n))) : 0;
-    setPoolTickets((prev) => ({ ...prev, [id]: v }));
-  }
-
   function setBonus(id: string, v: boolean) {
     setBonusById((prev) => ({ ...prev, [id]: v }));
     if (!v) {
@@ -111,7 +107,7 @@ export function EventEntryClient({ event }: Props) {
     if (poolSum !== previewTickets) {
       setStatus("error");
       setMessage(
-        `Tickets per pool must add up to ${previewTickets} (you have ${poolSum} assigned). Use the arrows or type the numbers.`,
+        `Tickets per pool must add up to ${previewTickets} (you have ${poolSum} assigned). Adjust each pool so the counts match your total.`,
       );
       return;
     }
@@ -446,6 +442,7 @@ export function EventEntryClient({ event }: Props) {
                 <div className="mt-4 space-y-3" role="group" aria-label="Prize pools">
                   {event.raffles.map((r) => {
                     const n = poolTickets[r.id] ?? 0;
+                    const cap = maxTicketsForPool(r.id, orderedIds, poolTickets, previewTickets);
                     const active = n > 0;
                     return (
                       <div
@@ -489,25 +486,25 @@ export function EventEntryClient({ event }: Props) {
                             </p>
                           ) : null}
                         </div>
-                        <div className="flex shrink-0 flex-col items-end justify-center gap-1 self-center">
-                          <label htmlFor={`pool-tickets-${r.id}`} className="sr-only">
-                            Tickets in {r.title}
-                          </label>
-                          <input
-                            id={`pool-tickets-${r.id}`}
-                            type="number"
-                            inputMode="numeric"
-                            min={0}
-                            max={previewTickets}
-                            step={1}
-                            value={n}
-                            onChange={(e) => setPoolTicketCount(r.id, e.target.value)}
-                            className="h-11 w-[4.5rem] rounded-xl border border-stone-300 bg-white px-1 text-center text-base font-semibold tabular-nums text-stone-900 shadow-inner outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/30 dark:border-neutral-600 dark:bg-neutral-950 dark:text-neutral-100"
-                          />
-                          <span className="text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:text-neutral-500">
-                            tickets
-                          </span>
-                        </div>
+                        <PoolTicketField
+                          inputId={`pool-tickets-${r.id}`}
+                          label={r.title}
+                          value={n}
+                          max={cap}
+                          onCommit={(next) =>
+                            setPoolTickets((prev) => ({
+                              ...prev,
+                              [r.id]: Math.max(
+                                0,
+                                Math.min(
+                                  maxTicketsForPool(r.id, orderedIds, prev, previewTickets),
+                                  Math.floor(next),
+                                ),
+                              ),
+                            }))
+                          }
+                          inputClassName="h-11 w-[4.25rem] rounded-xl border border-stone-300 bg-white px-1.5 text-center text-base font-semibold tabular-nums text-stone-900 shadow-inner outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/30 dark:border-neutral-600 dark:bg-neutral-950 dark:text-neutral-100"
+                        />
                       </div>
                     );
                   })}

@@ -58,6 +58,18 @@ export function sumPoolTickets(orderedIds: string[], poolTickets: Record<string,
   return orderedIds.reduce((s, id) => s + (Number(poolTickets[id]) || 0), 0);
 }
 
+/** Max tickets this pool may take without pushing the overall sum above `previewTotal`. */
+export function maxTicketsForPool(
+  poolId: string,
+  orderedIds: string[],
+  poolTickets: Record<string, number>,
+  previewTotal: number,
+): number {
+  const cur = Math.max(0, Math.floor(Number(poolTickets[poolId]) || 0));
+  const others = sumPoolTickets(orderedIds, poolTickets) - cur;
+  return Math.max(0, previewTotal - others);
+}
+
 export function countPositivePools(orderedIds: string[], poolTickets: Record<string, number>): number {
   return orderedIds.filter((id) => (Number(poolTickets[id]) || 0) > 0).length;
 }
