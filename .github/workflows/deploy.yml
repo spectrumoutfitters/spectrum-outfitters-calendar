@@ -80,21 +80,26 @@ jobs:
             raffle-platform/ \
             root@165.245.137.192:/opt/spectrum-raffle/raffle-platform/
 
-      # Repo Secrets used here (Settings → Secrets and variables → Actions):
-      #   RAFFLE_APPS_SCRIPT_URL          required — Apps Script web app /exec URL
+      # APPS_SCRIPT_URL is hardcoded below to the live Apps Script /exec deployment.
+      # When you redeploy Apps Script (which generates a NEW /exec URL), update the
+      # APPS_URL value in this step. Setting a RAFFLE_APPS_SCRIPT_URL repo secret
+      # also overrides it without a code change.
+      #
+      # Repo Secrets (optional overrides — Settings → Secrets and variables → Actions):
+      #   RAFFLE_APPS_SCRIPT_URL          override Apps Script web app /exec URL
       #   STRIPE_SECRET_KEY               for paid tickets — leave blank to disable buy
       #   STRIPE_WEBHOOK_SECRET           whsec_… from Stripe webhook endpoint
       #   RAFFLE_PAID_PURCHASE_SECRET     32-byte hex; must MATCH Apps Script PAID_PURCHASE_SECRET
       # NEXT_PUBLIC_RAFFLE_SITE_URL is hardcoded to the production host below (it is not a secret).
       - name: Raffle — write /etc/spectrum-raffle.env from GitHub secrets
         env:
-          APPS_URL: ${{ secrets.RAFFLE_APPS_SCRIPT_URL }}
+          APPS_URL: ${{ secrets.RAFFLE_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbx5A_Xb-WaF2aM8cp27ah7nnBXrWmRo2fJ1aB9WghkGeKX-5U4XdfOZKdF-CyyqdVjG/exec' }}
           STRIPE_SECRET: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WHSEC: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           PAID_PURCHASE: ${{ secrets.RAFFLE_PAID_PURCHASE_SECRET }}
         run: |
           if [ -z "${APPS_URL:-}" ]; then
-            echo "RAFFLE_APPS_SCRIPT_URL secret not set — leaving /etc/spectrum-raffle.env untouched."
+            echo "APPS_URL empty — leaving /etc/spectrum-raffle.env untouched."
             exit 0
           fi
           {

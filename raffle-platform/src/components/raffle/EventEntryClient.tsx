@@ -9,6 +9,7 @@ import { computeTicketsFromBonuses, resolveBonusRules } from "@/lib/entryMath";
 import {
   countPositivePools,
   defaultPoolTickets,
+  emptyPoolTickets,
   maxTicketsForPool,
   reconcilePoolTickets,
   sumPoolTickets,
@@ -20,6 +21,38 @@ import { PoolTicketField } from "./PoolTicketField";
 type Props = {
   event: EventConfig;
 };
+
+function formatMoney(cents: number, currency: string): string {
+  if (!Number.isFinite(cents)) return "";
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(2)} ${currency.toUpperCase()}`;
+  }
+}
+
+function formatCheckoutError(code: string | undefined): string {
+  switch (code) {
+    case "paid_tickets_disabled":
+      return "Paid tickets aren't enabled for this event yet.";
+    case "ticket_price_not_set":
+      return "Ticket pricing isn't configured yet.";
+    case "must_buy_at_least_one":
+      return "Pick at least one ticket before checking out.";
+    case "entry_locked":
+      return "This entry is locked because a draw is too close.";
+    case "stripe_not_configured":
+      return "Online payments are temporarily unavailable.";
+    case "missing_fields":
+      return "Something is missing from the request — refresh and try again.";
+    default:
+      if (code && code.startsWith("max_")) return code.replace(/_/g, " ");
+      return "We couldn't open Stripe right now.";
+  }
+}
 
 export function EventEntryClient({ event }: Props) {
   const searchParams = useSearchParams();
@@ -49,8 +82,18 @@ export function EventEntryClient({ event }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [entryToken, setEntryToken] = useState<string>("");
   const [submittedPoolIds, setSubmittedPoolIds] = useState<string[]>([]);
+  const [paidPoolTickets, setPaidPoolTickets] = useState<Record<string, number>>(() =>
+    emptyPoolTickets(event.raffles.map((r) => r.id)),
+  );
 
   const testMode = urlTest || event.defaultTestMode;
+
+  // Paid-ticket configuration (derived from event sheet via Apps Script). We only render the buy
+  // section when admin has explicitly enabled paid tickets AND set a non-zero per-ticket price.
+  const priceCents = Math.max(0, Math.floor(Number(event.ticketPriceCents) || 0));
+  const currency = String(event.ticketCurrency || "usd").toLowerCase();
+  const maxPerPurchase = Math.max(1, Math.floor(Number(event.paidTicketsMaxPerPurchase) || 100));
+  const paidEnabled = Boolean(event.paidTicketsEnabled) && priceCents > 0 && !testMode;
 
   const accent = event.primaryColor || "#c9a227";
   const secondary = event.secondaryColor || "#1c1917";
@@ -63,6 +106,21 @@ export function EventEntryClient({ event }: Props) {
   useEffect(() => {
     setPoolTickets((prev) => reconcilePoolTickets(orderedIds, prev, previewTickets));
   }, [orderedIds, previewTickets]);
+
+  // Keep paid-ticket map in sync if pools change (e.g. admin renames pools while form is open).
+  useEffect(() => {
+    setPaidPoolTickets((prev) => {
+      const next: Record<string, number> = {};
+      for (const id of orderedIds) next[id] = Math.max(0, Math.floor(Number(prev[id]) || 0));
+      return next;
+    });
+  }, [orderedIds]);
+
+  const paidTotal = useMemo(
+    () => sumPoolTickets(orderedIds, paidPoolTickets),
+    [orderedIds, paidPoolTickets],
+  );
+  const paidCostCents = paidTotal * priceCents;
 
   const assignedTotal = useMemo(() => sumPoolTickets(orderedIds, poolTickets), [orderedIds, poolTickets]);
   const selectedIdsOrdered = useMemo(
@@ -173,8 +231,38 @@ export function EventEntryClient({ event }: Props) {
         setMessage(data.error || "Something went wrong.");
         return;
       }
+      const token = String(data.entryToken || "");
+
+      // If user picked paid tickets, immediately kick off Stripe Checkout. Free entry is already
+      // saved in the sheet, so even if checkout fails the user keeps their free entry.
+      let stripeRedirected = false;
+      let buyError: string | null = null;
+      if (paidEnabled && paidTotal > 0 && token) {
+        try {
+          const cr = await fetch("/api/raffle/checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              slug: event.slug,
+              token,
+              ticketSplit: paidPoolTickets,
+            }),
+          });
+          const cd = (await cr.json()) as { ok?: boolean; url?: string; error?: string };
+          if (cr.ok && cd.ok && cd.url) {
+            window.location.href = cd.url;
+            stripeRedirected = true;
+          } else {
+            buyError = formatCheckoutError(cd.error);
+          }
+        } catch {
+          buyError = "We couldn't reach Stripe right now.";
+        }
+      }
+      if (stripeRedirected) return;
+
       setStatus("success");
-      setEntryToken(String(data.entryToken || ""));
+      setEntryToken(token);
       setSubmittedPoolIds(selectedIdsOrdered.slice());
       const splitNote =
         selectedIdsOrdered.length > 1 && typeof data.poolsEntered === "number"
@@ -186,11 +274,14 @@ export function EventEntryClient({ event }: Props) {
           : !testMode
             ? " If email is configured for this giveaway, you may receive a link to manage your entry from the same address you entered with."
             : "";
+      const buyNote = buyError
+        ? ` Heads up: ${buyError} Use your email manage-link below to buy tickets later.`
+        : "";
       setMessage(
         data.message ||
           (testMode
             ? `Test entry recorded (${data.totalEntries ?? previewTickets} tickets).${splitNote}`
-            : `You’re in! ${data.totalEntries ?? previewTickets} total tickets.${splitNote}${emailManageNote}`),
+            : `You’re in! ${data.totalEntries ?? previewTickets} total tickets.${splitNote}${emailManageNote}${buyNote}`),
       );
     } catch {
       setStatus("error");
@@ -550,6 +641,82 @@ export function EventEntryClient({ event }: Props) {
             ) : null}
           </section>
 
+          {paidEnabled ? (
+            <section
+              className="rounded-3xl border border-amber-300/70 bg-amber-50/60 p-4 shadow-sm backdrop-blur dark:border-amber-500/30 dark:bg-amber-500/5 sm:p-6 md:p-8"
+              aria-label="Buy extra raffle tickets"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-semibold text-stone-900 dark:text-neutral-100 sm:text-lg">
+                    Boost your odds (optional)
+                  </h2>
+                  <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-neutral-400">
+                    Buy extra tickets in any pool below — {formatMoney(priceCents, currency)} each.
+                    After you submit, we&apos;ll send you to Stripe to pay. Your free entry is saved
+                    either way, no purchase necessary.
+                  </p>
+                </div>
+                <div className="shrink-0 rounded-2xl bg-white/80 px-4 py-3 text-center shadow-inner dark:bg-neutral-900/80 sm:py-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-neutral-500">
+                    Cost
+                  </p>
+                  <p className="text-2xl font-semibold tabular-nums text-stone-900 dark:text-neutral-50">
+                    {formatMoney(paidCostCents, currency)}
+                  </p>
+                  <p className="text-xs text-stone-500 dark:text-neutral-500">
+                    {paidTotal} ticket{paidTotal === 1 ? "" : "s"}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 space-y-3" role="group" aria-label="Paid ticket pools">
+                {event.raffles.map((r) => {
+                  const n = paidPoolTickets[r.id] ?? 0;
+                  const cap = maxTicketsForPool(r.id, orderedIds, paidPoolTickets, maxPerPurchase);
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-white/85 p-3 dark:border-neutral-700 dark:bg-neutral-900/60"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-stone-900 dark:text-neutral-100">
+                          {r.title}
+                        </p>
+                        {r.subtitle ? (
+                          <p className="mt-0.5 line-clamp-2 text-xs text-stone-600 dark:text-neutral-400">
+                            {r.subtitle}
+                          </p>
+                        ) : null}
+                      </div>
+                      <PoolTicketField
+                        inputId={`paid-pool-tickets-${r.id}`}
+                        label={`Buy tickets in ${r.title}`}
+                        value={n}
+                        max={cap}
+                        onCommit={(next) =>
+                          setPaidPoolTickets((prev) => ({
+                            ...prev,
+                            [r.id]: Math.max(
+                              0,
+                              Math.min(
+                                maxTicketsForPool(r.id, orderedIds, prev, maxPerPurchase),
+                                Math.floor(next),
+                              ),
+                            ),
+                          }))
+                        }
+                        inputClassName="h-10 w-16 rounded-xl border border-stone-300 bg-white px-2 text-right text-sm font-semibold tabular-nums text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100 dark:focus:border-amber-400 dark:focus:ring-amber-500/40"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-[11px] leading-snug text-stone-500 dark:text-neutral-500">
+                Max {maxPerPurchase} tickets per checkout. Card details are handled by Stripe — we never see them.
+              </p>
+            </section>
+          ) : null}
+
           {/* Honeypot */}
           <div className="hidden" aria-hidden="true">
             <label>
@@ -656,7 +823,13 @@ export function EventEntryClient({ event }: Props) {
             className="min-h-14 w-full touch-manipulation rounded-2xl text-base font-semibold text-white shadow-lg transition hover:opacity-95 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[3.25rem]"
             style={{ background: `linear-gradient(135deg, ${accent}, ${secondary})` }}
           >
-            {status === "loading" ? "Submitting…" : "Submit free entry"}
+            {status === "loading"
+              ? paidEnabled && paidTotal > 0
+                ? "Opening Stripe…"
+                : "Submitting…"
+              : paidEnabled && paidTotal > 0
+                ? `Enter + pay ${formatMoney(paidCostCents, currency)}`
+                : "Submit free entry"}
           </button>
         </div>
       </div>
