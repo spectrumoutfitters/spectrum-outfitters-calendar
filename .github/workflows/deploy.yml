@@ -80,18 +80,37 @@ jobs:
             raffle-platform/ \
             root@165.245.137.192:/opt/spectrum-raffle/raffle-platform/
 
-      # Optional: add repo secret RAFFLE_APPS_SCRIPT_URL = your Google Apps Script web app URL (…/exec).
-      # Writes /etc/spectrum-raffle.env on the droplet so the entry page and APIs work after deploy.
-      - name: Raffle — optional Apps Script URL (secret → /etc/spectrum-raffle.env)
+      # Repo Secrets used here (Settings → Secrets and variables → Actions):
+      #   RAFFLE_APPS_SCRIPT_URL          required — Apps Script web app /exec URL
+      #   STRIPE_SECRET_KEY               for paid tickets — leave blank to disable buy
+      #   STRIPE_WEBHOOK_SECRET           whsec_… from Stripe webhook endpoint
+      #   RAFFLE_PAID_PURCHASE_SECRET     32-byte hex; must MATCH Apps Script PAID_PURCHASE_SECRET
+      # NEXT_PUBLIC_RAFFLE_SITE_URL is hardcoded to the production host below (it is not a secret).
+      - name: Raffle — write /etc/spectrum-raffle.env from GitHub secrets
         env:
           APPS_URL: ${{ secrets.RAFFLE_APPS_SCRIPT_URL }}
+          STRIPE_SECRET: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WHSEC: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          PAID_PURCHASE: ${{ secrets.RAFFLE_PAID_PURCHASE_SECRET }}
         run: |
           if [ -z "${APPS_URL:-}" ]; then
-            echo "RAFFLE_APPS_SCRIPT_URL secret not set — keep existing /etc/spectrum-raffle.env or create it on the server."
+            echo "RAFFLE_APPS_SCRIPT_URL secret not set — leaving /etc/spectrum-raffle.env untouched."
             exit 0
           fi
-          printf '%s\n%s\n' "APPS_SCRIPT_URL=${APPS_URL}" "NODE_ENV=production" | ssh root@165.245.137.192 'umask 077; cat > /etc/spectrum-raffle.env; chmod 600 /etc/spectrum-raffle.env'
-          echo "Wrote /etc/spectrum-raffle.env from GitHub secret RAFFLE_APPS_SCRIPT_URL."
+          {
+            echo "APPS_SCRIPT_URL=${APPS_URL}"
+            echo "NODE_ENV=production"
+            echo "NEXT_PUBLIC_RAFFLE_SITE_URL=https://raffle.spectrumoutfitters.com"
+            if [ -n "${STRIPE_SECRET:-}" ]; then echo "STRIPE_SECRET_KEY=${STRIPE_SECRET}"; fi
+            if [ -n "${STRIPE_WHSEC:-}" ]; then echo "STRIPE_WEBHOOK_SECRET=${STRIPE_WHSEC}"; fi
+            if [ -n "${PAID_PURCHASE:-}" ]; then echo "RAFFLE_PAID_PURCHASE_SECRET=${PAID_PURCHASE}"; fi
+          } | ssh root@165.245.137.192 'umask 077; cat > /etc/spectrum-raffle.env; chmod 600 /etc/spectrum-raffle.env'
+          # Echo which optional pieces were synced (without leaking values).
+          echo "Wrote /etc/spectrum-raffle.env."
+          echo "  APPS_SCRIPT_URL: set"
+          if [ -n "${STRIPE_SECRET:-}" ]; then echo "  STRIPE_SECRET_KEY: set"; else echo "  STRIPE_SECRET_KEY: (missing — paid tickets disabled)"; fi
+          if [ -n "${STRIPE_WHSEC:-}" ]; then echo "  STRIPE_WEBHOOK_SECRET: set"; else echo "  STRIPE_WEBHOOK_SECRET: (missing — webhooks will 503)"; fi
+          if [ -n "${PAID_PURCHASE:-}" ]; then echo "  RAFFLE_PAID_PURCHASE_SECRET: set"; else echo "  RAFFLE_PAID_PURCHASE_SECRET: (missing — sheet won't accept paid writes)"; fi
 
       - name: Raffle — install, build, restart PM2
         run: |

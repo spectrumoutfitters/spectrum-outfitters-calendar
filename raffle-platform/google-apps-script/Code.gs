@@ -19,7 +19,15 @@
  *
  * Script Properties (optional):
  *   ENTRY_BASE_URL — public raffle site origin, no trailing slash (e.g. https://raffle.example.com).
- *   Used to email magic links so entrants can view/update tickets until 10 minutes before each pool’s drawAt.
+ *     Used to email magic links so entrants can view/update tickets until 10 minutes before each pool's drawAt.
+ *   PAID_PURCHASE_SECRET — shared secret with the Next.js Stripe webhook handler. The webhook signs the
+ *     applyPaidTickets payload with HMAC-SHA256 using this secret; Apps Script verifies before writing rows.
+ *
+ * Optional Events columns (auto-added on first save):
+ *   paidTicketsEnabled (TRUE/FALSE) — show "Buy more tickets" UI for this event.
+ *   ticketPriceCents (integer)      — Stripe unit price per ticket in the smallest currency unit.
+ *   ticketCurrency (e.g. "usd")     — ISO currency code, lowercase.
+ *   paidTicketsMaxPerPurchase (int) — max tickets per Stripe Checkout session (default 100).
  *
  * Raffles
  *   slug, raffleId, title, subtitle, imageUrl, valueLabel, sortOrder, active, drawAt (optional)
@@ -97,82 +105,39 @@ function recordToObject_(headers, row) {
   return o;
 }
 
-var RAFFLE_DEFAULT_IG_ = 'https://www.instagram.com/spectrum.outfitters/';
-var RAFFLE_DEFAULT_TT_ = 'https://www.tiktok.com/@spectrumoutfitters';
-var RAFFLE_DEFAULT_FB_ = 'https://www.facebook.com/spectrumoutfitters';
-
+/**
+ * Free bonuses we ship by default. Only verifiable by staff (URL or referrer match) — anything we
+ * cannot prove was removed because raffles must stay fair without OAuth into social apps.
+ */
 function getDefaultBonuses_() {
   return [
     {
-      id: 'instagram',
-      label: 'Instagram — follow us',
-      description: 'Follow the shop, then leave your @ so we can match your account before prizes.',
-      tickets: 3,
-      actionUrl: RAFFLE_DEFAULT_IG_,
-      actionLabel: 'Open Instagram',
-      proofFields: [
-        { id: 'handle', input: 'text', label: 'Your Instagram @username', placeholder: '@yourhandle', requiredWhenBonus: true },
-      ],
-    },
-    {
-      id: 'tiktok',
-      label: 'TikTok — follow us',
-      description: 'Follow on TikTok for extra entries. We verify follows manually if you win.',
-      tickets: 2,
-      actionUrl: RAFFLE_DEFAULT_TT_,
-      actionLabel: 'Open TikTok',
-      proofFields: [
-        { id: 'handle', input: 'text', label: 'Your TikTok @username', placeholder: '@yourhandle', requiredWhenBonus: true },
-      ],
-    },
-    {
-      id: 'facebook',
-      label: 'Facebook — like our page',
-      description: 'Like Spectrum Outfitters on Facebook (public page). Optional note helps us verify.',
-      tickets: 2,
-      actionUrl: RAFFLE_DEFAULT_FB_,
-      actionLabel: 'Open Facebook',
-      proofFields: [
-        { id: 'note', input: 'text', label: 'First name on Facebook (optional)', placeholder: 'So we can spot your like', requiredWhenBonus: false },
-      ],
-    },
-    {
-      id: 'story_tag',
-      label: 'Story or reel — tag us',
-      description: 'Post a public story or reel tagging the shop. Link helps us verify faster.',
+      id: 'review',
+      label: 'Leave a public review',
+      description: 'Post a public Google, Facebook, or Yelp review and paste the link below — we click every link before awarding prizes.',
       tickets: 4,
       actionUrl: '',
       actionLabel: '',
       proofFields: [
-        { id: 'handle', input: 'text', label: 'Your @ on that post', placeholder: '@yourhandle', requiredWhenBonus: true },
-        { id: 'postUrl', input: 'url', label: 'Link to the post (optional)', placeholder: 'https://…', requiredWhenBonus: false },
-      ],
-    },
-    {
-      id: 'review',
-      label: 'Leave a review',
-      description: 'Google, Facebook, Yelp, etc. Tell us where and (if you can) paste the review link.',
-      tickets: 6,
-      actionUrl: '',
-      actionLabel: '',
-      proofFields: [
-        { id: 'platform', input: 'text', label: 'Where did you review?', placeholder: 'e.g. Google Maps, Facebook', requiredWhenBonus: true },
-        { id: 'reviewUrl', input: 'url', label: 'Link to your review (optional)', placeholder: 'https://…', requiredWhenBonus: false },
+        { id: 'platform', input: 'text', label: 'Where did you review? (Google, Facebook, Yelp, …)', placeholder: 'e.g. Google Maps', requiredWhenBonus: true },
+        { id: 'reviewUrl', input: 'url', label: 'Public link to your review', placeholder: 'https://…', requiredWhenBonus: true },
       ],
     },
     {
       id: 'referral',
       label: 'Refer a friend',
-      description: 'They must submit their own entry and type your full name when asked.',
-      tickets: 4,
+      description: "Your friend must submit their own entry and type your full name in their referral field — that is how we verify it.",
+      tickets: 3,
       actionUrl: '',
       actionLabel: '',
       proofFields: [
-        { id: 'friendName', input: 'text', label: "Friend's full name (as they'll enter it)", placeholder: 'First Last', requiredWhenBonus: true },
+        { id: 'friendName', input: 'text', label: "Friend's full name (must match what they type)", placeholder: 'First Last', requiredWhenBonus: true },
       ],
     },
   ];
 }
+
+var SHIPPED_DEFAULT_BONUS_IDS_ = ['instagram', 'tiktok', 'facebook', 'story_tag', 'review', 'referral'];
 
 function cloneProofFieldsFromBonus_(b) {
   if (!b || !Array.isArray(b.proofFields)) return [];
@@ -194,24 +159,22 @@ function cloneProofFieldsFromBonus_(b) {
 }
 
 /**
- * Old workbooks stored bonusRulesJson as exactly three rules (instagram, review, referral) with no proofFields.
- * Those rows should use the current default ladder (TikTok, Facebook, story tag, proof fields, etc.).
+ * Old workbooks may store a list whose ids are all from our previously shipped defaults
+ * (instagram, tiktok, facebook, story_tag, review, referral). When that's the case we want to
+ * fall back to the *current* code defaults so dropping unverifiable rules in code immediately
+ * removes them in the UI without anyone editing the sheet.
  */
 function isLegacyThreeRuleBonusConfig_(out) {
-  if (!out || out.length !== 3) return false;
-  var seen = { instagram: false, review: false, referral: false };
+  if (!out || !out.length) return false;
+  var allowed = {};
+  for (var s = 0; s < SHIPPED_DEFAULT_BONUS_IDS_.length; s++) {
+    allowed[SHIPPED_DEFAULT_BONUS_IDS_[s]] = true;
+  }
   for (var i = 0; i < out.length; i++) {
     var id = String(out[i].id || '').trim();
-    if (id === 'instagram' || id === 'review' || id === 'referral') {
-      if (seen[id]) return false;
-      seen[id] = true;
-    } else {
-      return false;
-    }
-    var pf = out[i].proofFields;
-    if (pf && pf.length) return false;
+    if (!allowed[id]) return false;
   }
-  return seen.instagram && seen.review && seen.referral;
+  return true;
 }
 
 function getDefaultBonusById_(id) {
@@ -553,20 +516,47 @@ function updateEventCellsForSlug_(slug, patch) {
     defaultTestMode: true,
     blockTestWrite: true,
     bonusRulesJson: true,
+    paidTicketsEnabled: true,
+    ticketPriceCents: true,
+    ticketCurrency: true,
+    paidTicketsMaxPerPurchase: true,
   };
+  ensurePaidTicketColumns_(sh);
+  headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
   var k;
   for (k in patch) {
     if (!Object.prototype.hasOwnProperty.call(patch, k) || !allowed[k]) continue;
     var col = headers.indexOf(k);
     if (col < 0) continue;
     var v = patch[k];
-    if (k === 'active' || k === 'defaultTestMode' || k === 'blockTestWrite') {
+    if (k === 'active' || k === 'defaultTestMode' || k === 'blockTestWrite' || k === 'paidTicketsEnabled') {
       var on = v === true || String(v).toUpperCase() === 'TRUE';
       sh.getRange(rowNum, col + 1).setValue(on ? 'TRUE' : 'FALSE');
     } else if (k === 'bonusRulesJson') {
       sh.getRange(rowNum, col + 1).setValue(String(v || ''));
+    } else if (k === 'ticketPriceCents' || k === 'paidTicketsMaxPerPurchase') {
+      var n = Math.max(0, Math.floor(Number(v) || 0));
+      sh.getRange(rowNum, col + 1).setValue(n);
+    } else if (k === 'ticketCurrency') {
+      sh.getRange(rowNum, col + 1).setValue(String(v || 'usd').toLowerCase().slice(0, 8));
     } else {
       sh.getRange(rowNum, col + 1).setValue(String(v == null ? '' : v));
+    }
+  }
+}
+
+/** Adds paidTicketsEnabled / ticketPriceCents / ticketCurrency / paidTicketsMaxPerPurchase columns when missing. */
+function ensurePaidTicketColumns_(sh) {
+  var lastCol = sh.getLastColumn();
+  if (lastCol < 1) return;
+  var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  var names = [];
+  for (var i = 0; i < headers.length; i++) names.push(String(headers[i]).trim());
+  var want = ['paidTicketsEnabled', 'ticketPriceCents', 'ticketCurrency', 'paidTicketsMaxPerPurchase'];
+  for (var w = 0; w < want.length; w++) {
+    if (names.indexOf(want[w]) === -1) {
+      sh.getRange(1, sh.getLastColumn() + 1).setValue(want[w]);
+      names.push(want[w]);
     }
   }
 }
@@ -591,6 +581,11 @@ function handleGetAdminEventConfig_(data) {
     defaultTestMode: String(o.defaultTestMode || '').toUpperCase() === 'TRUE' || o.defaultTestMode === true,
     blockTestWrite: String(o.blockTestWrite || '').toUpperCase() === 'TRUE' || o.blockTestWrite === true,
     bonusRulesJson: String(o.bonusRulesJson || ''),
+    paidTicketsEnabled:
+      String(o.paidTicketsEnabled || '').toUpperCase() === 'TRUE' || o.paidTicketsEnabled === true,
+    ticketPriceCents: Math.max(0, Math.floor(Number(o.ticketPriceCents) || 0)),
+    ticketCurrency: String(o.ticketCurrency || 'usd').toLowerCase().slice(0, 8) || 'usd',
+    paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(o.paidTicketsMaxPerPurchase) || 100)),
   };
   var raffles = getRafflesAllForSlug_(slug);
   return jsonResponse({ ok: true, slug: slug, event: eventOut, raffles: raffles });
@@ -683,6 +678,11 @@ function handleSaveEventConfig_(data) {
     defaultTestMode: String(o.defaultTestMode || '').toUpperCase() === 'TRUE' || o.defaultTestMode === true,
     blockTestWrite: String(o.blockTestWrite || '').toUpperCase() === 'TRUE' || o.blockTestWrite === true,
     bonusRulesJson: String(o.bonusRulesJson || ''),
+    paidTicketsEnabled:
+      String(o.paidTicketsEnabled || '').toUpperCase() === 'TRUE' || o.paidTicketsEnabled === true,
+    ticketPriceCents: Math.max(0, Math.floor(Number(o.ticketPriceCents) || 0)),
+    ticketCurrency: String(o.ticketCurrency || 'usd').toLowerCase().slice(0, 8) || 'usd',
+    paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(o.paidTicketsMaxPerPurchase) || 100)),
   };
   return jsonResponse({ ok: true, slug: slug, event: eventOut, raffles: rafflesOut });
 }
@@ -809,6 +809,22 @@ function deleteEntrySheetRowsDescending_(rowNumbersHighToLow) {
   for (var i = 0; i < rowNumbersHighToLow.length; i++) {
     sh.deleteRow(rowNumbersHighToLow[i]);
   }
+}
+
+/** Returns true if any Entries row for slug already has __stripeSessionId === sessionId in extrasJson. */
+function paidPurchaseAlreadyApplied_(slug, sessionId) {
+  if (!sessionId) return false;
+  var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
+  if (!sh || sh.getLastRow() < 2) return false;
+  var lastCol = Math.max(13, sh.getLastColumn());
+  var values = sh.getRange(2, 1, sh.getLastRow(), lastCol).getValues();
+  var exCol = getEntriesExtrasColumnIndex_();
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][1] || '').trim() !== String(slug).trim()) continue;
+    var ex = parseEntryExtrasJson_(values[i][exCol]);
+    if (String(ex.__stripeSessionId || '') === String(sessionId)) return true;
+  }
+  return false;
 }
 
 function getRaffleDrawAtMsMapForSlug_(slug) {
@@ -1021,6 +1037,11 @@ function doGet(e) {
         String(o.defaultTestMode || '').toUpperCase() === 'TRUE' || o.defaultTestMode === true,
       raffles: raffles,
       bonuses: bonuses,
+      paidTicketsEnabled:
+        String(o.paidTicketsEnabled || '').toUpperCase() === 'TRUE' || o.paidTicketsEnabled === true,
+      ticketPriceCents: Math.max(0, Math.floor(Number(o.ticketPriceCents) || 0)),
+      ticketCurrency: String(o.ticketCurrency || 'usd').toLowerCase().slice(0, 8) || 'usd',
+      paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(o.paidTicketsMaxPerPurchase) || 100)),
     };
     return jsonResponse({ ok: true, event: event });
   } catch (err) {
@@ -1040,7 +1061,10 @@ function doPost(e) {
     if (action === 'submitEntry') return handleSubmitEntry_(data);
     if (action === 'getEntryByToken') return handleGetEntryByToken_(data);
     if (action === 'updateEntryByToken') return handleUpdateEntryByToken_(data);
+    if (action === 'applyPaidTickets') return handleApplyPaidTickets_(data);
     if (action === 'getAdminStats') return handleAdminStats_(data);
+    if (action === 'getAdminInsights') return handleAdminInsights_(data);
+    if (action === 'refundPaidPurchase') return handleRefundPaidPurchase_(data);
     if (action === 'drawWinner') return handleDrawWinner_(data);
     if (action === 'exportEntries') return handleExportEntries_(data);
     if (action === 'getAdminEventConfig') return handleGetAdminEventConfig_(data);
@@ -1117,6 +1141,7 @@ function runEntryWritesAndMaybeEmail_(
         poolsEntered: written,
         testMode: testMode,
         magicLinkSent: magicSent,
+        entryToken: entryToken,
       });
     }
 
@@ -1124,7 +1149,14 @@ function runEntryWritesAndMaybeEmail_(
     if (sendMagicEmail && !testMode) {
       magicSent = trySendManageEntryEmail_(email, name, String(ev.name || 'Giveaway'), slug, entryToken);
     }
-    return jsonResponse({ ok: true, totalEntries: totalEntries, ticketMode: 'single', testMode: testMode, magicLinkSent: magicSent });
+    return jsonResponse({
+      ok: true,
+      totalEntries: totalEntries,
+      ticketMode: 'single',
+      testMode: testMode,
+      magicLinkSent: magicSent,
+      entryToken: entryToken,
+    });
   } catch (errSplit) {
     var msg = String(errSplit && errSplit.message ? errSplit.message : errSplit);
     return jsonResponse({ ok: false, error: msg, code: 'split' }, 400);
@@ -1525,6 +1557,225 @@ function readEntriesForSlug_(slug) {
   return range.getValues();
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Paid-ticket purchase (Stripe → Next.js webhook → Apps Script)
+   ──────────────────────────────────────────────────────────────────────────
+   Inputs (data.payload):
+     slug, token (entryToken), stripeSessionId, totalPaidTickets, ticketSplit (poolId → int),
+     paidAt (optional ISO).
+   Headers (data.signature): hex HMAC-SHA256(JSON.stringify(payload), PAID_PURCHASE_SECRET).
+   Behavior: idempotent on stripeSessionId; appends one Entries row per pool with __paid: true.
+   ────────────────────────────────────────────────────────────────────────── */
+
+function getPaidPurchaseSecret_() {
+  return PropertiesService.getScriptProperties().getProperty('PAID_PURCHASE_SECRET') || '';
+}
+
+function bytesToHex_(bytes) {
+  var hex = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var b = bytes[i] & 0xff;
+    var s = b.toString(16);
+    if (s.length === 1) s = '0' + s;
+    hex += s;
+  }
+  return hex;
+}
+
+function constantTimeEqualHex_(a, b) {
+  a = String(a || '');
+  b = String(b || '');
+  if (a.length !== b.length) return false;
+  var diff = 0;
+  for (var i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function verifyPaidPurchaseSignature_(payloadString, signatureHex) {
+  var secret = getPaidPurchaseSecret_();
+  if (!secret) return false;
+  var bytes = Utilities.computeHmacSha256Signature(String(payloadString || ''), secret);
+  var hex = bytesToHex_(bytes);
+  return constantTimeEqualHex_(hex, String(signatureHex || ''));
+}
+
+function appendPaidEntryRow_(slug, name, phoneNorm, email, raffleId, rowTickets, ip, userAgent, entryToken, paidMeta) {
+  var extras = {
+    __paid: true,
+    __paidTickets: rowTickets,
+    __stripeSessionId: paidMeta.stripeSessionId,
+    __purchaseAt: paidMeta.paidAt || new Date().toISOString(),
+  };
+  if (paidMeta.amountTotal != null) extras.__paidAmountCents = Math.floor(paidMeta.amountTotal);
+  if (paidMeta.currency) extras.__paidCurrency = String(paidMeta.currency).toLowerCase();
+  if (entryToken) extras.__entryToken = String(entryToken);
+  appendEntry_([
+    new Date(),
+    slug,
+    String(name || ''),
+    String(phoneNorm || ''),
+    String(email || ''),
+    raffleId,
+    'FALSE',
+    'FALSE',
+    'FALSE',
+    rowTickets,
+    'FALSE',
+    String(ip || ''),
+    String(userAgent || ''),
+    JSON.stringify(extras),
+  ]);
+}
+
+function handleApplyPaidTickets_(data) {
+  var rawPayload = data && typeof data.payload === 'object' ? data.payload : null;
+  if (!rawPayload) return jsonResponse({ ok: false, error: 'missing_payload' }, 400);
+
+  var payloadString = data.payloadString || JSON.stringify(rawPayload);
+  var sig = String(data.signature || '');
+  if (!verifyPaidPurchaseSignature_(payloadString, sig)) {
+    return jsonResponse({ ok: false, error: 'bad_signature' }, 401);
+  }
+
+  var p = rawPayload;
+  var slug = String(p.slug || '').trim();
+  var token = String(p.token || '').trim();
+  var stripeSessionId = String(p.stripeSessionId || '').trim();
+  var totalPaid = Math.max(0, Math.floor(Number(p.totalPaidTickets) || 0));
+  if (!slug || !token || !stripeSessionId || totalPaid <= 0) {
+    return jsonResponse({ ok: false, error: 'missing_fields', code: 'fields' }, 400);
+  }
+
+  var found = findEventRow_(slug);
+  if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
+
+  if (paidPurchaseAlreadyApplied_(slug, stripeSessionId)) {
+    return jsonResponse({ ok: true, alreadyApplied: true, totalPaidTickets: totalPaid });
+  }
+
+  var rows = readEntryRowsByToken_(slug, token);
+  if (!rows.length) return jsonResponse({ ok: false, error: 'entry_not_found', code: 'token' }, 404);
+
+  var raffles = getRafflesForSlug_(slug);
+  var validIds = {};
+  for (var ri = 0; ri < raffles.length; ri++) validIds[raffles[ri].id] = true;
+
+  var split = (p.ticketSplit && typeof p.ticketSplit === 'object' && !Array.isArray(p.ticketSplit)) ? p.ticketSplit : null;
+  var allocations = [];
+  if (split) {
+    var sum = 0;
+    Object.keys(split).forEach(function (k) {
+      var n = Math.max(0, Math.floor(Number(split[k]) || 0));
+      if (n > 0 && validIds[k]) {
+        allocations.push({ raffleId: k, tickets: n });
+        sum += n;
+      }
+    });
+    if (sum !== totalPaid) {
+      return jsonResponse({ ok: false, error: 'ticket_split_mismatch', code: 'split' }, 400);
+    }
+  } else {
+    var firstId = rows[0].raffleId;
+    if (!validIds[firstId]) firstId = (raffles[0] && raffles[0].id) || '';
+    if (!firstId) return jsonResponse({ ok: false, error: 'no_pool_for_entry' }, 500);
+    allocations.push({ raffleId: firstId, tickets: totalPaid });
+  }
+
+  var paidMeta = {
+    stripeSessionId: stripeSessionId,
+    paidAt: String(p.paidAt || ''),
+    amountTotal: Number(p.amountTotal),
+    currency: String(p.currency || ''),
+  };
+
+  var name = rows[0].name;
+  var phoneNorm = rows[0].phoneNorm;
+  var email = rows[0].email;
+  var ip = String(p.clientIp || 'paid');
+  var ua = String(p.userAgent || 'stripe-webhook');
+
+  for (var ai = 0; ai < allocations.length; ai++) {
+    var a = allocations[ai];
+    appendPaidEntryRow_(slug, name, phoneNorm, email, a.raffleId, a.tickets, ip, ua, token, paidMeta);
+  }
+
+  return jsonResponse({
+    ok: true,
+    alreadyApplied: false,
+    totalPaidTickets: totalPaid,
+    poolsAffected: allocations.length,
+  });
+}
+
+/**
+ * Mark every Entries row tied to a Stripe session as refunded:
+ *   - sets extras.__refunded = true, __refundedAt, __refundId, __refundedBy (admin)
+ *   - zeroes the totalEntries column so refunded tickets stop counting
+ * Idempotent: re-calling on a session that's already refunded returns ok:true with rowsChanged:0.
+ */
+function handleRefundPaidPurchase_(data) {
+  var slug = String(data.slug || '').trim();
+  var adminKey = String(data.adminKey || '');
+  var stripeSessionId = String(data.stripeSessionId || '').trim();
+  var refundId = String(data.refundId || '').trim();
+  var actor = String(data.actor || 'admin').slice(0, 64);
+  if (!slug || !stripeSessionId) return jsonResponse({ ok: false, error: 'missing_fields' }, 400);
+  if (!validateAdminKey_(slug, adminKey)) {
+    return jsonResponse({ ok: false, error: 'unauthorized' }, 401);
+  }
+
+  var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
+  if (!sh || sh.getLastRow() < 2) {
+    return jsonResponse({ ok: false, error: 'no_entries' }, 404);
+  }
+  var lastCol = Math.max(13, sh.getLastColumn());
+  var values = sh.getRange(2, 1, sh.getLastRow() - 1, lastCol).getValues();
+  var exCol = getEntriesExtrasColumnIndex_();
+  var ticketsColIdx0 = 9;
+
+  var rowsChanged = 0;
+  var ticketsRefunded = 0;
+  var amountCentsTotal = 0;
+  var firstCurrency = '';
+  var poolsAffected = {};
+
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i];
+    if (String(row[1] || '').trim() !== slug) continue;
+    var ex = parseEntryExtrasJson_(row[exCol]);
+    if (String(ex.__stripeSessionId || '') !== stripeSessionId) continue;
+    if (ex.__refunded === true) continue;
+
+    var rowNum = i + 2;
+    var oldTickets = Number(row[ticketsColIdx0]) || 0;
+    ticketsRefunded += oldTickets;
+    if (Number(ex.__paidAmountCents) > 0) {
+      amountCentsTotal += Math.floor(Number(ex.__paidAmountCents));
+      if (!firstCurrency && ex.__paidCurrency) firstCurrency = String(ex.__paidCurrency);
+    }
+    poolsAffected[String(row[5] || '')] = true;
+
+    ex.__refunded = true;
+    ex.__refundedAt = new Date().toISOString();
+    if (refundId) ex.__refundId = refundId;
+    if (actor) ex.__refundedBy = actor;
+
+    sh.getRange(rowNum, ticketsColIdx0 + 1).setValue(0);
+    sh.getRange(rowNum, exCol + 1).setValue(JSON.stringify(ex));
+    rowsChanged++;
+  }
+
+  return jsonResponse({
+    ok: true,
+    rowsChanged: rowsChanged,
+    ticketsRefunded: ticketsRefunded,
+    amountCents: amountCentsTotal,
+    currency: firstCurrency || '',
+    poolsAffected: Object.keys(poolsAffected),
+    alreadyRefunded: rowsChanged === 0,
+  });
+}
+
 function handleAdminStats_(data) {
   var slug = String(data.slug || '');
   var adminKey = String(data.adminKey || '');
@@ -1585,6 +1836,230 @@ function handleAdminStats_(data) {
       uniqueParticipants: uniqueParticipants,
       entryRowCount: entryRowCount,
       entriesByRaffle: entriesByRaffle,
+      lastUpdated: new Date().toISOString(),
+    },
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Enriched admin insights — single fetch the dashboard uses for everything.
+   Returns: totals, per-pool breakdown (free vs paid + revenue), per-day
+   payments, recent entries (masked PII), entrant leaderboard.
+   ────────────────────────────────────────────────────────────────────────── */
+function handleAdminInsights_(data) {
+  var slug = String(data.slug || '');
+  var adminKey = String(data.adminKey || '');
+  if (!slug || !validateAdminKey_(slug, adminKey)) {
+    return jsonResponse({ ok: false, error: 'unauthorized' }, 401);
+  }
+
+  var found = findEventRow_(slug);
+  if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
+  var ev = recordToObject_(found.headers, found.record);
+  var ticketCurrency = String(ev.ticketCurrency || 'usd').toLowerCase().slice(0, 8) || 'usd';
+
+  var rows = readEntriesForSlug_(slug);
+  var raffles = getRafflesAllForSlug_(slug);
+  var byPool = {};
+  for (var ri = 0; ri < raffles.length; ri++) {
+    var r = raffles[ri];
+    byPool[r.raffleId] = {
+      raffleId: r.raffleId,
+      title: String(r.title || r.raffleId),
+      drawAt: String(r.drawAt || ''),
+      active: Boolean(r.active),
+      tickets: 0,
+      freeTickets: 0,
+      paidTickets: 0,
+      people: {},
+      paidPeople: {},
+      paidPurchases: 0,
+      paidRevenueCents: 0,
+    };
+  }
+
+  var exCol = getEntriesExtrasColumnIndex_();
+  var phones = {};
+  var paidPhones = {};
+  var totalTickets = 0;
+  var totalFreeTickets = 0;
+  var totalPaidTickets = 0;
+  var paidPurchaseSet = {};
+  var totalRevenueCents = 0;
+  var revenueByCurrency = {};
+  var revenueByDay = {};
+  var recentEntries = [];
+  var entrantTotals = {};
+
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (String(row[1]) !== slug) continue;
+    var phone = String(row[3] || '');
+    var raffleId = String(row[5] || '');
+    var tickets = Number(row[9]) || 0;
+    var isTest = String(row[10]).toUpperCase() === 'TRUE' || row[10] === true;
+    if (isTest) continue;
+
+    var name = String(row[2] || '');
+    var email = String(row[4] || '');
+    var ts = row[0] instanceof Date ? row[0] : new Date(String(row[0] || ''));
+    var tsValid = ts instanceof Date && !isNaN(ts.getTime());
+
+    var ex = parseEntryExtrasJson_(row[exCol]);
+    var paid = Boolean(ex.__paid);
+    var refunded = ex.__refunded === true;
+    var sessionId = String(ex.__stripeSessionId || '');
+    var amountCents = Math.max(0, Math.floor(Number(ex.__paidAmountCents) || 0));
+    var paidCurrency = String(ex.__paidCurrency || ticketCurrency).toLowerCase();
+
+    if (!byPool[raffleId]) {
+      byPool[raffleId] = {
+        raffleId: raffleId,
+        title: raffleId,
+        drawAt: '',
+        active: false,
+        tickets: 0,
+        freeTickets: 0,
+        paidTickets: 0,
+        people: {},
+        paidPeople: {},
+        paidPurchases: 0,
+        paidRevenueCents: 0,
+      };
+    }
+    if (!refunded) {
+      byPool[raffleId].tickets += tickets;
+      byPool[raffleId].people[phone] = true;
+      totalTickets += tickets;
+      phones[phone] = true;
+
+      if (!entrantTotals[phone]) {
+        entrantTotals[phone] = { phoneLast4: phone.slice(-4), name: name, emailMasked: maskEmail_(email), tickets: 0, freeTickets: 0, paidTickets: 0, paidCents: 0 };
+      }
+      if (!entrantTotals[phone].name && name) entrantTotals[phone].name = name;
+      if (!entrantTotals[phone].emailMasked && email) entrantTotals[phone].emailMasked = maskEmail_(email);
+      entrantTotals[phone].tickets += tickets;
+
+      if (paid) {
+        byPool[raffleId].paidTickets += tickets;
+        byPool[raffleId].paidPeople[phone] = true;
+        totalPaidTickets += tickets;
+        paidPhones[phone] = true;
+        entrantTotals[phone].paidTickets += tickets;
+        if (sessionId && !paidPurchaseSet[sessionId]) {
+          paidPurchaseSet[sessionId] = { amountCents: amountCents, currency: paidCurrency, ts: tsValid ? ts.toISOString() : '' };
+          if (amountCents > 0) {
+            totalRevenueCents += amountCents;
+            revenueByCurrency[paidCurrency] = (revenueByCurrency[paidCurrency] || 0) + amountCents;
+            entrantTotals[phone].paidCents += amountCents;
+            byPool[raffleId].paidPurchases += 1;
+            byPool[raffleId].paidRevenueCents += amountCents;
+            if (tsValid) {
+              var dayKey = ts.toISOString().slice(0, 10);
+              revenueByDay[dayKey] = (revenueByDay[dayKey] || 0) + amountCents;
+            }
+          }
+        }
+      } else {
+        byPool[raffleId].freeTickets += tickets;
+        totalFreeTickets += tickets;
+        entrantTotals[phone].freeTickets += tickets;
+      }
+    }
+
+    recentEntries.push({
+      ts: tsValid ? ts.toISOString() : String(row[0] || ''),
+      tsMs: tsValid ? ts.getTime() : 0,
+      name: name,
+      emailMasked: maskEmail_(email),
+      phoneLast4: phone.slice(-4),
+      raffleId: raffleId,
+      tickets: tickets,
+      paid: paid,
+      refunded: refunded,
+      stripeSessionId: paid ? sessionId : '',
+      paidAmountCents: paid ? amountCents : 0,
+      currency: paid ? paidCurrency : '',
+    });
+  }
+
+  var poolList = [];
+  Object.keys(byPool).forEach(function (k) {
+    var p = byPool[k];
+    var ppl = 0;
+    Object.keys(p.people).forEach(function () { ppl++; });
+    var paidPpl = 0;
+    Object.keys(p.paidPeople).forEach(function () { paidPpl++; });
+    poolList.push({
+      raffleId: p.raffleId,
+      title: p.title,
+      drawAt: p.drawAt,
+      active: p.active,
+      tickets: p.tickets,
+      freeTickets: p.freeTickets,
+      paidTickets: p.paidTickets,
+      people: ppl,
+      paidPeople: paidPpl,
+      paidPurchases: p.paidPurchases,
+      paidRevenueCents: p.paidRevenueCents,
+    });
+  });
+
+  var orderById = {};
+  for (var oi = 0; oi < raffles.length; oi++) orderById[raffles[oi].raffleId] = oi;
+  poolList.sort(function (a, b) {
+    var ai = orderById[a.raffleId] != null ? orderById[a.raffleId] : 9999;
+    var bi = orderById[b.raffleId] != null ? orderById[b.raffleId] : 9999;
+    return ai - bi;
+  });
+
+  recentEntries.sort(function (a, b) { return b.tsMs - a.tsMs; });
+  recentEntries = recentEntries.slice(0, 50);
+  recentEntries.forEach(function (r) { delete r.tsMs; });
+
+  var entrants = [];
+  Object.keys(entrantTotals).forEach(function (k) {
+    entrants.push(entrantTotals[k]);
+  });
+  entrants.sort(function (a, b) { return b.tickets - a.tickets; });
+  entrants = entrants.slice(0, 25);
+
+  var revenueDayList = [];
+  Object.keys(revenueByDay).sort().forEach(function (k) {
+    revenueDayList.push({ day: k, amountCents: revenueByDay[k] });
+  });
+
+  var paidPurchaseCount = 0;
+  Object.keys(paidPurchaseSet).forEach(function () { paidPurchaseCount++; });
+
+  var uniqueParticipants = 0;
+  Object.keys(phones).forEach(function () { uniqueParticipants++; });
+  var paidParticipants = 0;
+  Object.keys(paidPhones).forEach(function () { paidParticipants++; });
+
+  return jsonResponse({
+    ok: true,
+    insights: {
+      slug: slug,
+      eventName: String(ev.name || 'Event'),
+      currency: ticketCurrency,
+      paidTicketsEnabled:
+        String(ev.paidTicketsEnabled || '').toUpperCase() === 'TRUE' || ev.paidTicketsEnabled === true,
+      ticketPriceCents: Math.max(0, Math.floor(Number(ev.ticketPriceCents) || 0)),
+      totals: {
+        uniqueParticipants: uniqueParticipants,
+        paidParticipants: paidParticipants,
+        totalTickets: totalTickets,
+        freeTickets: totalFreeTickets,
+        paidTickets: totalPaidTickets,
+        paidPurchases: paidPurchaseCount,
+        totalRevenueCents: totalRevenueCents,
+        revenueByCurrency: revenueByCurrency,
+      },
+      pools: poolList,
+      recentEntries: recentEntries,
+      topEntrants: entrants,
+      revenueByDay: revenueDayList,
       lastUpdated: new Date().toISOString(),
     },
   });

@@ -64,6 +64,12 @@ export default function PrivacyPage() {
         This platform uses Google Apps Script and Google Sheets to process and store entries. Entry data is subject to
         Google&apos;s privacy practices as well as ours.
       </p>
+      <p>
+        When a promotion offers paid extra tickets, payments are processed by Stripe. Card details are never sent to
+        Spectrum Outfitters servers; we only receive a confirmation that payment succeeded along with the amount and a
+        Stripe session identifier so we can credit your tickets correctly. Stripe&apos;s privacy practices apply to those
+        transactions in addition to ours.
+      </p>
 
       <h2 className="mt-10 text-xl font-semibold text-neutral-50">Changes to this policy</h2>
       <p>

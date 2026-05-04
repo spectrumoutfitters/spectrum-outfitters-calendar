@@ -22,6 +22,10 @@ function defaultEvent(): AdminEventEditable {
     defaultTestMode: false,
     blockTestWrite: false,
     bonusRulesJson: "",
+    paidTicketsEnabled: false,
+    ticketPriceCents: 500,
+    ticketCurrency: "usd",
+    paidTicketsMaxPerPurchase: 100,
   };
 }
 
@@ -140,6 +144,10 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
         defaultTestMode: Boolean(ev.defaultTestMode),
         blockTestWrite: Boolean(ev.blockTestWrite),
         bonusRulesJson: String(ev.bonusRulesJson ?? ""),
+        paidTicketsEnabled: Boolean(ev.paidTicketsEnabled),
+        ticketPriceCents: Math.max(0, Math.floor(Number(ev.ticketPriceCents) || 0)),
+        ticketCurrency: String(ev.ticketCurrency ?? "usd").toLowerCase().slice(0, 8) || "usd",
+        paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(ev.paidTicketsMaxPerPurchase) || 100)),
       });
       const rows = Array.isArray(data.raffles) ? data.raffles.map((r) => normalizeRaffle(r)) : [];
       setRaffles(rows.length ? rows : [normalizeRaffle({ raffleId: "grand-prize", title: "Grand prize", sortOrder: 1 })]);
@@ -203,6 +211,10 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
           defaultTestMode: Boolean(ev.defaultTestMode),
           blockTestWrite: Boolean(ev.blockTestWrite),
           bonusRulesJson: String(ev.bonusRulesJson ?? ""),
+          paidTicketsEnabled: Boolean(ev.paidTicketsEnabled),
+          ticketPriceCents: Math.max(0, Math.floor(Number(ev.ticketPriceCents) || 0)),
+          ticketCurrency: String(ev.ticketCurrency ?? "usd").toLowerCase().slice(0, 8) || "usd",
+          paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(ev.paidTicketsMaxPerPurchase) || 100)),
         });
         setRaffles(data.raffles.map((r) => normalizeRaffle(r)));
       }
@@ -648,9 +660,87 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
                     className="mt-1 min-h-[88px] w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 font-mono text-xs text-neutral-100"
                     value={event.bonusRulesJson}
                     onChange={(e) => setEvent((s) => ({ ...s, bonusRulesJson: e.target.value.slice(0, 8000) }))}
-                    placeholder='[{"id":"instagram","label":"…","tickets":2}]'
+                    placeholder='[{"id":"review","label":"…","tickets":4}]'
                   />
                 </label>
+
+                <div className="rounded-2xl border border-neutral-800 bg-neutral-950/80 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-100">Paid tickets (Stripe)</p>
+                      <p className="mt-0.5 text-xs text-neutral-400">
+                        Lets entrants buy more tickets after entering. Disabled until ticket price is set and Stripe keys are
+                        installed on the server.
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs font-medium text-neutral-200">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-neutral-600"
+                        checked={event.paidTicketsEnabled}
+                        onChange={(e) => setEvent((s) => ({ ...s, paidTicketsEnabled: e.target.checked }))}
+                      />
+                      Enabled
+                    </label>
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <label className="block text-sm">
+                      <span className="text-xs font-medium text-neutral-300">Price per ticket (cents)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+                        value={event.ticketPriceCents}
+                        onChange={(e) =>
+                          setEvent((s) => ({
+                            ...s,
+                            ticketPriceCents: Math.max(0, Math.floor(Number(e.target.value) || 0)),
+                          }))
+                        }
+                      />
+                      <span className="mt-1 block text-[11px] text-neutral-500">
+                        500 = $5.00. Stripe minimum is typically 50 cents.
+                      </span>
+                    </label>
+                    <label className="block text-sm">
+                      <span className="text-xs font-medium text-neutral-300">Currency</span>
+                      <input
+                        type="text"
+                        maxLength={8}
+                        className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm uppercase text-neutral-100"
+                        value={event.ticketCurrency}
+                        onChange={(e) =>
+                          setEvent((s) => ({ ...s, ticketCurrency: e.target.value.trim().toLowerCase().slice(0, 8) }))
+                        }
+                        placeholder="usd"
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="text-xs font-medium text-neutral-300">Max tickets per checkout</span>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+                        value={event.paidTicketsMaxPerPurchase}
+                        onChange={(e) =>
+                          setEvent((s) => ({
+                            ...s,
+                            paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(e.target.value) || 1)),
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                  <p className="mt-3 text-[11px] text-neutral-500">
+                    Server env required: <code className="text-neutral-300">STRIPE_SECRET_KEY</code>,{" "}
+                    <code className="text-neutral-300">STRIPE_WEBHOOK_SECRET</code>, and{" "}
+                    <code className="text-neutral-300">RAFFLE_PAID_PURCHASE_SECRET</code>. Apps Script needs the same value as
+                    Script Property <code className="text-neutral-300">PAID_PURCHASE_SECRET</code>. Stripe webhook URL:{" "}
+                    <code className="text-neutral-300">/api/raffle/webhook</code>.
+                  </p>
+                </div>
               </div>
             ) : null}
           </div>

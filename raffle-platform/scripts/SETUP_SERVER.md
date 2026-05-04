@@ -192,3 +192,80 @@ pm2 stop spectrum-raffle    # stop the app
 | 5000 | Spectrum Outfitters Calendar (main app) |
 | 3001 | Spectrum Raffle Platform (new) |
 | 80/443 | Nginx (routes by subdomain) |
+
+---
+
+## 11. Stripe paid tickets (production)
+
+Paid tickets ride on the same Apps Script + Next app. Two pieces talk to each other:
+
+1. **Stripe → Next.js webhook** — Stripe POSTs to `/api/raffle/webhook`. Next verifies the
+   signature with `STRIPE_WEBHOOK_SECRET`.
+2. **Next.js → Apps Script** — Next signs the payload with `RAFFLE_PAID_PURCHASE_SECRET`
+   and POSTs `applyPaidTickets`. Apps Script verifies the HMAC using its
+   `PAID_PURCHASE_SECRET` script property and writes paid-ticket rows to the sheet.
+
+### 11a. Apps Script
+
+Open the bound Apps Script (Extensions → Apps Script from the spreadsheet):
+
+1. Replace `Code.gs` with the latest from this repo (`raffle-platform/google-apps-script/Code.gs`).
+2. Project Settings → Script properties → add:
+   - `PAID_PURCHASE_SECRET` = the value of `RAFFLE_PAID_PURCHASE_SECRET` in `.env.local`
+     (it must match exactly).
+3. Deploy → Manage deployments → edit the existing web app → New version → Deploy.
+   The web app URL stays the same.
+
+### 11b. Server env vars
+
+Append to `/etc/spectrum-raffle.env` on the droplet (and to `raffle-platform/.env.local` locally):
+
+```
+STRIPE_SECRET_KEY=rk_live_… (or sk_live_…)
+STRIPE_WEBHOOK_SECRET=whsec_… (filled in step 11c)
+RAFFLE_PAID_PURCHASE_SECRET=<32-byte hex, same as Apps Script PAID_PURCHASE_SECRET>
+NEXT_PUBLIC_RAFFLE_SITE_URL=https://raffle.spectrumoutfitters.com
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_… (optional; not used server-side)
+```
+
+Then on the droplet:
+
+```bash
+cp /etc/spectrum-raffle.env /opt/spectrum-raffle/raffle-platform/.env.local
+pm2 restart spectrum-raffle
+```
+
+### 11c. Stripe dashboard
+
+In Stripe → Developers → Webhooks → **Add endpoint**:
+
+- Endpoint URL: `https://raffle.spectrumoutfitters.com/api/raffle/webhook`
+- Events: `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
+- Copy the signing secret it shows (`whsec_…`) and paste it into `STRIPE_WEBHOOK_SECRET`.
+
+Restart the raffle app once more (`pm2 restart spectrum-raffle`).
+
+### 11d. Turn on paid tickets per event
+
+`https://raffle.spectrumoutfitters.com/admin/<slug>` → expand **Add or edit items** →
+**Advanced settings → Paid tickets (Stripe)**:
+
+- Tick **Enabled**.
+- Set **Price per ticket** in cents (e.g. `500` = $5.00, Stripe minimum is ~50¢).
+- Currency: `usd`.
+- Max tickets per checkout: `100` (or whatever cap you want).
+- Save changes — this will auto-add the new columns to the Events sheet on first save.
+
+The Insights panel on the same page now shows live ticket counts, free-vs-paid split,
+revenue per pool, and recent entries. It refreshes every 7 seconds.
+
+### 11e. Confirm end-to-end (live)
+
+1. Open the entry page and submit a real entry.
+2. On the success state, click **Buy more tickets**, choose 1 ticket, complete the
+   Stripe checkout with a real card.
+3. Within ~30 seconds, refresh the admin page — the Insights tables should show that
+   purchase under "Recent entries" with a Paid badge and the revenue should appear in
+   the Pool breakdown row.
+4. Open Stripe → Developers → Webhooks → click your endpoint → **Recent events** must
+   show a `200 OK` for that event.

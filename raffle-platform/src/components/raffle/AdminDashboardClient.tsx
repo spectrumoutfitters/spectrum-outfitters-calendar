@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminEventConfigPanel } from "@/components/raffle/AdminEventConfigPanel";
+import { AdminInsightsPanel } from "@/components/raffle/AdminInsightsPanel";
 import type { AdminStats } from "@/lib/types";
 
 type WinnerInfo = {
@@ -374,6 +375,14 @@ export function AdminDashboardClient({ slug }: Props) {
               ) : null}
             </section>
           </div>
+        ) : null}
+
+        {effectiveKey.trim() ? (
+          <AdminInsightsPanel
+            slug={slug}
+            adminKey={effectiveKey.trim()}
+            onUnauthorized={() => setError("Admin key was rejected by Insights — re-paste it.")}
+          />
         ) : null}
 
         {effectiveKey.trim() ? (

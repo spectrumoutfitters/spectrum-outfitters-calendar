@@ -1,131 +1,65 @@
 import type { BonusRule } from "@/lib/types";
 
-const IG =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_RAFFLE_INSTAGRAM_URL) ||
-  "https://www.instagram.com/spectrum.outfitters/";
-const TT =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_RAFFLE_TIKTOK_URL) ||
-  "https://www.tiktok.com/@spectrumoutfitters";
-const FB =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_RAFFLE_FACEBOOK_URL) ||
-  "https://www.facebook.com/spectrumoutfitters";
-
 /**
- * Default bonus ladder when Events.bonusRulesJson is empty.
- * Proof fields are stored for staff to verify (no OAuth to Meta/TikTok in this app — see Official Rules).
+ * Free bonus ladder. We only ship rules staff can actually verify before awarding prizes:
+ *
+ * - review: requires a public review URL the team can click and confirm.
+ * - referral: requires the friend's full name; counts only when that friend submits their own
+ *   entry and types this entrant back as their referrer.
+ *
+ * Older rules (instagram / tiktok / facebook follows, story tags) were removed because we cannot
+ * verify them at scale without OAuth into Meta/TikTok. Paid tickets are the supported way to add
+ * weight to an entry beyond these two.
  */
 export const DEFAULT_BONUS_RULES: BonusRule[] = [
   {
-    id: "instagram",
-    label: "Instagram — follow us",
-    description: "Follow the shop, then leave your @ so we can match your account before prizes.",
-    tickets: 3,
-    actionUrl: IG,
-    actionLabel: "Open Instagram",
-    proofFields: [
-      {
-        id: "handle",
-        input: "text",
-        label: "Your Instagram @username",
-        placeholder: "@yourhandle",
-        requiredWhenBonus: true,
-      },
-    ],
-  },
-  {
-    id: "tiktok",
-    label: "TikTok — follow us",
-    description: "Follow on TikTok for extra entries. We verify follows manually if you win.",
-    tickets: 2,
-    actionUrl: TT,
-    actionLabel: "Open TikTok",
-    proofFields: [
-      {
-        id: "handle",
-        input: "text",
-        label: "Your TikTok @username",
-        placeholder: "@yourhandle",
-        requiredWhenBonus: true,
-      },
-    ],
-  },
-  {
-    id: "facebook",
-    label: "Facebook — like our page",
-    description: "Like Spectrum Outfitters on Facebook (public page). Optional note helps us verify.",
-    tickets: 2,
-    actionUrl: FB,
-    actionLabel: "Open Facebook",
-    proofFields: [
-      {
-        id: "note",
-        input: "text",
-        label: "First name on Facebook (optional)",
-        placeholder: "So we can spot your like",
-        requiredWhenBonus: false,
-      },
-    ],
-  },
-  {
-    id: "story_tag",
-    label: "Story or reel — tag us",
-    description: "Post a public story or reel tagging the shop. Link helps us verify faster.",
-    tickets: 4,
-    proofFields: [
-      {
-        id: "handle",
-        input: "text",
-        label: "Your @ on that post",
-        placeholder: "@yourhandle",
-        requiredWhenBonus: true,
-      },
-      {
-        id: "postUrl",
-        input: "url",
-        label: "Link to the post (optional)",
-        placeholder: "https://…",
-        requiredWhenBonus: false,
-      },
-    ],
-  },
-  {
     id: "review",
-    label: "Leave a review",
-    description: "Google, Facebook, Yelp, etc. Tell us where and (if you can) paste the review link.",
-    tickets: 6,
+    label: "Leave a public review",
+    description: "Post a public Google, Facebook, or Yelp review and paste the link below — we click every link before awarding prizes.",
+    tickets: 4,
     proofFields: [
       {
         id: "platform",
         input: "text",
-        label: "Where did you review?",
-        placeholder: "e.g. Google Maps, Facebook",
+        label: "Where did you review? (Google, Facebook, Yelp, …)",
+        placeholder: "e.g. Google Maps",
         requiredWhenBonus: true,
       },
       {
         id: "reviewUrl",
         input: "url",
-        label: "Link to your review (optional)",
+        label: "Public link to your review",
         placeholder: "https://…",
-        requiredWhenBonus: false,
+        requiredWhenBonus: true,
       },
     ],
   },
   {
     id: "referral",
     label: "Refer a friend",
-    description: "They must submit their own entry and type your full name when asked.",
-    tickets: 4,
+    description: "Your friend must submit their own entry and type your full name in their referral field — that is how we verify it.",
+    tickets: 3,
     proofFields: [
       {
         id: "friendName",
         input: "text",
-        label: "Friend's full name (as they'll enter it)",
+        label: "Friend's full name (must match what they type)",
         placeholder: "First Last",
         requiredWhenBonus: true,
       },
     ],
   },
 ];
+
+/** IDs we have ever shipped as defaults — used to decide when a sheet is just echoing them back. */
+const SHIPPED_DEFAULT_IDS = new Set([
+  "instagram",
+  "tiktok",
+  "facebook",
+  "story_tag",
+  "review",
+  "referral",
+]);
 
 const DEFAULT_BONUS_BY_ID: Record<string, BonusRule> = Object.fromEntries(
   DEFAULT_BONUS_RULES.map((r) => [r.id, r]),
@@ -154,15 +88,13 @@ export function mergeBonusRulesWithDefaults(rules: BonusRule[]): BonusRule[] {
 }
 
 /**
- * Events sheet often still has the original JSON: exactly instagram + review + referral, no proofFields.
- * That should not override the current default ladder (TikTok, Facebook, story tag, verification fields).
+ * The Events sheet often still has older JSON arrays (3 or 6 rules) that match exactly the IDs
+ * we have shipped as defaults in the past. We treat any such row as "use current defaults" so
+ * removing unverifiable rules in code automatically removes them in the UI without sheet edits.
  */
 export function isLegacyBonusRulesFingerprint(rules: BonusRule[]): boolean {
-  if (!Array.isArray(rules) || rules.length !== 3) return false;
-  const ids = new Set(rules.map((r) => String(r.id || "").trim()));
-  if (!ids.has("instagram") || !ids.has("review") || !ids.has("referral")) return false;
-  if (ids.size !== 3) return false;
-  return !rules.some((r) => (r.proofFields?.length ?? 0) > 0);
+  if (!Array.isArray(rules) || !rules.length) return false;
+  return rules.every((r) => SHIPPED_DEFAULT_IDS.has(String(r.id || "").trim()));
 }
 
 export function resolveBonusRules(event: { bonuses?: BonusRule[] | null }): BonusRule[] {

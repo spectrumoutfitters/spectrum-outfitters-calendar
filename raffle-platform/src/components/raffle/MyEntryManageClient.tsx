@@ -15,6 +15,7 @@ import {
 } from "@/lib/poolTicketAlloc";
 import type { EventConfig, MyEntrySnapshot } from "@/lib/types";
 import { BonusToggle } from "./BonusToggle";
+import { BuyTicketsCard } from "./BuyTicketsCard";
 import { PoolTicketField } from "./PoolTicketField";
 
 type Props = {
@@ -613,6 +614,23 @@ export function MyEntryManageClient({ event, slug, initialToken = "" }: Props) {
 
               <div className="h-24 sm:h-20" aria-hidden />
             </form>
+
+            {entry && !testMode && event.paidTicketsEnabled && (event.ticketPriceCents ?? 0) > 0 ? (
+              <div className="mt-6">
+                <BuyTicketsCard
+                  event={event}
+                  entryToken={token}
+                  restrictToPoolIds={
+                    entry.ticketMode === "split" && entry.splitRaffleIds.length
+                      ? entry.splitRaffleIds
+                      : entry.singleRaffleId
+                        ? [entry.singleRaffleId]
+                        : undefined
+                  }
+                  disabled={locked}
+                />
+              </div>
+            ) : null}
           </>
         ) : null}
 

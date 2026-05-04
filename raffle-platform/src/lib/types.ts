@@ -51,6 +51,14 @@ export type EventConfig = EventBranding & {
   raffles: RaffleOption[];
   /** From Apps Script when Events.bonusRulesJson is set; else client uses defaults. */
   bonuses?: BonusRule[];
+  /** Paid ticket add-ons (Stripe). When false, the Buy button is hidden everywhere. */
+  paidTicketsEnabled?: boolean;
+  /** Per-ticket price for the buy flow, in the smallest currency unit (e.g. 100 = $1.00). */
+  ticketPriceCents?: number;
+  /** ISO currency code, lowercase (Stripe convention). Defaults to "usd" when omitted. */
+  ticketCurrency?: string;
+  /** Cap on tickets per Stripe Checkout session, to keep purchases sane. */
+  paidTicketsMaxPerPurchase?: number;
 };
 
 export type EntryPayload = {
@@ -93,6 +101,8 @@ export type SubmitEntryResult =
       poolsEntered?: number;
       ticketMode?: string;
       testMode?: boolean;
+      /** Returned when the entry was created so the client can offer "Buy more tickets" right after submit. */
+      entryToken?: string;
     }
   | { ok: false; error: string; code?: string };
 
@@ -132,6 +142,78 @@ export type AdminStats = {
   lastUpdated: string;
 };
 
+/** Per-pool breakdown surfaced on the admin Insights tab. */
+export type AdminInsightsPool = {
+  raffleId: string;
+  title: string;
+  drawAt: string;
+  active: boolean;
+  tickets: number;
+  freeTickets: number;
+  paidTickets: number;
+  people: number;
+  paidPeople: number;
+  paidPurchases: number;
+  paidRevenueCents: number;
+};
+
+/** One row in the recent-entries feed (PII masked). */
+export type AdminInsightsRecentEntry = {
+  ts: string;
+  name: string;
+  emailMasked: string;
+  phoneLast4: string;
+  raffleId: string;
+  tickets: number;
+  paid: boolean;
+  /** True after the paid row was refunded — shown as a badge, excluded from totals. */
+  refunded?: boolean;
+  /** Stripe session id for refund button (only set on paid rows). */
+  stripeSessionId?: string;
+  paidAmountCents: number;
+  currency: string;
+};
+
+/** Top entrant aggregate (by total ticket count). */
+export type AdminInsightsEntrant = {
+  phoneLast4: string;
+  name: string;
+  emailMasked: string;
+  tickets: number;
+  freeTickets: number;
+  paidTickets: number;
+  paidCents: number;
+};
+
+/** Daily revenue point. */
+export type AdminInsightsRevenueDay = {
+  day: string;
+  amountCents: number;
+};
+
+export type AdminInsights = {
+  slug: string;
+  eventName: string;
+  currency: string;
+  paidTicketsEnabled: boolean;
+  ticketPriceCents: number;
+  totals: {
+    uniqueParticipants: number;
+    paidParticipants: number;
+    totalTickets: number;
+    freeTickets: number;
+    paidTickets: number;
+    paidPurchases: number;
+    totalRevenueCents: number;
+    revenueByCurrency: Record<string, number>;
+  };
+  pools: AdminInsightsPool[];
+  recentEntries: AdminInsightsRecentEntry[];
+  topEntrants: AdminInsightsEntrant[];
+  revenueByDay: AdminInsightsRevenueDay[];
+  lastUpdated: string;
+};
+
 /** Editable raffle row returned by getAdminEventConfig / saveEventConfig. */
 export type AdminRaffleRow = {
   id: string;
@@ -164,6 +246,10 @@ export type AdminEventEditable = {
   defaultTestMode: boolean;
   blockTestWrite: boolean;
   bonusRulesJson: string;
+  paidTicketsEnabled: boolean;
+  ticketPriceCents: number;
+  ticketCurrency: string;
+  paidTicketsMaxPerPurchase: number;
 };
 
 export type DrawWinnerResult =

@@ -14,6 +14,7 @@ import {
   sumPoolTickets,
 } from "@/lib/poolTicketAlloc";
 import { BonusToggle } from "./BonusToggle";
+import { BuyTicketsCard } from "./BuyTicketsCard";
 import { PoolTicketField } from "./PoolTicketField";
 
 type Props = {
@@ -46,6 +47,8 @@ export function EventEntryClient({ event }: Props) {
   const [company, setCompany] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [entryToken, setEntryToken] = useState<string>("");
+  const [submittedPoolIds, setSubmittedPoolIds] = useState<string[]>([]);
 
   const testMode = urlTest || event.defaultTestMode;
 
@@ -163,6 +166,7 @@ export function EventEntryClient({ event }: Props) {
         error?: string;
         message?: string;
         magicLinkSent?: boolean;
+        entryToken?: string;
       };
       if (!res.ok || !data.ok) {
         setStatus("error");
@@ -170,6 +174,8 @@ export function EventEntryClient({ event }: Props) {
         return;
       }
       setStatus("success");
+      setEntryToken(String(data.entryToken || ""));
+      setSubmittedPoolIds(selectedIdsOrdered.slice());
       const splitNote =
         selectedIdsOrdered.length > 1 && typeof data.poolsEntered === "number"
           ? ` Recorded across ${data.poolsEntered} prize pool${data.poolsEntered === 1 ? "" : "s"} with your ticket split.`
@@ -604,6 +610,14 @@ export function EventEntryClient({ event }: Props) {
             >
               {message}
             </div>
+          ) : null}
+
+          {status === "success" && entryToken && !testMode && event.paidTicketsEnabled && (event.ticketPriceCents ?? 0) > 0 ? (
+            <BuyTicketsCard
+              event={event}
+              entryToken={entryToken}
+              restrictToPoolIds={submittedPoolIds.length > 0 ? submittedPoolIds : undefined}
+            />
           ) : null}
 
           {/* Spacer so content clears fixed submit bar on phones */}

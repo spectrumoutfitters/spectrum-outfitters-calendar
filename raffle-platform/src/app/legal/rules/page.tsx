@@ -46,33 +46,44 @@ export default function RulesPage() {
         ), complete the form with your name, phone number, and email address, accept these rules, and submit.
       </p>
       <p>
-        <strong className="text-neutral-100">One submission per phone number per event.</strong> You may either (a){" "}
-        <strong className="text-neutral-100">place all of your tickets on one prize pool</strong> you choose on the form,
-        or (b) if the entry page offers multiple pools, <strong className="text-neutral-100">select two or more pools</strong>{" "}
-        and have your total ticket count (including any bonus tickets you qualify for){" "}
-        <strong className="text-neutral-100">divided evenly only across the pools you selected</strong>. Weights may be
-        fractional (for example, one total ticket split across four selected pools may be recorded as 0.25 toward each of
-        those four drawings). Each pool is drawn separately and only includes tickets allocated to that pool.
+        <strong className="text-neutral-100">One free submission per phone number per event.</strong> You choose how to
+        distribute your total ticket count (free base ticket + verified bonus tickets) across the prize pools listed on
+        the entry page. The sum of tickets you assign to pools must equal your total ticket count. Each pool is drawn
+        separately and only includes tickets you allocated to that pool. You can revisit your private manage-entry link
+        (sent by email when enabled) to adjust the split until shortly before each pool&apos;s scheduled draw.
       </p>
 
-      <h2 className="mt-8 scroll-mt-4 text-lg font-semibold text-neutral-50 sm:mt-10 sm:text-xl">5. Bonus tickets</h2>
+      <h2 className="mt-8 scroll-mt-4 text-lg font-semibold text-neutral-50 sm:mt-10 sm:text-xl">5. Bonus tickets (free)</h2>
       <p>
-        Participants may claim additional raffle tickets by completing optional bonus actions listed on each event’s
-        entry page (for example following the sponsor on social platforms, tagging the sponsor in a public story or reel,
-        leaving an online review, or referring a friend who submits a separate qualifying entry). Ticket values for each
-        action are shown on that event’s form.
+        Participants may claim additional raffle tickets by completing optional bonus actions listed on each event&apos;s
+        entry page. We only offer bonus actions our staff can verify before awarding prizes — currently:
       </p>
-      <p>
-        The entry form may ask for your social handle, a link to a public post, where you left a review, or similar
-        details so our staff can confirm the action before prizes are awarded.{" "}
-        <strong className="text-neutral-100">
-          This process does not use automated logins or official APIs to Meta, TikTok, or other platforms
-        </strong>
-        ; verification is performed manually using the information you submit and what is publicly visible online.
-      </p>
+      <ul className="list-disc space-y-1 pl-6">
+        <li>
+          <strong className="text-neutral-100">Public review:</strong> post a public Google, Facebook, or Yelp review and
+          paste the link on the entry form. Staff click every submitted link before drawing.
+        </li>
+        <li>
+          <strong className="text-neutral-100">Refer a friend:</strong> the friend must submit their own entry and type
+          your full name in their referral field. The bonus tickets only count once that referral is recorded.
+        </li>
+      </ul>
       <p>
         Spectrum Outfitters reserves the right to verify any bonus claim and to disqualify entries where claimed bonuses
         cannot be confirmed.
+      </p>
+
+      <h2 className="mt-8 scroll-mt-4 text-lg font-semibold text-neutral-50 sm:mt-10 sm:text-xl">5a. Optional paid tickets</h2>
+      <p>
+        Where allowed by law and offered by the sponsor on the entry page, participants may purchase additional tickets
+        through Stripe at the price displayed on the entry page. Paid tickets are added to the prize pool(s) the
+        purchaser selects at checkout and are subject to the same draw process as free tickets. Paid tickets are
+        non-refundable once a draw has occurred.
+      </p>
+      <p>
+        Free entry remains available at all times via the methods in Section 4. Where a sponsor is not authorized to sell
+        raffle tickets in a participant&apos;s jurisdiction, paid tickets will not be made available there and are void
+        where prohibited.
       </p>
 
       <h2 className="mt-8 scroll-mt-4 text-lg font-semibold text-neutral-50 sm:mt-10 sm:text-xl">6. Winner selection</h2>
@@ -102,9 +113,11 @@ export default function RulesPage() {
         or prize acceptance.
       </p>
 
-      <h2 className="mt-8 scroll-mt-4 text-lg font-semibold text-neutral-50 sm:mt-10 sm:text-xl">10. No purchase necessary</h2>
+      <h2 className="mt-8 scroll-mt-4 text-lg font-semibold text-neutral-50 sm:mt-10 sm:text-xl">10. Free entry available</h2>
       <p>
-        No purchase is necessary to enter or win. A purchase does not increase your chances of winning.
+        A free entry path is always available via Section 4 above and includes the free bonus tickets described in
+        Section 5. Optional paid tickets (Section 5a), where offered, are an additional way to add weight to a pool and
+        are not required to enter or win.
       </p>
 
       <h2 className="mt-8 scroll-mt-4 text-lg font-semibold text-neutral-50 sm:mt-10 sm:text-xl">11. Governing law</h2>
