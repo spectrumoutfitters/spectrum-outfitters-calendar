@@ -111,10 +111,6 @@ export type SubmitEntryResult =
       testMode?: boolean;
       /** Returned when the entry was created so the client can offer "Buy more tickets" right after submit. */
       entryToken?: string;
-      /** True when newsletter opt-in is on but bonus tickets are still pending email confirmation. */
-      newsletterBonusPending?: boolean;
-      /** Tickets that will be awarded once the entrant confirms via the email link. */
-      newsletterBonusTickets?: number;
     }
   | { ok: false; error: string; code?: string };
 
@@ -143,9 +139,11 @@ export type MyEntrySnapshot = {
   bonuses?: BonusRule[];
   /** Newsletter opt-in flag from the original submission (preserved across edits). */
   newsletterOptIn?: boolean;
-  /** True after the entrant clicked the email confirmation link. */
+  /**
+   * Kept for API compatibility — mirrors newsletter opt-in (there is no separate email confirmation step).
+   */
   newsletterConfirmed?: boolean;
-  /** Bonus tickets that will be (or were) awarded on confirmation. */
+  /** Configured newsletter bonus ticket count when the event offers that perk (shown for manage-entry UI). */
   newsletterBonusTickets?: number;
 };
 
@@ -224,11 +222,9 @@ export type AdminInsights = {
     paidPurchases: number;
     totalRevenueCents: number;
     revenueByCurrency: Record<string, number>;
-    /** Number of distinct people who ticked the newsletter opt-in. */
+    /** Number of distinct people who ticked the newsletter opt-in checkbox. */
     newsletterOptIns?: number;
-    /** Subset of newsletterOptIns whose email was confirmed via the magic link. */
-    newsletterConfirmed?: number;
-    /** Bonus tickets awarded via newsletter confirmation across all entries. */
+    /** Bonus newsletter tickets summed across entrants (instant checkbox bonus + legacy confirm-only rows). */
     newsletterBonusTickets?: number;
   };
   pools: AdminInsightsPool[];

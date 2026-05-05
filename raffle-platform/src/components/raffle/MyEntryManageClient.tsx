@@ -65,10 +65,6 @@ export function MyEntryManageClient({ event, slug, initialToken = "" }: Props) {
   const [submitStatus, setSubmitStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
 
-  // Newsletter confirmation flow state — independent of the main edit-entry form.
-  const [confirmStatus, setConfirmStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
-
   const accent = event.primaryColor || "#c9a227";
   const secondary = event.secondaryColor || "#1c1917";
   const isDark = event.theme === "dark";
@@ -333,89 +329,13 @@ export function MyEntryManageClient({ event, slug, initialToken = "" }: Props) {
             )}
 
             {entry.newsletterOptIn ? (
-              <div
-                className={[
-                  "mb-6 rounded-2xl border px-4 py-3 text-sm",
-                  entry.newsletterConfirmed
-                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100"
-                    : "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100",
-                ].join(" ")}
-              >
-                {entry.newsletterConfirmed ? (
-                  <p className="font-semibold">
-                    ✓ Newsletter confirmed
-                    {(entry.newsletterBonusTickets ?? 0) > 0
-                      ? ` · +${entry.newsletterBonusTickets} bonus tickets locked in.`
-                      : "."}
-                  </p>
-                ) : (
-                  <>
-                    <p className="font-semibold">
-                      Newsletter bonus pending
-                      {(entry.newsletterBonusTickets ?? 0) > 0
-                        ? ` · +${entry.newsletterBonusTickets} ticket${entry.newsletterBonusTickets === 1 ? "" : "s"} waiting`
-                        : ""}
-                    </p>
-                    <p className="mt-1 text-xs leading-relaxed">
-                      Open the confirmation email we sent and click the confirm button there, or tap the button below.
-                    </p>
-                    <button
-                      type="button"
-                      disabled={confirmStatus === "loading" || confirmStatus === "success"}
-                      onClick={async () => {
-                        setConfirmStatus("loading");
-                        setConfirmMessage(null);
-                        try {
-                          const cr = await fetch("/api/entry/confirm-newsletter", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ slug, token }),
-                          });
-                          const cd: Record<string, unknown> = await cr.json().catch(() => ({}));
-                          if (cr.ok && cd && cd.ok === true) {
-                            setConfirmStatus("success");
-                            const bt = Number(cd.bonusTickets) || 0;
-                            setConfirmMessage(
-                              cd.alreadyConfirmed === true
-                                ? "Already confirmed — bonus tickets are locked in."
-                                : `Confirmed. +${bt} bonus ticket${bt === 1 ? "" : "s"} added.`,
-                            );
-                            const reload = await fetch(
-                              `/api/entry/my?slug=${encodeURIComponent(slug)}&token=${encodeURIComponent(token)}`,
-                              { method: "GET", headers: { Accept: "application/json" } },
-                            );
-                            const rj = (await reload.json()) as { ok?: boolean; entry?: MyEntrySnapshot };
-                            if (rj.ok && rj.entry) {
-                              setEntry(rj.entry);
-                              applyEntryToForm(rj.entry);
-                            }
-                          } else {
-                            setConfirmStatus("error");
-                            setConfirmMessage(String((cd && cd.error) || "Could not confirm."));
-                          }
-                        } catch {
-                          setConfirmStatus("error");
-                          setConfirmMessage("Network error — please retry.");
-                        }
-                      }}
-                      className="mt-3 inline-flex min-h-10 touch-manipulation items-center justify-center rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-500 disabled:opacity-60 dark:bg-amber-500 dark:text-stone-950 dark:hover:bg-amber-400"
-                    >
-                      {confirmStatus === "loading" ? "Confirming…" : "Confirm now"}
-                    </button>
-                    {confirmMessage ? (
-                      <p
-                        className={[
-                          "mt-2 text-xs",
-                          confirmStatus === "error"
-                            ? "text-red-700 dark:text-red-300"
-                            : "text-emerald-700 dark:text-emerald-300",
-                        ].join(" ")}
-                      >
-                        {confirmMessage}
-                      </p>
-                    ) : null}
-                  </>
-                )}
+              <div className="mb-6 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-100">
+                <p className="font-semibold">
+                  ✓ On the shop email list
+                  {(entry.newsletterBonusTickets ?? 0) > 0
+                    ? ` · +${entry.newsletterBonusTickets} newsletter bonus ticket${entry.newsletterBonusTickets === 1 ? "" : "s"} already count toward your ${entry.totalTickets} total.`
+                    : "."}
+                </p>
               </div>
             ) : null}
 

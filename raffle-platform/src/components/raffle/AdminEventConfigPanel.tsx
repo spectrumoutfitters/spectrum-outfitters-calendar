@@ -616,7 +616,7 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-neutral-100">Free entry settings</p>
                 <p className="mt-0.5 text-xs text-neutral-400">
-                  Tickets every entrant gets for showing up, and the email-confirmation bonus.
+                  Tickets every entrant gets for showing up, and extra tickets when they tick the email list checkbox.
                 </p>
               </div>
             </div>
@@ -656,7 +656,7 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
                   }
                 />
                 <span className="mt-1 block text-[11px] text-neutral-500">
-                  Awarded only after the entrant clicks the confirm button in their email.
+                  Added to their ticket total as soon as they check the box and submit (if newsletter opt-in is enabled).
                 </span>
               </label>
               <label className="flex flex-col text-sm">

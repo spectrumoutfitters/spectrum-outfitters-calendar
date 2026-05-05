@@ -201,21 +201,16 @@ export function AdminInsightsPanel({ slug, adminKey, onUnauthorized }: Props) {
       ) : null}
 
       {totals && (totals.newsletterOptIns ?? 0) > 0 ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3">
           <Stat
             label="Newsletter opt-ins"
             value={(totals.newsletterOptIns ?? 0).toLocaleString()}
-            hint={`${(totals.newsletterConfirmed ?? 0).toLocaleString()} confirmed`}
+            hint="Checkbox at entry"
           />
           <Stat
-            label="Pending confirmations"
-            value={Math.max(0, (totals.newsletterOptIns ?? 0) - (totals.newsletterConfirmed ?? 0)).toLocaleString()}
-            hint="Awaiting email click"
-          />
-          <Stat
-            label="Bonus tickets awarded"
+            label="Newsletter bonus tickets"
             value={(totals.newsletterBonusTickets ?? 0).toLocaleString()}
-            hint="From confirmed opt-ins"
+            hint="Instant + legacy confirm rows"
           />
         </div>
       ) : null}

@@ -4,8 +4,8 @@ import type { BonusRule } from "@/lib/types";
  * Free bonus ladder.
  *
  * As of v3 the only free-ticket bonus is the email newsletter opt-in, and that one is intentionally
- * NOT modelled as a `BonusRule` — it has its own dedicated checkbox + confirmation flow on the
- * server, because tickets are only awarded after a magic-link click (double opt-in).
+ * NOT modelled as a `BonusRule` — it uses a dedicated checkbox on the entry form; when opted in,
+ * bonus tickets apply immediately server-side (`totalEntries` includes them on submit/update).
  *
  * `DEFAULT_BONUS_RULES` is therefore an empty array. Older versions of this app shipped Instagram
  * follow / TikTok follow / Facebook follow / story tag / public review / refer-a-friend rules
@@ -79,9 +79,9 @@ export function resolveBonusRules(event: { bonuses?: BonusRule[] | null }): Bonu
  * Sum the ticket count for an entry: a configurable base plus any selected (custom) bonus rules.
  * The default base is 2 — operators can override per event via `baseTicketsPerEntry`.
  *
- * NOTE: Newsletter opt-in tickets are NOT added here — those are awarded server-side after the
- * email confirmation flow completes. The form/UI should add the newsletter bonus to a separate
- * "pending tickets" indicator, not to this base count.
+ * NOTE: Newsletter opt-in tickets are added in the UI preview (`EventEntryClient` combines this
+ * helper plus the checkbox) and persisted by the Apps Script submit/update handlers — not inside
+ * this function.
  */
 export function computeTicketsFromBonuses(
   selections: Record<string, boolean>,

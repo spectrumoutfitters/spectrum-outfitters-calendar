@@ -44,8 +44,8 @@
  *   timestamp, slug, name, phone, email, raffleId, bonusInstagram, bonusReview, bonusReferral, totalEntries, isTest, ip, userAgent, extrasJson
  *   — extrasJson includes per-id bonus toggles, optional __bonusProof, __entryToken (magic link),
  *     __splitRaffleIds, __paid/__paidTickets/__stripeSessionId (paid rows),
- *     __newsletterOptIn/__newsletterConfirmed (free entry rows that opted in),
- *     __newsletterBonus/__newsletterBonusTickets (the bonus row appended on email confirm).
+ *     __newsletterOptIn + optional __newsletterBonusEarned (instant bonus ticket count).
+ *     Legacy rows may still carry __newsletterBonus (old email-confirm-only flow).
  *   — totalEntries may be fractional when ticketMode is "split" (one sheet row per pool; weights sum to the entrant's full ticket count).
  *
  * Winners (optional but recommended)
@@ -297,10 +297,9 @@ function trimBonusProofForSubmit_(proof, rules) {
 }
 
 /**
- * Sum the ticket count for an entry. `baseTickets` defaults to 2 when missing/invalid; operators
- * can override per event via `Events.baseTicketsPerEntry`. The newsletter opt-in bonus is NOT
- * added here — it's awarded separately by handleConfirmNewsletterByToken_ once the entrant clicks
- * the email confirmation link.
+ * Sum the ticket count for an entry from base + configurable bonus ladder rules (`bonusRulesJson`).
+ * `baseTickets` defaults to 2 (see Events.baseTicketsPerEntry). Newsletter opt-in extras are handled
+ * in submit/update callers — they increase `totalEntries` before splitting across pools — not here.
  */
 function computeTicketsFromBonuses_(bonusById, rules, baseTickets) {
   var n = Math.max(1, Math.floor(Number(baseTickets) || 2));
@@ -800,30 +799,19 @@ function getEntryBaseUrl_() {
   return p ? String(p).trim().replace(/\/$/, '') : '';
 }
 
-function trySendManageEntryEmail_(email, entrantName, eventName, slug, token, newsletterPending, newsletterBonusTickets) {
+function trySendManageEntryEmail_(email, entrantName, eventName, slug, token) {
   var base = getEntryBaseUrl_();
   if (!base || !email) return false;
   var managePath = '/e/' + encodeURIComponent(slug) + '/my-entry?token=' + encodeURIComponent(token);
   var manageUrl = base + managePath;
-  var confirmPath = '/e/' + encodeURIComponent(slug) + '/confirm?token=' + encodeURIComponent(token);
-  var confirmUrl = base + confirmPath;
 
   var subject = 'Your raffle entry — ' + String(eventName || 'Event');
   var greeting = 'Hi ' + String(entrantName || 'there') + ',\n\n';
 
   var body = greeting +
     'Use this private link to see your tickets and change how they are split across prize pools (until 10 minutes before each scheduled draw, when set):\n\n' +
-    manageUrl + '\n';
-
-  var nlBonus = Math.max(0, Math.floor(Number(newsletterBonusTickets) || 0));
-  if (newsletterPending && nlBonus > 0) {
-    body += '\n--\n' +
-      'You opted in to our email list. Click below to confirm your email and unlock +' + nlBonus +
-      ' bonus ticket' + (nlBonus === 1 ? '' : 's') + ':\n\n' +
-      confirmUrl + '\n';
-  }
-
-  body += '\nIf you did not enter this raffle, you can ignore this email.\n\n— Spectrum Outfitters';
+    manageUrl +
+    '\n\nIf you did not enter this raffle, you can ignore this email.\n\n— Spectrum Outfitters';
 
   try {
     MailApp.sendEmail({ to: String(email).trim(), subject: subject, body: body });
@@ -958,7 +946,7 @@ function legacyBonusBooleans_(bonusById) {
 }
 
 /** One Entries row; rowTickets can be fractional for split pools. extras merges bonus toggles + optional __split* audit fields. */
-function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta, testMode, ip, userAgent, bonusProofTrimmed, entryToken, newsletterOptIn) {
+function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta, testMode, ip, userAgent, bonusProofTrimmed, entryToken, newsletterOptIn, newsletterBonusEarned) {
   var b = bonusById || {};
   var extras = {};
   Object.keys(b).forEach(function (k) {
@@ -972,10 +960,9 @@ function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowT
     if (splitMeta.poolIds && splitMeta.poolIds.length) extras.__splitRaffleIds = splitMeta.poolIds.slice();
   }
   if (entryToken) extras.__entryToken = String(entryToken);
-  if (newsletterOptIn) {
-    extras.__newsletterOptIn = true;
-    extras.__newsletterConfirmed = false;
-  }
+  if (newsletterOptIn) extras.__newsletterOptIn = true;
+  var nbe = Math.max(0, Math.floor(Number(newsletterBonusEarned) || 0));
+  if (nbe > 0) extras.__newsletterBonusEarned = nbe;
   if (bonusProofTrimmed && typeof bonusProofTrimmed === 'object' && !Array.isArray(bonusProofTrimmed)) {
     var pk = Object.keys(bonusProofTrimmed);
     if (pk.length) extras.__bonusProof = bonusProofTrimmed;
@@ -1142,7 +1129,6 @@ function doPost(e) {
     if (action === 'submitEntry') return handleSubmitEntry_(data);
     if (action === 'getEntryByToken') return handleGetEntryByToken_(data);
     if (action === 'updateEntryByToken') return handleUpdateEntryByToken_(data);
-    if (action === 'confirmNewsletterByToken') return handleConfirmNewsletterByToken_(data);
     if (action === 'applyPaidTickets') return handleApplyPaidTickets_(data);
     if (action === 'getAdminStats') return handleAdminStats_(data);
     if (action === 'getAdminInsights') return handleAdminInsights_(data);
@@ -1181,12 +1167,11 @@ function runEntryWritesAndMaybeEmail_(
   entryToken,
   sendMagicEmail,
   newsletterOptIn,
-  newsletterBonusTickets
+  newsletterBonusEarned
 ) {
   var userAgentStr = String(ua || '');
   var magicSent = false;
-  var nlPending = Boolean(newsletterOptIn) && Number(newsletterBonusTickets) > 0;
-  var nlBonus = Math.max(0, Math.floor(Number(newsletterBonusTickets) || 0));
+  var nlEarned = Math.max(0, Math.floor(Number(newsletterBonusEarned) || 0));
   try {
     if (ticketMode === 'split') {
       var plan = buildTicketSplitPlan_(p, raffles, totalEntries);
@@ -1211,7 +1196,8 @@ function runEntryWritesAndMaybeEmail_(
           userAgentStr,
           bonusProofTrimmed,
           entryToken,
-          newsletterOptIn
+          newsletterOptIn,
+          nlEarned
         );
         written++;
       }
@@ -1219,7 +1205,7 @@ function runEntryWritesAndMaybeEmail_(
         return jsonResponse({ ok: false, error: 'No ticket weight in split — check pools.', code: 'split' }, 400);
       }
       if (sendMagicEmail && !testMode) {
-        magicSent = trySendManageEntryEmail_(email, name, String(ev.name || 'Giveaway'), slug, entryToken, nlPending, nlBonus);
+        magicSent = trySendManageEntryEmail_(email, name, String(ev.name || 'Giveaway'), slug, entryToken);
       }
       return jsonResponse({
         ok: true,
@@ -1229,8 +1215,6 @@ function runEntryWritesAndMaybeEmail_(
         testMode: testMode,
         magicLinkSent: magicSent,
         entryToken: entryToken,
-        newsletterBonusPending: nlPending,
-        newsletterBonusTickets: nlBonus,
       });
     }
 
@@ -1248,10 +1232,11 @@ function runEntryWritesAndMaybeEmail_(
       userAgentStr,
       bonusProofTrimmed,
       entryToken,
-      newsletterOptIn
+      newsletterOptIn,
+      nlEarned
     );
     if (sendMagicEmail && !testMode) {
-      magicSent = trySendManageEntryEmail_(email, name, String(ev.name || 'Giveaway'), slug, entryToken, nlPending, nlBonus);
+      magicSent = trySendManageEntryEmail_(email, name, String(ev.name || 'Giveaway'), slug, entryToken);
     }
     return jsonResponse({
       ok: true,
@@ -1260,8 +1245,6 @@ function runEntryWritesAndMaybeEmail_(
       testMode: testMode,
       magicLinkSent: magicSent,
       entryToken: entryToken,
-      newsletterBonusPending: nlPending,
-      newsletterBonusTickets: nlBonus,
     });
   } catch (errSplit) {
     var msg = String(errSplit && errSplit.message ? errSplit.message : errSplit);
@@ -1377,10 +1360,9 @@ function handleSubmitEntry_(data) {
   var baseTickets = getBaseTicketsPerEntry_(ev);
   var totalEntries = computeTicketsFromBonuses_(bonusById, bonuses, baseTickets);
 
-  // Newsletter opt-in: only honor when the event has the bonus enabled. Tickets are NOT added to
-  // totalEntries here — handleConfirmNewsletterByToken_ awards them after the email click.
   var newsletterOptIn = Boolean(p.newsletterOptIn) && isNewsletterBonusEnabled_(ev);
-  var newsletterBonusTickets = newsletterOptIn ? getNewsletterBonusTickets_(ev) : 0;
+  var newsletterBonusEarned = newsletterOptIn ? getNewsletterBonusTickets_(ev) : 0;
+  totalEntries += newsletterBonusEarned;
 
   if (testMode) {
     // Flag only — still written for QA; optional block: return without append
@@ -1419,7 +1401,7 @@ function handleSubmitEntry_(data) {
     entryToken,
     true,
     newsletterOptIn,
-    newsletterBonusTickets
+    newsletterBonusEarned
   );
 }
 
@@ -1487,15 +1469,11 @@ function handleGetEntryByToken_(data) {
   var bonuses = parseBonusRulesFromRow_(ev);
   var locked = entryUpdateLockedForRaffleIds_(slug, raffleIdsSeen);
 
-  // Newsletter state: opt-in is true if any non-bonus row for this entry has it; confirmed
-  // is true if any row (or the bonus row) carries the confirmed flag.
+  // Newsletter opt-in checkbox (bonus tickets are counted in totalTickets / pool splits immediately).
   var nlOptIn = false;
-  var nlConfirmed = false;
   for (var nl = 0; nl < rows.length; nl++) {
     var nx = rows[nl].extras || {};
     if (nx.__newsletterOptIn === true) nlOptIn = true;
-    if (nx.__newsletterConfirmed === true) nlConfirmed = true;
-    if (nx.__newsletterBonus === true) nlConfirmed = true;
   }
 
   return jsonResponse({
@@ -1516,7 +1494,7 @@ function handleGetEntryByToken_(data) {
       editLocked: locked,
       bonuses: bonuses,
       newsletterOptIn: nlOptIn,
-      newsletterConfirmed: nlConfirmed,
+      newsletterConfirmed: nlOptIn,
       newsletterBonusTickets: getNewsletterBonusTickets_(ev),
     },
   });
@@ -1629,10 +1607,19 @@ function handleUpdateEntryByToken_(data) {
   var baseTickets2 = getBaseTicketsPerEntry_(ev);
   var totalEntries = computeTicketsFromBonuses_(bonusById, bonuses, baseTickets2);
 
-  var testMode = Boolean(p.testMode);
-  var defaultTest2 =
-    String(ev.defaultTestMode || '').toUpperCase() === 'TRUE' || ev.defaultTestMode === true;
-  testMode = Boolean(p.testMode) || defaultTest2;
+  var newsletterOptIn2 = false;
+  if (Object.prototype.hasOwnProperty.call(p, 'newsletterOptIn')) {
+    newsletterOptIn2 = Boolean(p.newsletterOptIn) && isNewsletterBonusEnabled_(ev);
+  } else {
+    for (var qi = 0; qi < rows.length; qi++) {
+      var qx = rows[qi].extras || {};
+      if (qx.__newsletterOptIn === true) newsletterOptIn2 = true;
+    }
+  }
+  var newsletterBonusEarned2 = newsletterOptIn2 ? getNewsletterBonusTickets_(ev) : 0;
+  totalEntries += newsletterBonusEarned2;
+  var testMode =
+    Boolean(p.testMode) || String(ev.defaultTestMode || '').toUpperCase() === 'TRUE' || ev.defaultTestMode === true;
 
   if (testMode) {
     var block2 = String(ev.blockTestWrite || '').toUpperCase() === 'TRUE';
@@ -1646,17 +1633,10 @@ function handleUpdateEntryByToken_(data) {
     }
   }
 
-  // Partition rows: paid + newsletter-bonus rows are preserved (independent of base entry edits).
-  // Only the "free entry" rows are deleted and rewritten with the user's new pool split.
   var editableRowNums = [];
-  var preservedNewsletterOptIn = false;
-  var preservedNewsletterConfirmed = false;
   for (var pr = 0; pr < rows.length; pr++) {
     var rrr = rows[pr];
     var ex = rrr.extras || {};
-    if (ex.__newsletterOptIn === true) preservedNewsletterOptIn = true;
-    if (ex.__newsletterConfirmed === true) preservedNewsletterConfirmed = true;
-    if (ex.__newsletterBonus === true) preservedNewsletterConfirmed = true;
     if (ex.__paid === true || ex.__newsletterBonus === true) continue;
     editableRowNums.push(rrr.sheetRow);
   }
@@ -1669,14 +1649,6 @@ function handleUpdateEntryByToken_(data) {
   deleteEntrySheetRowsDescending_(editableRowNums);
 
   var ua = String(p.userAgent || '');
-
-  // Carry the newsletter opt-in forward unless the user explicitly opted out via the payload.
-  var newsletterOptIn2 = preservedNewsletterOptIn;
-  if (Object.prototype.hasOwnProperty.call(p, 'newsletterOptIn')) {
-    newsletterOptIn2 = Boolean(p.newsletterOptIn);
-  }
-  // Confirmed flag is one-way: only the confirm endpoint can flip it. It stays as-is across edits.
-  var newsletterBonusTickets2 = newsletterOptIn2 ? getNewsletterBonusTickets_(ev) : 0;
 
   return runEntryWritesAndMaybeEmailPreservingNewsletter_(
     slug,
@@ -1697,21 +1669,21 @@ function handleUpdateEntryByToken_(data) {
     ua,
     token,
     newsletterOptIn2,
-    preservedNewsletterConfirmed,
-    newsletterBonusTickets2
+    newsletterBonusEarned2
   );
 }
 
 /**
- * Update-only variant: rewrites editable rows preserving the newsletter opt-in / confirmed flags
- * the entrant earned previously. No magic-link email is sent on update.
+ * Update-only variant: rewrites editable rows. Preserves paid + legacy newsletter-bonus rows.
+ * No magic-link email on update.
  */
 function runEntryWritesAndMaybeEmailPreservingNewsletter_(
   slug, name, phoneNorm, email, p, ev, bonuses, bonusById, bonusProofTrimmed,
   totalEntries, ticketMode, raffleId, raffles, testMode, ip, ua, entryToken,
-  newsletterOptIn, newsletterConfirmed, newsletterBonusTickets
+  newsletterOptIn, newsletterBonusEarned
 ) {
   var userAgentStr = String(ua || '');
+  var nlEarned = Math.max(0, Math.floor(Number(newsletterBonusEarned) || 0));
   try {
     if (ticketMode === 'split') {
       var plan = buildTicketSplitPlan_(p, raffles, totalEntries);
@@ -1726,7 +1698,7 @@ function runEntryWritesAndMaybeEmailPreservingNewsletter_(
           slug, name, phoneNorm, email, part.raffleId, bonusById, part.weight,
           { split: true, totalAll: totalEntries, evenly: plan.evenly, poolIds: plan.poolIds },
           testMode, ip, userAgentStr, bonusProofTrimmed, entryToken,
-          newsletterOptIn, newsletterConfirmed
+          newsletterOptIn, nlEarned
         );
         written++;
       }
@@ -1736,20 +1708,16 @@ function runEntryWritesAndMaybeEmailPreservingNewsletter_(
       return jsonResponse({
         ok: true, totalEntries: totalEntries, ticketMode: 'split', poolsEntered: written,
         testMode: testMode, magicLinkSent: false, entryToken: entryToken,
-        newsletterBonusPending: newsletterOptIn && !newsletterConfirmed,
-        newsletterBonusTickets: Math.max(0, Math.floor(Number(newsletterBonusTickets) || 0)),
       });
     }
     appendEntryRowWithNewsletter_(
       slug, name, phoneNorm, email, raffleId, bonusById, totalEntries, null,
       testMode, ip, userAgentStr, bonusProofTrimmed, entryToken,
-      newsletterOptIn, newsletterConfirmed
+      newsletterOptIn, nlEarned
     );
     return jsonResponse({
       ok: true, totalEntries: totalEntries, ticketMode: 'single',
       testMode: testMode, magicLinkSent: false, entryToken: entryToken,
-      newsletterBonusPending: newsletterOptIn && !newsletterConfirmed,
-      newsletterBonusTickets: Math.max(0, Math.floor(Number(newsletterBonusTickets) || 0)),
     });
   } catch (errSplit) {
     var msg = String(errSplit && errSplit.message ? errSplit.message : errSplit);
@@ -1757,35 +1725,11 @@ function runEntryWritesAndMaybeEmailPreservingNewsletter_(
   }
 }
 
-function appendEntryRowWithNewsletter_(slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta, testMode, ip, userAgent, bonusProofTrimmed, entryToken, newsletterOptIn, newsletterConfirmed) {
-  var b = bonusById || {};
-  var extras = {};
-  Object.keys(b).forEach(function (k) {
-    extras[String(k)] = b[k];
-  });
-  if (splitMeta && splitMeta.split) {
-    extras.__split = true;
-    extras.__splitTotalTickets = splitMeta.totalAll;
-    extras.__rowTickets = rowTickets;
-    extras.__splitEvenly = splitMeta.evenly === true;
-    if (splitMeta.poolIds && splitMeta.poolIds.length) extras.__splitRaffleIds = splitMeta.poolIds.slice();
-  }
-  if (entryToken) extras.__entryToken = String(entryToken);
-  if (newsletterOptIn) {
-    extras.__newsletterOptIn = true;
-    extras.__newsletterConfirmed = Boolean(newsletterConfirmed);
-  }
-  if (bonusProofTrimmed && typeof bonusProofTrimmed === 'object' && !Array.isArray(bonusProofTrimmed)) {
-    var pk = Object.keys(bonusProofTrimmed);
-    if (pk.length) extras.__bonusProof = bonusProofTrimmed;
-  }
-  var bb = legacyBonusBooleans_(b);
-  appendEntry_([
-    new Date(), slug, name, phoneNorm, email, raffleId,
-    bb[0], bb[1], bb[2], rowTickets,
-    testMode ? 'TRUE' : 'FALSE', ip, String(userAgent || ''),
-    JSON.stringify(extras),
-  ]);
+function appendEntryRowWithNewsletter_(slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta, testMode, ip, userAgent, bonusProofTrimmed, entryToken, newsletterOptIn, newsletterBonusEarned) {
+  appendEntryRow_(
+    slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta,
+    testMode, ip, userAgent, bonusProofTrimmed, entryToken, newsletterOptIn, newsletterBonusEarned
+  );
 }
 
 function readEntriesForSlug_(slug) {
@@ -2015,131 +1959,6 @@ function handleRefundPaidPurchase_(data) {
   });
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
-   Newsletter double-opt-in: clicking the confirm link in the magic-link email
-   awards a one-time bonus on the entry, marks every existing row as
-   `__newsletterConfirmed: true`, and appends a separate `__newsletterBonus` row
-   so the bonus is auditable and idempotent (re-clicks are no-ops).
-   Inputs (data.payload): slug, token.
-   ────────────────────────────────────────────────────────────────────────── */
-function appendNewsletterBonusRow_(slug, name, phoneNorm, email, raffleId, tickets, ip, userAgent, entryToken) {
-  var extras = {
-    __newsletterBonus: true,
-    __newsletterConfirmed: true,
-    __newsletterConfirmedAt: new Date().toISOString(),
-    __newsletterBonusTickets: tickets,
-  };
-  if (entryToken) extras.__entryToken = String(entryToken);
-  appendEntry_([
-    new Date(),
-    slug,
-    String(name || ''),
-    String(phoneNorm || ''),
-    String(email || ''),
-    raffleId,
-    'FALSE',
-    'FALSE',
-    'FALSE',
-    tickets,
-    'FALSE',
-    String(ip || 'newsletter-confirm'),
-    String(userAgent || 'newsletter-confirm'),
-    JSON.stringify(extras),
-  ]);
-}
-
-function handleConfirmNewsletterByToken_(data) {
-  var p = data.payload || {};
-  var slug = String(p.slug || '').trim();
-  var token = String(p.token || '').trim();
-  if (!slug || !token) {
-    return jsonResponse({ ok: false, error: 'missing_fields', code: 'fields' }, 400);
-  }
-  var ip = String(p.clientIp || 'unknown');
-  if (!rateLimitOk_(ip)) {
-    return jsonResponse({ ok: false, error: 'Rate limited', code: 'rate_limited' }, 429);
-  }
-
-  var found = findEventRow_(slug);
-  if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
-  var ev = recordToObject_(found.headers, found.record);
-
-  var rows = readEntryRowsByToken_(slug, token);
-  if (!rows.length) {
-    return jsonResponse({ ok: false, error: 'entry_not_found', code: 'token' }, 404);
-  }
-
-  // Idempotency: if any row for this token is already marked `__newsletterBonus: true`, skip.
-  for (var i = 0; i < rows.length; i++) {
-    if (rows[i].extras && rows[i].extras.__newsletterBonus === true) {
-      return jsonResponse({
-        ok: true,
-        alreadyConfirmed: true,
-        bonusTickets: Math.max(0, Math.floor(Number(rows[i].extras.__newsletterBonusTickets) || 0)),
-      });
-    }
-  }
-
-  // Verify the entry actually opted in. Without this, anyone with a token could mint bonus tickets.
-  var didOptIn = false;
-  for (var j = 0; j < rows.length; j++) {
-    if (rows[j].extras && rows[j].extras.__newsletterOptIn === true) {
-      didOptIn = true;
-      break;
-    }
-  }
-  if (!didOptIn) {
-    return jsonResponse({ ok: false, error: 'newsletter_opt_in_required', code: 'opt_in' }, 400);
-  }
-
-  if (!isNewsletterBonusEnabled_(ev)) {
-    return jsonResponse({ ok: false, error: 'newsletter_bonus_disabled', code: 'disabled' }, 400);
-  }
-  var bonus = getNewsletterBonusTickets_(ev);
-  if (bonus <= 0) {
-    return jsonResponse({ ok: false, error: 'newsletter_bonus_zero', code: 'bonus_zero' }, 400);
-  }
-
-  // Pick the pool that already has the most tickets for this entry — the entrant's "main" pool.
-  var bestRow = rows[0];
-  for (var r = 1; r < rows.length; r++) {
-    if (Number(rows[r].tickets) > Number(bestRow.tickets)) bestRow = rows[r];
-  }
-
-  // Stamp existing rows with __newsletterConfirmed so the manage-entry page reflects it.
-  var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
-  var exCol = getEntriesExtrasColumnIndex_();
-  for (var k = 0; k < rows.length; k++) {
-    var rr = rows[k];
-    var ex = rr.extras || {};
-    ex.__newsletterConfirmed = true;
-    if (!ex.__newsletterConfirmedAt) ex.__newsletterConfirmedAt = new Date().toISOString();
-    sh.getRange(rr.sheetRow, exCol + 1).setValue(JSON.stringify(ex));
-  }
-
-  appendNewsletterBonusRow_(
-    slug,
-    bestRow.name,
-    bestRow.phoneNorm,
-    bestRow.email,
-    bestRow.raffleId,
-    bonus,
-    ip,
-    String(p.userAgent || 'newsletter-confirm'),
-    token
-  );
-
-  var totalAfter = bonus;
-  for (var t = 0; t < rows.length; t++) totalAfter += Number(rows[t].tickets) || 0;
-
-  return jsonResponse({
-    ok: true,
-    alreadyConfirmed: false,
-    bonusTickets: bonus,
-    totalTickets: totalAfter,
-    poolApplied: bestRow.raffleId,
-  });
-}
 
 function handleAdminStats_(data) {
   var slug = String(data.slug || '');
@@ -2256,8 +2075,8 @@ function handleAdminInsights_(data) {
   var recentEntries = [];
   var entrantTotals = {};
   var newsletterOptInPhones = {};
-  var newsletterConfirmedPhones = {};
-  var newsletterBonusTicketsTotal = 0;
+  var newsletterBonusEarnedByPhone = {};
+  var newsletterBonusLegacyTickets = 0;
 
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
@@ -2281,11 +2100,14 @@ function handleAdminInsights_(data) {
     var paidCurrency = String(ex.__paidCurrency || ticketCurrency).toLowerCase();
     if (!refunded && phone) {
       if (ex.__newsletterOptIn === true) newsletterOptInPhones[phone] = true;
-      if (ex.__newsletterConfirmed === true || ex.__newsletterBonus === true) {
-        newsletterConfirmedPhones[phone] = true;
+      if (!paid && ex.__newsletterBonusEarned) {
+        var nbeAmt = Math.max(0, Math.floor(Number(ex.__newsletterBonusEarned) || 0));
+        if (nbeAmt > 0) {
+          newsletterBonusEarnedByPhone[phone] = Math.max(newsletterBonusEarnedByPhone[phone] || 0, nbeAmt);
+        }
       }
       if (ex.__newsletterBonus === true) {
-        newsletterBonusTicketsTotal += Math.max(0, Math.floor(Number(ex.__newsletterBonusTickets) || tickets || 0));
+        newsletterBonusLegacyTickets += Math.max(0, Math.floor(Number(ex.__newsletterBonusTickets) || tickets || 0));
       }
     }
 
@@ -2425,7 +2247,10 @@ function handleAdminInsights_(data) {
       ticketPriceCents: Math.max(0, Math.floor(Number(ev.ticketPriceCents) || 0)),
       totals: (function () {
         var nlOpt = 0; Object.keys(newsletterOptInPhones).forEach(function () { nlOpt++; });
-        var nlConf = 0; Object.keys(newsletterConfirmedPhones).forEach(function () { nlConf++; });
+        var nlEarnedSum = 0;
+        Object.keys(newsletterBonusEarnedByPhone).forEach(function (ph) {
+          nlEarnedSum += newsletterBonusEarnedByPhone[ph];
+        });
         return {
           uniqueParticipants: uniqueParticipants,
           paidParticipants: paidParticipants,
@@ -2436,8 +2261,7 @@ function handleAdminInsights_(data) {
           totalRevenueCents: totalRevenueCents,
           revenueByCurrency: revenueByCurrency,
           newsletterOptIns: nlOpt,
-          newsletterConfirmed: nlConf,
-          newsletterBonusTickets: newsletterBonusTicketsTotal,
+          newsletterBonusTickets: newsletterBonusLegacyTickets + nlEarnedSum,
         };
       })(),
       pools: poolList,

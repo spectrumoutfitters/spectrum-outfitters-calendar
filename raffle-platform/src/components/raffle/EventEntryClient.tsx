@@ -103,11 +103,13 @@ export function EventEntryClient({ event }: Props) {
   const accent = event.primaryColor || "#c9a227";
   const secondary = event.secondaryColor || "#1c1917";
 
-  const previewTickets = useMemo(
-    () => computeTicketsFromBonuses(bonusById, bonusRules, baseTickets),
-    [bonusById, bonusRules, baseTickets],
-  );
   const newsletterShowsBonus = newsletterEnabled && newsletterBonus > 0;
+
+  const previewTickets = useMemo(() => {
+    const baseOnly = computeTicketsFromBonuses(bonusById, bonusRules, baseTickets);
+    if (newsletterShowsBonus && newsletterOptIn) return baseOnly + newsletterBonus;
+    return baseOnly;
+  }, [bonusById, bonusRules, baseTickets, newsletterShowsBonus, newsletterOptIn, newsletterBonus]);
 
   useEffect(() => {
     setPoolTickets((prev) => reconcilePoolTickets(orderedIds, prev, previewTickets));
@@ -232,8 +234,6 @@ export function EventEntryClient({ event }: Props) {
         message?: string;
         magicLinkSent?: boolean;
         entryToken?: string;
-        newsletterBonusPending?: boolean;
-        newsletterBonusTickets?: number;
       };
       if (!res.ok || !data.ok) {
         setStatus("error");
@@ -283,10 +283,6 @@ export function EventEntryClient({ event }: Props) {
           : !testMode
             ? " If email is configured for this giveaway, you may receive a link to manage your entry from the same address you entered with."
             : "";
-      const newsletterPendingNote =
-        !testMode && data.newsletterBonusPending && (data.newsletterBonusTickets ?? 0) > 0
-          ? ` Inside that email, click the confirm button to unlock +${data.newsletterBonusTickets} bonus ticket${data.newsletterBonusTickets === 1 ? "" : "s"}.`
-          : "";
       const buyNote = buyError
         ? ` Heads up: ${buyError} Use your email manage-link below to buy tickets later.`
         : "";
@@ -294,7 +290,7 @@ export function EventEntryClient({ event }: Props) {
         data.message ||
           (testMode
             ? `Test entry recorded (${data.totalEntries ?? previewTickets} tickets).${splitNote}`
-            : `You’re in! ${data.totalEntries ?? previewTickets} total tickets.${splitNote}${emailManageNote}${newsletterPendingNote}${buyNote}`),
+            : `You’re in! ${data.totalEntries ?? previewTickets} total tickets.${splitNote}${emailManageNote}${buyNote}`),
       );
     } catch {
       setStatus("error");
@@ -441,7 +437,7 @@ export function EventEntryClient({ event }: Props) {
                 <h2 className="text-base font-semibold text-stone-900 dark:text-neutral-100 sm:text-lg">Boost your entry (optional)</h2>
                 <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-neutral-400">
                   {newsletterShowsBonus
-                    ? `Get ${baseTickets} ticket${baseTickets === 1 ? "" : "s"} just for entering. Sign up for our email list and we'll add +${newsletterBonus} more after you confirm your address.`
+                    ? `Get ${baseTickets} ticket${baseTickets === 1 ? "" : "s"} just for entering. Check the box below to join the email list and get +${newsletterBonus} immediately.`
                     : "Optional ways to stack tickets after the basics above."}
                 </p>
               </div>
@@ -451,11 +447,6 @@ export function EventEntryClient({ event }: Props) {
                 <p className="text-xs text-stone-500 dark:text-neutral-500">
                   ticket{previewTickets === 1 ? "" : "s"}
                 </p>
-                {newsletterShowsBonus && newsletterOptIn ? (
-                  <p className="mt-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
-                    +{newsletterBonus} pending
-                  </p>
-                ) : null}
               </div>
             </div>
 
@@ -477,8 +468,7 @@ export function EventEntryClient({ event }: Props) {
                     </span>
                   </span>
                   <span className="mt-1 text-xs leading-relaxed text-stone-600 dark:text-neutral-400">
-                    We&apos;ll send a confirmation email after you submit. Click the button inside to claim your bonus
-                    tickets — they only count once your address is verified. Unsubscribe anytime.
+                    Checking this adds the bonus tickets to your entry now. Standard marketing unsubscribe applies.
                   </span>
                 </span>
               </label>
