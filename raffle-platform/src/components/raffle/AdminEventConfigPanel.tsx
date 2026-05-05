@@ -26,6 +26,9 @@ function defaultEvent(): AdminEventEditable {
     ticketPriceCents: 500,
     ticketCurrency: "usd",
     paidTicketsMaxPerPurchase: 100,
+    baseTicketsPerEntry: 2,
+    newsletterBonusEnabled: true,
+    newsletterBonusTickets: 2,
   };
 }
 
@@ -148,6 +151,9 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
         ticketPriceCents: Math.max(0, Math.floor(Number(ev.ticketPriceCents) || 0)),
         ticketCurrency: String(ev.ticketCurrency ?? "usd").toLowerCase().slice(0, 8) || "usd",
         paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(ev.paidTicketsMaxPerPurchase) || 100)),
+        baseTicketsPerEntry: Math.max(1, Math.floor(Number(ev.baseTicketsPerEntry) || 2)),
+        newsletterBonusEnabled: ev.newsletterBonusEnabled !== false,
+        newsletterBonusTickets: Math.max(0, Math.floor(Number(ev.newsletterBonusTickets) || 0)),
       });
       const rows = Array.isArray(data.raffles) ? data.raffles.map((r) => normalizeRaffle(r)) : [];
       setRaffles(rows.length ? rows : [normalizeRaffle({ raffleId: "grand-prize", title: "Grand prize", sortOrder: 1 })]);
@@ -215,6 +221,9 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
           ticketPriceCents: Math.max(0, Math.floor(Number(ev.ticketPriceCents) || 0)),
           ticketCurrency: String(ev.ticketCurrency ?? "usd").toLowerCase().slice(0, 8) || "usd",
           paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(ev.paidTicketsMaxPerPurchase) || 100)),
+          baseTicketsPerEntry: Math.max(1, Math.floor(Number(ev.baseTicketsPerEntry) || 2)),
+          newsletterBonusEnabled: ev.newsletterBonusEnabled !== false,
+          newsletterBonusTickets: Math.max(0, Math.floor(Number(ev.newsletterBonusTickets) || 0)),
         });
         setRaffles(data.raffles.map((r) => normalizeRaffle(r)));
       }
@@ -599,6 +608,74 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-neutral-100">Free entry settings</p>
+                <p className="mt-0.5 text-xs text-neutral-400">
+                  Tickets every entrant gets for showing up, and the email-confirmation bonus.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="block text-sm">
+                <span className="text-xs font-medium text-neutral-300">Free tickets per entry</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+                  value={event.baseTicketsPerEntry}
+                  onChange={(e) =>
+                    setEvent((s) => ({
+                      ...s,
+                      baseTicketsPerEntry: Math.max(1, Math.floor(Number(e.target.value) || 1)),
+                    }))
+                  }
+                />
+                <span className="mt-1 block text-[11px] text-neutral-500">
+                  Default 2. Counts the moment they submit, no proof required.
+                </span>
+              </label>
+              <label className="block text-sm">
+                <span className="text-xs font-medium text-neutral-300">Newsletter bonus tickets</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+                  value={event.newsletterBonusTickets}
+                  onChange={(e) =>
+                    setEvent((s) => ({
+                      ...s,
+                      newsletterBonusTickets: Math.max(0, Math.floor(Number(e.target.value) || 0)),
+                    }))
+                  }
+                />
+                <span className="mt-1 block text-[11px] text-neutral-500">
+                  Awarded only after the entrant clicks the confirm button in their email.
+                </span>
+              </label>
+              <label className="flex flex-col text-sm">
+                <span className="text-xs font-medium text-neutral-300">Newsletter opt-in shown on form?</span>
+                <label className="mt-1 inline-flex items-center gap-2 rounded-xl bg-neutral-950/60 px-3 py-2 text-xs font-medium text-neutral-200">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-neutral-600"
+                    checked={event.newsletterBonusEnabled}
+                    onChange={(e) =>
+                      setEvent((s) => ({ ...s, newsletterBonusEnabled: e.target.checked }))
+                    }
+                  />
+                  {event.newsletterBonusEnabled ? "Enabled" : "Disabled"}
+                </label>
+                <span className="mt-1 block text-[11px] text-neutral-500">
+                  Hide the checkbox during events where you don&apos;t want to grow the email list.
+                </span>
+              </label>
             </div>
           </div>
 

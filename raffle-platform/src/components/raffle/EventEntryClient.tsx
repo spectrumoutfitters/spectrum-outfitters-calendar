@@ -62,9 +62,13 @@ export function EventEntryClient({ event }: Props) {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const bonusRules = useMemo(() => resolveBonusRules(event), [event]);
+  const baseTickets = Math.max(1, Math.floor(Number(event.baseTicketsPerEntry) || 2));
+  const newsletterEnabled = event.newsletterBonusEnabled !== false;
+  const newsletterBonus = Math.max(0, Math.floor(Number(event.newsletterBonusTickets) || 0));
   const [bonusById, setBonusById] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(bonusRules.map((r) => [r.id, false])),
   );
+  const [newsletterOptIn, setNewsletterOptIn] = useState(false);
   const orderedIds = useMemo(() => event.raffles.map((r) => r.id), [event.raffles]);
   const [poolTickets, setPoolTickets] = useState<Record<string, number>>(() =>
     defaultPoolTickets(
@@ -72,6 +76,7 @@ export function EventEntryClient({ event }: Props) {
       computeTicketsFromBonuses(
         Object.fromEntries(bonusRules.map((r) => [r.id, false])),
         bonusRules,
+        baseTickets,
       ),
     ),
   );
@@ -99,9 +104,10 @@ export function EventEntryClient({ event }: Props) {
   const secondary = event.secondaryColor || "#1c1917";
 
   const previewTickets = useMemo(
-    () => computeTicketsFromBonuses(bonusById, bonusRules),
-    [bonusById, bonusRules],
+    () => computeTicketsFromBonuses(bonusById, bonusRules, baseTickets),
+    [bonusById, bonusRules, baseTickets],
   );
+  const newsletterShowsBonus = newsletterEnabled && newsletterBonus > 0;
 
   useEffect(() => {
     setPoolTickets((prev) => reconcilePoolTickets(orderedIds, prev, previewTickets));
@@ -194,6 +200,7 @@ export function EventEntryClient({ event }: Props) {
         bonusInstagram: Boolean(bonusById.instagram),
         bonusReview: Boolean(bonusById.review),
         bonusReferral: Boolean(bonusById.referral),
+        newsletterOptIn: newsletterShowsBonus ? newsletterOptIn : false,
         company,
         termsAccepted: terms,
         testMode,
@@ -225,6 +232,8 @@ export function EventEntryClient({ event }: Props) {
         message?: string;
         magicLinkSent?: boolean;
         entryToken?: string;
+        newsletterBonusPending?: boolean;
+        newsletterBonusTickets?: number;
       };
       if (!res.ok || !data.ok) {
         setStatus("error");
@@ -274,6 +283,10 @@ export function EventEntryClient({ event }: Props) {
           : !testMode
             ? " If email is configured for this giveaway, you may receive a link to manage your entry from the same address you entered with."
             : "";
+      const newsletterPendingNote =
+        !testMode && data.newsletterBonusPending && (data.newsletterBonusTickets ?? 0) > 0
+          ? ` Inside that email, click the confirm button to unlock +${data.newsletterBonusTickets} bonus ticket${data.newsletterBonusTickets === 1 ? "" : "s"}.`
+          : "";
       const buyNote = buyError
         ? ` Heads up: ${buyError} Use your email manage-link below to buy tickets later.`
         : "";
@@ -281,7 +294,7 @@ export function EventEntryClient({ event }: Props) {
         data.message ||
           (testMode
             ? `Test entry recorded (${data.totalEntries ?? previewTickets} tickets).${splitNote}`
-            : `You’re in! ${data.totalEntries ?? previewTickets} total tickets.${splitNote}${emailManageNote}${buyNote}`),
+            : `You’re in! ${data.totalEntries ?? previewTickets} total tickets.${splitNote}${emailManageNote}${newsletterPendingNote}${buyNote}`),
       );
     } catch {
       setStatus("error");
@@ -421,21 +434,57 @@ export function EventEntryClient({ event }: Props) {
             </div>
           </section>
 
+          {newsletterShowsBonus || bonusRules.length > 0 ? (
           <section className="rounded-3xl border border-stone-200 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80 sm:p-6 md:p-8">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="min-w-0 flex-1">
-                <h2 className="text-base font-semibold text-stone-900 dark:text-neutral-100 sm:text-lg">Extra entries</h2>
+                <h2 className="text-base font-semibold text-stone-900 dark:text-neutral-100 sm:text-lg">Boost your entry (optional)</h2>
                 <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-neutral-400">
-                  Optional ways to stack tickets after the basics above. We save @handles and links so our team can verify
-                  follows, tags, and reviews before prizes — this form does not log into Instagram or Facebook for you.
+                  {newsletterShowsBonus
+                    ? `Get ${baseTickets} ticket${baseTickets === 1 ? "" : "s"} just for entering. Sign up for our email list and we'll add +${newsletterBonus} more after you confirm your address.`
+                    : "Optional ways to stack tickets after the basics above."}
                 </p>
               </div>
               <div className="shrink-0 rounded-2xl bg-stone-100 px-4 py-2 text-center dark:bg-neutral-800/90">
                 <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-neutral-500">Total now</p>
                 <p className="text-2xl font-semibold tabular-nums text-stone-900 dark:text-neutral-50">{previewTickets}</p>
-                <p className="text-xs text-stone-500 dark:text-neutral-500">tickets</p>
+                <p className="text-xs text-stone-500 dark:text-neutral-500">
+                  ticket{previewTickets === 1 ? "" : "s"}
+                </p>
+                {newsletterShowsBonus && newsletterOptIn ? (
+                  <p className="mt-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                    +{newsletterBonus} pending
+                  </p>
+                ) : null}
               </div>
             </div>
+
+            {newsletterShowsBonus ? (
+              <label className="mt-5 flex min-h-[3.5rem] cursor-pointer items-start gap-4 rounded-2xl border border-stone-200/80 bg-white/70 p-4 dark:border-neutral-800 dark:bg-neutral-950/40">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-6 w-6 shrink-0 touch-manipulation rounded-md border-stone-300 text-amber-600 focus:ring-amber-500 dark:border-neutral-600 dark:bg-neutral-900"
+                  checked={newsletterOptIn}
+                  onChange={(e) => setNewsletterOptIn(e.target.checked)}
+                />
+                <span className="flex flex-1 flex-col">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-stone-900 dark:text-neutral-100">
+                      Email me about new gear, restocks &amp; shop events
+                    </span>
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                      +{newsletterBonus} ticket{newsletterBonus === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                  <span className="mt-1 text-xs leading-relaxed text-stone-600 dark:text-neutral-400">
+                    We&apos;ll send a confirmation email after you submit. Click the button inside to claim your bonus
+                    tickets — they only count once your address is verified. Unsubscribe anytime.
+                  </span>
+                </span>
+              </label>
+            ) : null}
+
+            {bonusRules.length > 0 ? (
             <div className="mt-5 space-y-5">
               {bonusRules.map((r) => (
                 <div
@@ -499,7 +548,9 @@ export function EventEntryClient({ event }: Props) {
                 </div>
               ))}
             </div>
+            ) : null}
           </section>
+          ) : null}
 
           <section className="rounded-3xl border border-stone-200 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80 sm:p-6 md:p-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

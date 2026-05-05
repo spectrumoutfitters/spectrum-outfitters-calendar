@@ -200,6 +200,26 @@ export function AdminInsightsPanel({ slug, adminKey, onUnauthorized }: Props) {
         </div>
       ) : null}
 
+      {totals && (totals.newsletterOptIns ?? 0) > 0 ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Stat
+            label="Newsletter opt-ins"
+            value={(totals.newsletterOptIns ?? 0).toLocaleString()}
+            hint={`${(totals.newsletterConfirmed ?? 0).toLocaleString()} confirmed`}
+          />
+          <Stat
+            label="Pending confirmations"
+            value={Math.max(0, (totals.newsletterOptIns ?? 0) - (totals.newsletterConfirmed ?? 0)).toLocaleString()}
+            hint="Awaiting email click"
+          />
+          <Stat
+            label="Bonus tickets awarded"
+            value={(totals.newsletterBonusTickets ?? 0).toLocaleString()}
+            hint="From confirmed opt-ins"
+          />
+        </div>
+      ) : null}
+
       {insights ? (
         <div className="rounded-3xl border border-neutral-800 bg-neutral-900 p-6 shadow-sm">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Pool breakdown</h3>

@@ -42,7 +42,10 @@
  *
  * Entries (created automatically in column order)
  *   timestamp, slug, name, phone, email, raffleId, bonusInstagram, bonusReview, bonusReferral, totalEntries, isTest, ip, userAgent, extrasJson
- *   — extrasJson includes per-id bonus toggles, optional __bonusProof, __entryToken (magic link), __splitRaffleIds.
+ *   — extrasJson includes per-id bonus toggles, optional __bonusProof, __entryToken (magic link),
+ *     __splitRaffleIds, __paid/__paidTickets/__stripeSessionId (paid rows),
+ *     __newsletterOptIn/__newsletterConfirmed (free entry rows that opted in),
+ *     __newsletterBonus/__newsletterBonusTickets (the bonus row appended on email confirm).
  *   — totalEntries may be fractional when ticketMode is "split" (one sheet row per pool; weights sum to the entrant's full ticket count).
  *
  * Winners (optional but recommended)
@@ -293,13 +296,39 @@ function trimBonusProofForSubmit_(proof, rules) {
   return out;
 }
 
-function computeTicketsFromBonuses_(bonusById, rules) {
-  var n = 1;
+/**
+ * Sum the ticket count for an entry. `baseTickets` defaults to 2 when missing/invalid; operators
+ * can override per event via `Events.baseTicketsPerEntry`. The newsletter opt-in bonus is NOT
+ * added here — it's awarded separately by handleConfirmNewsletterByToken_ once the entrant clicks
+ * the email confirmation link.
+ */
+function computeTicketsFromBonuses_(bonusById, rules, baseTickets) {
+  var n = Math.max(1, Math.floor(Number(baseTickets) || 2));
   for (var i = 0; i < rules.length; i++) {
     var id = rules[i].id;
     if (bonusById[id]) n += Number(rules[i].tickets) || 0;
   }
   return n;
+}
+
+function getBaseTicketsPerEntry_(ev) {
+  var n = Math.floor(Number(ev && ev.baseTicketsPerEntry));
+  if (!isFinite(n) || n < 1) return 2;
+  return n;
+}
+
+function getNewsletterBonusTickets_(ev) {
+  var n = Math.floor(Number(ev && ev.newsletterBonusTickets));
+  if (!isFinite(n) || n < 0) return 2;
+  return n;
+}
+
+function isNewsletterBonusEnabled_(ev) {
+  if (!ev) return true;
+  var raw = ev.newsletterBonusEnabled;
+  if (raw === '' || raw == null) return true;
+  if (typeof raw === 'boolean') return raw;
+  return String(raw).toUpperCase() === 'TRUE';
 }
 
 function validateAdminKey_(slug, adminKey) {
@@ -520,6 +549,9 @@ function updateEventCellsForSlug_(slug, patch) {
     ticketPriceCents: true,
     ticketCurrency: true,
     paidTicketsMaxPerPurchase: true,
+    baseTicketsPerEntry: true,
+    newsletterBonusEnabled: true,
+    newsletterBonusTickets: true,
   };
   ensurePaidTicketColumns_(sh);
   headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
@@ -529,7 +561,13 @@ function updateEventCellsForSlug_(slug, patch) {
     var col = headers.indexOf(k);
     if (col < 0) continue;
     var v = patch[k];
-    if (k === 'active' || k === 'defaultTestMode' || k === 'blockTestWrite' || k === 'paidTicketsEnabled') {
+    if (
+      k === 'active' ||
+      k === 'defaultTestMode' ||
+      k === 'blockTestWrite' ||
+      k === 'paidTicketsEnabled' ||
+      k === 'newsletterBonusEnabled'
+    ) {
       var on = v === true || String(v).toUpperCase() === 'TRUE';
       sh.getRange(rowNum, col + 1).setValue(on ? 'TRUE' : 'FALSE');
     } else if (k === 'bonusRulesJson') {
@@ -537,6 +575,12 @@ function updateEventCellsForSlug_(slug, patch) {
     } else if (k === 'ticketPriceCents' || k === 'paidTicketsMaxPerPurchase') {
       var n = Math.max(0, Math.floor(Number(v) || 0));
       sh.getRange(rowNum, col + 1).setValue(n);
+    } else if (k === 'baseTicketsPerEntry') {
+      var nb = Math.max(1, Math.floor(Number(v) || 2));
+      sh.getRange(rowNum, col + 1).setValue(nb);
+    } else if (k === 'newsletterBonusTickets') {
+      var nn = Math.max(0, Math.floor(Number(v) || 0));
+      sh.getRange(rowNum, col + 1).setValue(nn);
     } else if (k === 'ticketCurrency') {
       sh.getRange(rowNum, col + 1).setValue(String(v || 'usd').toLowerCase().slice(0, 8));
     } else {
@@ -545,14 +589,25 @@ function updateEventCellsForSlug_(slug, patch) {
   }
 }
 
-/** Adds paidTicketsEnabled / ticketPriceCents / ticketCurrency / paidTicketsMaxPerPurchase columns when missing. */
+/**
+ * Ensures the optional Events columns exist before we read/write them. Idempotent — only adds
+ * missing names. Includes paid-ticket columns AND the newsletter / base-ticket config.
+ */
 function ensurePaidTicketColumns_(sh) {
   var lastCol = sh.getLastColumn();
   if (lastCol < 1) return;
   var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
   var names = [];
   for (var i = 0; i < headers.length; i++) names.push(String(headers[i]).trim());
-  var want = ['paidTicketsEnabled', 'ticketPriceCents', 'ticketCurrency', 'paidTicketsMaxPerPurchase'];
+  var want = [
+    'paidTicketsEnabled',
+    'ticketPriceCents',
+    'ticketCurrency',
+    'paidTicketsMaxPerPurchase',
+    'baseTicketsPerEntry',
+    'newsletterBonusEnabled',
+    'newsletterBonusTickets',
+  ];
   for (var w = 0; w < want.length; w++) {
     if (names.indexOf(want[w]) === -1) {
       sh.getRange(1, sh.getLastColumn() + 1).setValue(want[w]);
@@ -586,6 +641,9 @@ function handleGetAdminEventConfig_(data) {
     ticketPriceCents: Math.max(0, Math.floor(Number(o.ticketPriceCents) || 0)),
     ticketCurrency: String(o.ticketCurrency || 'usd').toLowerCase().slice(0, 8) || 'usd',
     paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(o.paidTicketsMaxPerPurchase) || 100)),
+    baseTicketsPerEntry: getBaseTicketsPerEntry_(o),
+    newsletterBonusEnabled: isNewsletterBonusEnabled_(o),
+    newsletterBonusTickets: getNewsletterBonusTickets_(o),
   };
   var raffles = getRafflesAllForSlug_(slug);
   return jsonResponse({ ok: true, slug: slug, event: eventOut, raffles: raffles });
@@ -683,6 +741,9 @@ function handleSaveEventConfig_(data) {
     ticketPriceCents: Math.max(0, Math.floor(Number(o.ticketPriceCents) || 0)),
     ticketCurrency: String(o.ticketCurrency || 'usd').toLowerCase().slice(0, 8) || 'usd',
     paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(o.paidTicketsMaxPerPurchase) || 100)),
+    baseTicketsPerEntry: getBaseTicketsPerEntry_(o),
+    newsletterBonusEnabled: isNewsletterBonusEnabled_(o),
+    newsletterBonusTickets: getNewsletterBonusTickets_(o),
   };
   return jsonResponse({ ok: true, slug: slug, event: eventOut, raffles: rafflesOut });
 }
@@ -739,18 +800,31 @@ function getEntryBaseUrl_() {
   return p ? String(p).trim().replace(/\/$/, '') : '';
 }
 
-function trySendManageEntryEmail_(email, entrantName, eventName, slug, token) {
+function trySendManageEntryEmail_(email, entrantName, eventName, slug, token, newsletterPending, newsletterBonusTickets) {
   var base = getEntryBaseUrl_();
   if (!base || !email) return false;
-  var path = '/e/' + encodeURIComponent(slug) + '/my-entry?token=' + encodeURIComponent(token);
-  var url = base + path;
+  var managePath = '/e/' + encodeURIComponent(slug) + '/my-entry?token=' + encodeURIComponent(token);
+  var manageUrl = base + managePath;
+  var confirmPath = '/e/' + encodeURIComponent(slug) + '/confirm?token=' + encodeURIComponent(token);
+  var confirmUrl = base + confirmPath;
+
   var subject = 'Your raffle entry — ' + String(eventName || 'Event');
-  var body =
-    'Hi ' +
-    String(entrantName || 'there') +
-    ',\n\nUse this private link to see your tickets and change how they are split across prize pools (until 10 minutes before each scheduled draw, when set):\n\n' +
-    url +
-    '\n\nIf you did not enter this raffle, you can ignore this email.\n\n— Spectrum Outfitters';
+  var greeting = 'Hi ' + String(entrantName || 'there') + ',\n\n';
+
+  var body = greeting +
+    'Use this private link to see your tickets and change how they are split across prize pools (until 10 minutes before each scheduled draw, when set):\n\n' +
+    manageUrl + '\n';
+
+  var nlBonus = Math.max(0, Math.floor(Number(newsletterBonusTickets) || 0));
+  if (newsletterPending && nlBonus > 0) {
+    body += '\n--\n' +
+      'You opted in to our email list. Click below to confirm your email and unlock +' + nlBonus +
+      ' bonus ticket' + (nlBonus === 1 ? '' : 's') + ':\n\n' +
+      confirmUrl + '\n';
+  }
+
+  body += '\nIf you did not enter this raffle, you can ignore this email.\n\n— Spectrum Outfitters';
+
   try {
     MailApp.sendEmail({ to: String(email).trim(), subject: subject, body: body });
     return true;
@@ -884,7 +958,7 @@ function legacyBonusBooleans_(bonusById) {
 }
 
 /** One Entries row; rowTickets can be fractional for split pools. extras merges bonus toggles + optional __split* audit fields. */
-function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta, testMode, ip, userAgent, bonusProofTrimmed, entryToken) {
+function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta, testMode, ip, userAgent, bonusProofTrimmed, entryToken, newsletterOptIn) {
   var b = bonusById || {};
   var extras = {};
   Object.keys(b).forEach(function (k) {
@@ -898,6 +972,10 @@ function appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, rowT
     if (splitMeta.poolIds && splitMeta.poolIds.length) extras.__splitRaffleIds = splitMeta.poolIds.slice();
   }
   if (entryToken) extras.__entryToken = String(entryToken);
+  if (newsletterOptIn) {
+    extras.__newsletterOptIn = true;
+    extras.__newsletterConfirmed = false;
+  }
   if (bonusProofTrimmed && typeof bonusProofTrimmed === 'object' && !Array.isArray(bonusProofTrimmed)) {
     var pk = Object.keys(bonusProofTrimmed);
     if (pk.length) extras.__bonusProof = bonusProofTrimmed;
@@ -1042,6 +1120,9 @@ function doGet(e) {
       ticketPriceCents: Math.max(0, Math.floor(Number(o.ticketPriceCents) || 0)),
       ticketCurrency: String(o.ticketCurrency || 'usd').toLowerCase().slice(0, 8) || 'usd',
       paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(o.paidTicketsMaxPerPurchase) || 100)),
+      baseTicketsPerEntry: getBaseTicketsPerEntry_(o),
+      newsletterBonusEnabled: isNewsletterBonusEnabled_(o),
+      newsletterBonusTickets: getNewsletterBonusTickets_(o),
     };
     return jsonResponse({ ok: true, event: event });
   } catch (err) {
@@ -1061,6 +1142,7 @@ function doPost(e) {
     if (action === 'submitEntry') return handleSubmitEntry_(data);
     if (action === 'getEntryByToken') return handleGetEntryByToken_(data);
     if (action === 'updateEntryByToken') return handleUpdateEntryByToken_(data);
+    if (action === 'confirmNewsletterByToken') return handleConfirmNewsletterByToken_(data);
     if (action === 'applyPaidTickets') return handleApplyPaidTickets_(data);
     if (action === 'getAdminStats') return handleAdminStats_(data);
     if (action === 'getAdminInsights') return handleAdminInsights_(data);
@@ -1097,10 +1179,14 @@ function runEntryWritesAndMaybeEmail_(
   ip,
   ua,
   entryToken,
-  sendMagicEmail
+  sendMagicEmail,
+  newsletterOptIn,
+  newsletterBonusTickets
 ) {
   var userAgentStr = String(ua || '');
   var magicSent = false;
+  var nlPending = Boolean(newsletterOptIn) && Number(newsletterBonusTickets) > 0;
+  var nlBonus = Math.max(0, Math.floor(Number(newsletterBonusTickets) || 0));
   try {
     if (ticketMode === 'split') {
       var plan = buildTicketSplitPlan_(p, raffles, totalEntries);
@@ -1124,7 +1210,8 @@ function runEntryWritesAndMaybeEmail_(
           ip,
           userAgentStr,
           bonusProofTrimmed,
-          entryToken
+          entryToken,
+          newsletterOptIn
         );
         written++;
       }
@@ -1132,7 +1219,7 @@ function runEntryWritesAndMaybeEmail_(
         return jsonResponse({ ok: false, error: 'No ticket weight in split — check pools.', code: 'split' }, 400);
       }
       if (sendMagicEmail && !testMode) {
-        magicSent = trySendManageEntryEmail_(email, name, String(ev.name || 'Giveaway'), slug, entryToken);
+        magicSent = trySendManageEntryEmail_(email, name, String(ev.name || 'Giveaway'), slug, entryToken, nlPending, nlBonus);
       }
       return jsonResponse({
         ok: true,
@@ -1142,12 +1229,29 @@ function runEntryWritesAndMaybeEmail_(
         testMode: testMode,
         magicLinkSent: magicSent,
         entryToken: entryToken,
+        newsletterBonusPending: nlPending,
+        newsletterBonusTickets: nlBonus,
       });
     }
 
-    appendEntryRow_(slug, name, phoneNorm, email, raffleId, bonusById, totalEntries, null, testMode, ip, userAgentStr, bonusProofTrimmed, entryToken);
+    appendEntryRow_(
+      slug,
+      name,
+      phoneNorm,
+      email,
+      raffleId,
+      bonusById,
+      totalEntries,
+      null,
+      testMode,
+      ip,
+      userAgentStr,
+      bonusProofTrimmed,
+      entryToken,
+      newsletterOptIn
+    );
     if (sendMagicEmail && !testMode) {
-      magicSent = trySendManageEntryEmail_(email, name, String(ev.name || 'Giveaway'), slug, entryToken);
+      magicSent = trySendManageEntryEmail_(email, name, String(ev.name || 'Giveaway'), slug, entryToken, nlPending, nlBonus);
     }
     return jsonResponse({
       ok: true,
@@ -1156,6 +1260,8 @@ function runEntryWritesAndMaybeEmail_(
       testMode: testMode,
       magicLinkSent: magicSent,
       entryToken: entryToken,
+      newsletterBonusPending: nlPending,
+      newsletterBonusTickets: nlBonus,
     });
   } catch (errSplit) {
     var msg = String(errSplit && errSplit.message ? errSplit.message : errSplit);
@@ -1268,7 +1374,13 @@ function handleSubmitEntry_(data) {
     return jsonResponse({ ok: false, error: 'This phone is already entered for this event.', code: 'duplicate_phone' }, 409);
   }
 
-  var totalEntries = computeTicketsFromBonuses_(bonusById, bonuses);
+  var baseTickets = getBaseTicketsPerEntry_(ev);
+  var totalEntries = computeTicketsFromBonuses_(bonusById, bonuses, baseTickets);
+
+  // Newsletter opt-in: only honor when the event has the bonus enabled. Tickets are NOT added to
+  // totalEntries here — handleConfirmNewsletterByToken_ awards them after the email click.
+  var newsletterOptIn = Boolean(p.newsletterOptIn) && isNewsletterBonusEnabled_(ev);
+  var newsletterBonusTickets = newsletterOptIn ? getNewsletterBonusTickets_(ev) : 0;
 
   if (testMode) {
     // Flag only — still written for QA; optional block: return without append
@@ -1305,7 +1417,9 @@ function handleSubmitEntry_(data) {
     ip,
     ua,
     entryToken,
-    true
+    true,
+    newsletterOptIn,
+    newsletterBonusTickets
   );
 }
 
@@ -1373,6 +1487,17 @@ function handleGetEntryByToken_(data) {
   var bonuses = parseBonusRulesFromRow_(ev);
   var locked = entryUpdateLockedForRaffleIds_(slug, raffleIdsSeen);
 
+  // Newsletter state: opt-in is true if any non-bonus row for this entry has it; confirmed
+  // is true if any row (or the bonus row) carries the confirmed flag.
+  var nlOptIn = false;
+  var nlConfirmed = false;
+  for (var nl = 0; nl < rows.length; nl++) {
+    var nx = rows[nl].extras || {};
+    if (nx.__newsletterOptIn === true) nlOptIn = true;
+    if (nx.__newsletterConfirmed === true) nlConfirmed = true;
+    if (nx.__newsletterBonus === true) nlConfirmed = true;
+  }
+
   return jsonResponse({
     ok: true,
     entry: {
@@ -1390,6 +1515,9 @@ function handleGetEntryByToken_(data) {
       bonusProof: ex0.__bonusProof || {},
       editLocked: locked,
       bonuses: bonuses,
+      newsletterOptIn: nlOptIn,
+      newsletterConfirmed: nlConfirmed,
+      newsletterBonusTickets: getNewsletterBonusTickets_(ev),
     },
   });
 }
@@ -1498,7 +1626,8 @@ function handleUpdateEntryByToken_(data) {
   }
   var bonusProofTrimmed = trimBonusProofForSubmit_(p.bonusProof, bonuses);
 
-  var totalEntries = computeTicketsFromBonuses_(bonusById, bonuses);
+  var baseTickets2 = getBaseTicketsPerEntry_(ev);
+  var totalEntries = computeTicketsFromBonuses_(bonusById, bonuses, baseTickets2);
 
   var testMode = Boolean(p.testMode);
   var defaultTest2 =
@@ -1517,17 +1646,39 @@ function handleUpdateEntryByToken_(data) {
     }
   }
 
-  var rowNums = rows.map(function (x) {
-    return x.sheetRow;
-  });
-  rowNums.sort(function (a, b) {
+  // Partition rows: paid + newsletter-bonus rows are preserved (independent of base entry edits).
+  // Only the "free entry" rows are deleted and rewritten with the user's new pool split.
+  var editableRowNums = [];
+  var preservedNewsletterOptIn = false;
+  var preservedNewsletterConfirmed = false;
+  for (var pr = 0; pr < rows.length; pr++) {
+    var rrr = rows[pr];
+    var ex = rrr.extras || {};
+    if (ex.__newsletterOptIn === true) preservedNewsletterOptIn = true;
+    if (ex.__newsletterConfirmed === true) preservedNewsletterConfirmed = true;
+    if (ex.__newsletterBonus === true) preservedNewsletterConfirmed = true;
+    if (ex.__paid === true || ex.__newsletterBonus === true) continue;
+    editableRowNums.push(rrr.sheetRow);
+  }
+  if (!editableRowNums.length) {
+    return jsonResponse({ ok: false, error: 'no_editable_rows', code: 'editable' }, 400);
+  }
+  editableRowNums.sort(function (a, b) {
     return b - a;
   });
-  deleteEntrySheetRowsDescending_(rowNums);
+  deleteEntrySheetRowsDescending_(editableRowNums);
 
   var ua = String(p.userAgent || '');
 
-  return runEntryWritesAndMaybeEmail_(
+  // Carry the newsletter opt-in forward unless the user explicitly opted out via the payload.
+  var newsletterOptIn2 = preservedNewsletterOptIn;
+  if (Object.prototype.hasOwnProperty.call(p, 'newsletterOptIn')) {
+    newsletterOptIn2 = Boolean(p.newsletterOptIn);
+  }
+  // Confirmed flag is one-way: only the confirm endpoint can flip it. It stays as-is across edits.
+  var newsletterBonusTickets2 = newsletterOptIn2 ? getNewsletterBonusTickets_(ev) : 0;
+
+  return runEntryWritesAndMaybeEmailPreservingNewsletter_(
     slug,
     name,
     phoneNorm,
@@ -1545,8 +1696,96 @@ function handleUpdateEntryByToken_(data) {
     ip,
     ua,
     token,
-    false
+    newsletterOptIn2,
+    preservedNewsletterConfirmed,
+    newsletterBonusTickets2
   );
+}
+
+/**
+ * Update-only variant: rewrites editable rows preserving the newsletter opt-in / confirmed flags
+ * the entrant earned previously. No magic-link email is sent on update.
+ */
+function runEntryWritesAndMaybeEmailPreservingNewsletter_(
+  slug, name, phoneNorm, email, p, ev, bonuses, bonusById, bonusProofTrimmed,
+  totalEntries, ticketMode, raffleId, raffles, testMode, ip, ua, entryToken,
+  newsletterOptIn, newsletterConfirmed, newsletterBonusTickets
+) {
+  var userAgentStr = String(ua || '');
+  try {
+    if (ticketMode === 'split') {
+      var plan = buildTicketSplitPlan_(p, raffles, totalEntries);
+      if (!plan || !plan.rows.length) {
+        return jsonResponse({ ok: false, error: 'Could not build ticket split.', code: 'split' }, 400);
+      }
+      var written = 0;
+      for (var s = 0; s < plan.rows.length; s++) {
+        var part = plan.rows[s];
+        if (!(part.weight > 0)) continue;
+        appendEntryRowWithNewsletter_(
+          slug, name, phoneNorm, email, part.raffleId, bonusById, part.weight,
+          { split: true, totalAll: totalEntries, evenly: plan.evenly, poolIds: plan.poolIds },
+          testMode, ip, userAgentStr, bonusProofTrimmed, entryToken,
+          newsletterOptIn, newsletterConfirmed
+        );
+        written++;
+      }
+      if (!written) {
+        return jsonResponse({ ok: false, error: 'No ticket weight in split — check pools.', code: 'split' }, 400);
+      }
+      return jsonResponse({
+        ok: true, totalEntries: totalEntries, ticketMode: 'split', poolsEntered: written,
+        testMode: testMode, magicLinkSent: false, entryToken: entryToken,
+        newsletterBonusPending: newsletterOptIn && !newsletterConfirmed,
+        newsletterBonusTickets: Math.max(0, Math.floor(Number(newsletterBonusTickets) || 0)),
+      });
+    }
+    appendEntryRowWithNewsletter_(
+      slug, name, phoneNorm, email, raffleId, bonusById, totalEntries, null,
+      testMode, ip, userAgentStr, bonusProofTrimmed, entryToken,
+      newsletterOptIn, newsletterConfirmed
+    );
+    return jsonResponse({
+      ok: true, totalEntries: totalEntries, ticketMode: 'single',
+      testMode: testMode, magicLinkSent: false, entryToken: entryToken,
+      newsletterBonusPending: newsletterOptIn && !newsletterConfirmed,
+      newsletterBonusTickets: Math.max(0, Math.floor(Number(newsletterBonusTickets) || 0)),
+    });
+  } catch (errSplit) {
+    var msg = String(errSplit && errSplit.message ? errSplit.message : errSplit);
+    return jsonResponse({ ok: false, error: msg, code: 'split' }, 400);
+  }
+}
+
+function appendEntryRowWithNewsletter_(slug, name, phoneNorm, email, raffleId, bonusById, rowTickets, splitMeta, testMode, ip, userAgent, bonusProofTrimmed, entryToken, newsletterOptIn, newsletterConfirmed) {
+  var b = bonusById || {};
+  var extras = {};
+  Object.keys(b).forEach(function (k) {
+    extras[String(k)] = b[k];
+  });
+  if (splitMeta && splitMeta.split) {
+    extras.__split = true;
+    extras.__splitTotalTickets = splitMeta.totalAll;
+    extras.__rowTickets = rowTickets;
+    extras.__splitEvenly = splitMeta.evenly === true;
+    if (splitMeta.poolIds && splitMeta.poolIds.length) extras.__splitRaffleIds = splitMeta.poolIds.slice();
+  }
+  if (entryToken) extras.__entryToken = String(entryToken);
+  if (newsletterOptIn) {
+    extras.__newsletterOptIn = true;
+    extras.__newsletterConfirmed = Boolean(newsletterConfirmed);
+  }
+  if (bonusProofTrimmed && typeof bonusProofTrimmed === 'object' && !Array.isArray(bonusProofTrimmed)) {
+    var pk = Object.keys(bonusProofTrimmed);
+    if (pk.length) extras.__bonusProof = bonusProofTrimmed;
+  }
+  var bb = legacyBonusBooleans_(b);
+  appendEntry_([
+    new Date(), slug, name, phoneNorm, email, raffleId,
+    bb[0], bb[1], bb[2], rowTickets,
+    testMode ? 'TRUE' : 'FALSE', ip, String(userAgent || ''),
+    JSON.stringify(extras),
+  ]);
 }
 
 function readEntriesForSlug_(slug) {
@@ -1776,6 +2015,132 @@ function handleRefundPaidPurchase_(data) {
   });
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Newsletter double-opt-in: clicking the confirm link in the magic-link email
+   awards a one-time bonus on the entry, marks every existing row as
+   `__newsletterConfirmed: true`, and appends a separate `__newsletterBonus` row
+   so the bonus is auditable and idempotent (re-clicks are no-ops).
+   Inputs (data.payload): slug, token.
+   ────────────────────────────────────────────────────────────────────────── */
+function appendNewsletterBonusRow_(slug, name, phoneNorm, email, raffleId, tickets, ip, userAgent, entryToken) {
+  var extras = {
+    __newsletterBonus: true,
+    __newsletterConfirmed: true,
+    __newsletterConfirmedAt: new Date().toISOString(),
+    __newsletterBonusTickets: tickets,
+  };
+  if (entryToken) extras.__entryToken = String(entryToken);
+  appendEntry_([
+    new Date(),
+    slug,
+    String(name || ''),
+    String(phoneNorm || ''),
+    String(email || ''),
+    raffleId,
+    'FALSE',
+    'FALSE',
+    'FALSE',
+    tickets,
+    'FALSE',
+    String(ip || 'newsletter-confirm'),
+    String(userAgent || 'newsletter-confirm'),
+    JSON.stringify(extras),
+  ]);
+}
+
+function handleConfirmNewsletterByToken_(data) {
+  var p = data.payload || {};
+  var slug = String(p.slug || '').trim();
+  var token = String(p.token || '').trim();
+  if (!slug || !token) {
+    return jsonResponse({ ok: false, error: 'missing_fields', code: 'fields' }, 400);
+  }
+  var ip = String(p.clientIp || 'unknown');
+  if (!rateLimitOk_(ip)) {
+    return jsonResponse({ ok: false, error: 'Rate limited', code: 'rate_limited' }, 429);
+  }
+
+  var found = findEventRow_(slug);
+  if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
+  var ev = recordToObject_(found.headers, found.record);
+
+  var rows = readEntryRowsByToken_(slug, token);
+  if (!rows.length) {
+    return jsonResponse({ ok: false, error: 'entry_not_found', code: 'token' }, 404);
+  }
+
+  // Idempotency: if any row for this token is already marked `__newsletterBonus: true`, skip.
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].extras && rows[i].extras.__newsletterBonus === true) {
+      return jsonResponse({
+        ok: true,
+        alreadyConfirmed: true,
+        bonusTickets: Math.max(0, Math.floor(Number(rows[i].extras.__newsletterBonusTickets) || 0)),
+      });
+    }
+  }
+
+  // Verify the entry actually opted in. Without this, anyone with a token could mint bonus tickets.
+  var didOptIn = false;
+  for (var j = 0; j < rows.length; j++) {
+    if (rows[j].extras && rows[j].extras.__newsletterOptIn === true) {
+      didOptIn = true;
+      break;
+    }
+  }
+  if (!didOptIn) {
+    return jsonResponse({ ok: false, error: 'newsletter_opt_in_required', code: 'opt_in' }, 400);
+  }
+
+  if (!isNewsletterBonusEnabled_(ev)) {
+    return jsonResponse({ ok: false, error: 'newsletter_bonus_disabled', code: 'disabled' }, 400);
+  }
+  var bonus = getNewsletterBonusTickets_(ev);
+  if (bonus <= 0) {
+    return jsonResponse({ ok: false, error: 'newsletter_bonus_zero', code: 'bonus_zero' }, 400);
+  }
+
+  // Pick the pool that already has the most tickets for this entry — the entrant's "main" pool.
+  var bestRow = rows[0];
+  for (var r = 1; r < rows.length; r++) {
+    if (Number(rows[r].tickets) > Number(bestRow.tickets)) bestRow = rows[r];
+  }
+
+  // Stamp existing rows with __newsletterConfirmed so the manage-entry page reflects it.
+  var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
+  var exCol = getEntriesExtrasColumnIndex_();
+  for (var k = 0; k < rows.length; k++) {
+    var rr = rows[k];
+    var ex = rr.extras || {};
+    ex.__newsletterConfirmed = true;
+    if (!ex.__newsletterConfirmedAt) ex.__newsletterConfirmedAt = new Date().toISOString();
+    sh.getRange(rr.sheetRow, exCol + 1).setValue(JSON.stringify(ex));
+  }
+
+  appendNewsletterBonusRow_(
+    slug,
+    bestRow.name,
+    bestRow.phoneNorm,
+    bestRow.email,
+    bestRow.raffleId,
+    bonus,
+    ip,
+    String(p.userAgent || 'newsletter-confirm'),
+    token
+  );
+
+  var totalAfter = bonus;
+  for (var t = 0; t < rows.length; t++) totalAfter += Number(rows[t].tickets) || 0;
+
+  return jsonResponse({
+    ok: true,
+    alreadyConfirmed: false,
+    bonusTickets: bonus,
+    totalTickets: totalAfter,
+    poolApplied: bestRow.raffleId,
+  });
+}
+
 function handleAdminStats_(data) {
   var slug = String(data.slug || '');
   var adminKey = String(data.adminKey || '');
@@ -1890,6 +2255,9 @@ function handleAdminInsights_(data) {
   var revenueByDay = {};
   var recentEntries = [];
   var entrantTotals = {};
+  var newsletterOptInPhones = {};
+  var newsletterConfirmedPhones = {};
+  var newsletterBonusTicketsTotal = 0;
 
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
@@ -1911,6 +2279,15 @@ function handleAdminInsights_(data) {
     var sessionId = String(ex.__stripeSessionId || '');
     var amountCents = Math.max(0, Math.floor(Number(ex.__paidAmountCents) || 0));
     var paidCurrency = String(ex.__paidCurrency || ticketCurrency).toLowerCase();
+    if (!refunded && phone) {
+      if (ex.__newsletterOptIn === true) newsletterOptInPhones[phone] = true;
+      if (ex.__newsletterConfirmed === true || ex.__newsletterBonus === true) {
+        newsletterConfirmedPhones[phone] = true;
+      }
+      if (ex.__newsletterBonus === true) {
+        newsletterBonusTicketsTotal += Math.max(0, Math.floor(Number(ex.__newsletterBonusTickets) || tickets || 0));
+      }
+    }
 
     if (!byPool[raffleId]) {
       byPool[raffleId] = {
@@ -2046,16 +2423,23 @@ function handleAdminInsights_(data) {
       paidTicketsEnabled:
         String(ev.paidTicketsEnabled || '').toUpperCase() === 'TRUE' || ev.paidTicketsEnabled === true,
       ticketPriceCents: Math.max(0, Math.floor(Number(ev.ticketPriceCents) || 0)),
-      totals: {
-        uniqueParticipants: uniqueParticipants,
-        paidParticipants: paidParticipants,
-        totalTickets: totalTickets,
-        freeTickets: totalFreeTickets,
-        paidTickets: totalPaidTickets,
-        paidPurchases: paidPurchaseCount,
-        totalRevenueCents: totalRevenueCents,
-        revenueByCurrency: revenueByCurrency,
-      },
+      totals: (function () {
+        var nlOpt = 0; Object.keys(newsletterOptInPhones).forEach(function () { nlOpt++; });
+        var nlConf = 0; Object.keys(newsletterConfirmedPhones).forEach(function () { nlConf++; });
+        return {
+          uniqueParticipants: uniqueParticipants,
+          paidParticipants: paidParticipants,
+          totalTickets: totalTickets,
+          freeTickets: totalFreeTickets,
+          paidTickets: totalPaidTickets,
+          paidPurchases: paidPurchaseCount,
+          totalRevenueCents: totalRevenueCents,
+          revenueByCurrency: revenueByCurrency,
+          newsletterOptIns: nlOpt,
+          newsletterConfirmed: nlConf,
+          newsletterBonusTickets: newsletterBonusTicketsTotal,
+        };
+      })(),
       pools: poolList,
       recentEntries: recentEntries,
       topEntrants: entrants,

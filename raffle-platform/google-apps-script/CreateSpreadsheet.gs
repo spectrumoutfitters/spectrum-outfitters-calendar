@@ -29,6 +29,13 @@ var EVENT_HEADERS = [
   'adminKey',
   'blockTestWrite',
   'bonusRulesJson',
+  'paidTicketsEnabled',
+  'ticketPriceCents',
+  'ticketCurrency',
+  'paidTicketsMaxPerPurchase',
+  'baseTicketsPerEntry',
+  'newsletterBonusEnabled',
+  'newsletterBonusTickets',
 ];
 
 var RAFFLE_HEADERS = ['slug', 'raffleId', 'title', 'subtitle', 'imageUrl', 'valueLabel', 'sortOrder', 'active', 'drawAt'];
@@ -170,7 +177,7 @@ function writeHeadersAndSamples_(ss) {
     [
       'grand-opening',
       'Grand Opening Giveaway',
-      'Enter for a chance to win. One entry per phone number. Bonus tickets for social actions.',
+      'Enter for a chance to win. One entry per phone number. Optional email bonus for confirmed signups.',
       '',
       '#D4A017',
       '#0c0a09',
@@ -180,6 +187,13 @@ function writeHeadersAndSamples_(ss) {
       'CHANGE_THIS_SECRET_KEY',
       false,
       '',
+      false,
+      500,
+      'usd',
+      100,
+      2,
+      true,
+      2,
     ],
   ];
   if (eventSampleRows[0].length !== EVENT_HEADERS.length) {

@@ -59,6 +59,12 @@ export type EventConfig = EventBranding & {
   ticketCurrency?: string;
   /** Cap on tickets per Stripe Checkout session, to keep purchases sane. */
   paidTicketsMaxPerPurchase?: number;
+  /** Number of tickets a base/free entry awards before any bonuses. Defaults to 2. */
+  baseTicketsPerEntry?: number;
+  /** When true, the entry form shows the newsletter opt-in checkbox. */
+  newsletterBonusEnabled?: boolean;
+  /** Tickets added once the entrant clicks the email confirmation link. Defaults to 2. */
+  newsletterBonusTickets?: number;
 };
 
 export type EntryPayload = {
@@ -86,6 +92,8 @@ export type EntryPayload = {
   bonusInstagram?: boolean;
   bonusReview?: boolean;
   bonusReferral?: boolean;
+  /** True when the entrant ticked the "send me emails" checkbox on the entry form. */
+  newsletterOptIn?: boolean;
   /** Honeypot — must be empty */
   company?: string;
   termsAccepted: boolean;
@@ -103,6 +111,10 @@ export type SubmitEntryResult =
       testMode?: boolean;
       /** Returned when the entry was created so the client can offer "Buy more tickets" right after submit. */
       entryToken?: string;
+      /** True when newsletter opt-in is on but bonus tickets are still pending email confirmation. */
+      newsletterBonusPending?: boolean;
+      /** Tickets that will be awarded once the entrant confirms via the email link. */
+      newsletterBonusTickets?: number;
     }
   | { ok: false; error: string; code?: string };
 
@@ -129,6 +141,12 @@ export type MyEntrySnapshot = {
   bonusProof: Record<string, Record<string, string>>;
   editLocked: boolean;
   bonuses?: BonusRule[];
+  /** Newsletter opt-in flag from the original submission (preserved across edits). */
+  newsletterOptIn?: boolean;
+  /** True after the entrant clicked the email confirmation link. */
+  newsletterConfirmed?: boolean;
+  /** Bonus tickets that will be (or were) awarded on confirmation. */
+  newsletterBonusTickets?: number;
 };
 
 export type AdminStats = {
@@ -206,6 +224,12 @@ export type AdminInsights = {
     paidPurchases: number;
     totalRevenueCents: number;
     revenueByCurrency: Record<string, number>;
+    /** Number of distinct people who ticked the newsletter opt-in. */
+    newsletterOptIns?: number;
+    /** Subset of newsletterOptIns whose email was confirmed via the magic link. */
+    newsletterConfirmed?: number;
+    /** Bonus tickets awarded via newsletter confirmation across all entries. */
+    newsletterBonusTickets?: number;
   };
   pools: AdminInsightsPool[];
   recentEntries: AdminInsightsRecentEntry[];
@@ -250,6 +274,9 @@ export type AdminEventEditable = {
   ticketPriceCents: number;
   ticketCurrency: string;
   paidTicketsMaxPerPurchase: number;
+  baseTicketsPerEntry: number;
+  newsletterBonusEnabled: boolean;
+  newsletterBonusTickets: number;
 };
 
 export type DrawWinnerResult =

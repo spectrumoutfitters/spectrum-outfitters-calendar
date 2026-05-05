@@ -1,55 +1,21 @@
 import type { BonusRule } from "@/lib/types";
 
 /**
- * Free bonus ladder. We only ship rules staff can actually verify before awarding prizes:
+ * Free bonus ladder.
  *
- * - review: requires a public review URL the team can click and confirm.
- * - referral: requires the friend's full name; counts only when that friend submits their own
- *   entry and types this entrant back as their referrer.
+ * As of v3 the only free-ticket bonus is the email newsletter opt-in, and that one is intentionally
+ * NOT modelled as a `BonusRule` — it has its own dedicated checkbox + confirmation flow on the
+ * server, because tickets are only awarded after a magic-link click (double opt-in).
  *
- * Older rules (instagram / tiktok / facebook follows, story tags) were removed because we cannot
- * verify them at scale without OAuth into Meta/TikTok. Paid tickets are the supported way to add
- * weight to an entry beyond these two.
+ * `DEFAULT_BONUS_RULES` is therefore an empty array. Older versions of this app shipped Instagram
+ * follow / TikTok follow / Facebook follow / story tag / public review / refer-a-friend rules
+ * that turned out to be unverifiable at scale. We keep the ID list around so legacy sheet rows
+ * that just echo old defaults can be cleanly stripped (see `isLegacyBonusRulesFingerprint`).
+ *
+ * Operators who want a custom bonus ladder can still set Events.bonusRulesJson to a JSON array of
+ * `BonusRule` objects in the sheet — those are honoured as-is.
  */
-export const DEFAULT_BONUS_RULES: BonusRule[] = [
-  {
-    id: "review",
-    label: "Leave a public review",
-    description: "Post a public Google, Facebook, or Yelp review and paste the link below — we click every link before awarding prizes.",
-    tickets: 4,
-    proofFields: [
-      {
-        id: "platform",
-        input: "text",
-        label: "Where did you review? (Google, Facebook, Yelp, …)",
-        placeholder: "e.g. Google Maps",
-        requiredWhenBonus: true,
-      },
-      {
-        id: "reviewUrl",
-        input: "url",
-        label: "Public link to your review",
-        placeholder: "https://…",
-        requiredWhenBonus: true,
-      },
-    ],
-  },
-  {
-    id: "referral",
-    label: "Refer a friend",
-    description: "Your friend must submit their own entry and type your full name in their referral field — that is how we verify it.",
-    tickets: 3,
-    proofFields: [
-      {
-        id: "friendName",
-        input: "text",
-        label: "Friend's full name (must match what they type)",
-        placeholder: "First Last",
-        requiredWhenBonus: true,
-      },
-    ],
-  },
-];
+export const DEFAULT_BONUS_RULES: BonusRule[] = [];
 
 /** IDs we have ever shipped as defaults — used to decide when a sheet is just echoing them back. */
 const SHIPPED_DEFAULT_IDS = new Set([
@@ -88,9 +54,9 @@ export function mergeBonusRulesWithDefaults(rules: BonusRule[]): BonusRule[] {
 }
 
 /**
- * The Events sheet often still has older JSON arrays (3 or 6 rules) that match exactly the IDs
- * we have shipped as defaults in the past. We treat any such row as "use current defaults" so
- * removing unverifiable rules in code automatically removes them in the UI without sheet edits.
+ * Old Events.bonusRulesJson rows often still hold one of the previously-shipped default lists.
+ * Detecting that fingerprint lets us swap to the current defaults (now empty) automatically,
+ * without the operator having to clear the JSON manually.
  */
 export function isLegacyBonusRulesFingerprint(rules: BonusRule[]): boolean {
   if (!Array.isArray(rules) || !rules.length) return false;
@@ -109,11 +75,20 @@ export function resolveBonusRules(event: { bonuses?: BonusRule[] | null }): Bonu
   return mergeBonusRulesWithDefaults(rules);
 }
 
+/**
+ * Sum the ticket count for an entry: a configurable base plus any selected (custom) bonus rules.
+ * The default base is 2 — operators can override per event via `baseTicketsPerEntry`.
+ *
+ * NOTE: Newsletter opt-in tickets are NOT added here — those are awarded server-side after the
+ * email confirmation flow completes. The form/UI should add the newsletter bonus to a separate
+ * "pending tickets" indicator, not to this base count.
+ */
 export function computeTicketsFromBonuses(
   selections: Record<string, boolean>,
   rules: { id: string; tickets: number }[],
+  baseTickets: number = 2,
 ): number {
-  let n = 1;
+  let n = Math.max(1, Math.floor(Number(baseTickets) || 2));
   for (const r of rules) {
     if (selections[r.id]) n += r.tickets;
   }

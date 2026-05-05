@@ -2,7 +2,7 @@ import { computeTicketsFromBonuses, DEFAULT_BONUS_RULES } from "@/lib/bonusDefau
 
 export { computeTicketsFromBonuses, DEFAULT_BONUS_RULES, resolveBonusRules } from "@/lib/bonusDefaults";
 
-/** @deprecated use DEFAULT_BONUS_RULES + computeTicketsFromBonuses */
+/** @deprecated kept only for legacy entries that referenced these IDs. */
 export const BONUS_WEIGHTS = {
   instagram: 2,
   review: 5,
