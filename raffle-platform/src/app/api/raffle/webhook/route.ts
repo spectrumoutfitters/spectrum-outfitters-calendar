@@ -7,7 +7,7 @@ import { signPaidPurchasePayload } from "@/lib/paidPurchaseSign";
 
 export const runtime = "nodejs";
 
-function readTicketSplitMetadata(md: Stripe.Metadata): string {
+function readTicketSplitMetadata(md: Record<string, string | undefined>): string {
   const parts = Math.max(0, Math.floor(Number(md.ticket_split_parts) || 0));
   if (parts > 0) {
     let out = "";
