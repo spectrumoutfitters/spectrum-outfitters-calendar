@@ -5,6 +5,23 @@ import { getClientIpFromRequest } from "@/lib/clientIp";
 import { getRaffleSiteOrigin, getStripeClient } from "@/lib/stripe";
 import type { MyEntrySnapshot, EventConfig } from "@/lib/types";
 
+const STRIPE_METADATA_VALUE_LIMIT = 480;
+const STRIPE_METADATA_MAX_TICKET_SPLIT_PARTS = 46;
+
+function addTicketSplitMetadata(metadata: Record<string, string>, ticketSplitJson: string): boolean {
+  const chunks = ticketSplitJson.match(new RegExp(`.{1,${STRIPE_METADATA_VALUE_LIMIT}}`, "g")) || [ticketSplitJson];
+  if (chunks.length > STRIPE_METADATA_MAX_TICKET_SPLIT_PARTS) return false;
+  if (chunks.length === 1) {
+    metadata.ticket_split = chunks[0];
+    return true;
+  }
+  metadata.ticket_split_parts = String(chunks.length);
+  chunks.forEach((chunk, i) => {
+    metadata[`ticket_split_${i}`] = chunk;
+  });
+  return true;
+}
+
 /**
  * Body:
  *   {
@@ -117,6 +134,14 @@ export async function POST(request: Request) {
 
   const productName = `Raffle tickets — ${event.name || "Giveaway"}`;
   const description = `${totalTickets} extra ticket${totalTickets === 1 ? "" : "s"} for ${snapshot.name || snapshot.emailMasked}`;
+  const metadata: Record<string, string> = {
+    raffle_slug: slug,
+    entry_token: token,
+    total_tickets: String(totalTickets),
+  };
+  if (!addTicketSplitMetadata(metadata, JSON.stringify(cleanSplit))) {
+    return NextResponse.json({ ok: false, error: "ticket_split_too_large" }, { status: 400 });
+  }
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -139,12 +164,7 @@ export async function POST(request: Request) {
           },
         },
       ],
-      metadata: {
-        raffle_slug: slug,
-        entry_token: token,
-        ticket_split: JSON.stringify(cleanSplit).slice(0, 480),
-        total_tickets: String(totalTickets),
-      },
+      metadata,
     });
 
     return NextResponse.json({
