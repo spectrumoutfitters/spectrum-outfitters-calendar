@@ -7,6 +7,18 @@ import { signPaidPurchasePayload } from "@/lib/paidPurchaseSign";
 
 export const runtime = "nodejs";
 
+function readTicketSplitMetadata(md: Record<string, string | undefined>): string {
+  const parts = Math.max(0, Math.floor(Number(md.ticket_split_parts) || 0));
+  if (parts > 0) {
+    let out = "";
+    for (let i = 0; i < parts; i += 1) {
+      out += String(md[`ticket_split_${i}`] || "");
+    }
+    return out;
+  }
+  return String(md.ticket_split || "{}");
+}
+
 /** Stripe webhook: applies paid tickets to the entry sheet via signed call to Apps Script. */
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
@@ -47,7 +59,7 @@ export async function POST(request: Request) {
   const totalTickets = Math.max(0, Math.floor(Number(md.total_tickets) || 0));
   let ticketSplit: Record<string, number> = {};
   try {
-    const parsed = JSON.parse(String(md.ticket_split || "{}")) as Record<string, unknown>;
+    const parsed = JSON.parse(readTicketSplitMetadata(md)) as Record<string, unknown>;
     for (const [k, v] of Object.entries(parsed)) {
       const n = Math.max(0, Math.floor(Number(v) || 0));
       if (n > 0) ticketSplit[k] = n;
