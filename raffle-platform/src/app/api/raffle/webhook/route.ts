@@ -4,6 +4,7 @@ import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getStripeClient } from "@/lib/stripe";
 import { signPaidPurchasePayload } from "@/lib/paidPurchaseSign";
+import { decodeTicketSplitMetadata } from "@/lib/stripeTicketSplitMetadata";
 
 export const runtime = "nodejs";
 
@@ -45,16 +46,7 @@ export async function POST(request: Request) {
   const slug = String(md.raffle_slug || "").trim();
   const entryToken = String(md.entry_token || "").trim();
   const totalTickets = Math.max(0, Math.floor(Number(md.total_tickets) || 0));
-  let ticketSplit: Record<string, number> = {};
-  try {
-    const parsed = JSON.parse(String(md.ticket_split || "{}")) as Record<string, unknown>;
-    for (const [k, v] of Object.entries(parsed)) {
-      const n = Math.max(0, Math.floor(Number(v) || 0));
-      if (n > 0) ticketSplit[k] = n;
-    }
-  } catch {
-    ticketSplit = {};
-  }
+  const ticketSplit = decodeTicketSplitMetadata(md);
 
   if (!slug || !entryToken || totalTickets <= 0) {
     return NextResponse.json({ ok: false, error: "invalid_session_metadata" }, { status: 400 });

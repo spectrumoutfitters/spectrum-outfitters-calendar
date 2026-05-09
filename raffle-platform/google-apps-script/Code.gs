@@ -1829,6 +1829,26 @@ function handleApplyPaidTickets_(data) {
     return jsonResponse({ ok: false, error: 'missing_fields', code: 'fields' }, 400);
   }
 
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (e) {
+    return jsonResponse({ ok: false, error: 'paid_apply_lock_timeout' }, 503);
+  }
+
+  try {
+    return applyPaidTicketsLocked_(p);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function applyPaidTicketsLocked_(p) {
+  var slug = String(p.slug || '').trim();
+  var token = String(p.token || '').trim();
+  var stripeSessionId = String(p.stripeSessionId || '').trim();
+  var totalPaid = Math.max(0, Math.floor(Number(p.totalPaidTickets) || 0));
+
   var found = findEventRow_(slug);
   if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
 
