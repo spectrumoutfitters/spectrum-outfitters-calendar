@@ -126,9 +126,11 @@ export function MyEntryManageClient({ event, slug, initialToken = "" }: Props) {
     };
   }, [slug, token, applyEntryToForm]);
 
+  const preservedNewsletterBonus =
+    entry?.newsletterOptIn === true ? Math.max(0, Math.floor(Number(entry.newsletterBonusTickets) || 0)) : 0;
   const previewTickets = useMemo(
-    () => computeTicketsFromBonuses(bonusById, bonusRules, baseTickets),
-    [bonusById, bonusRules, baseTickets],
+    () => computeTicketsFromBonuses(bonusById, bonusRules, baseTickets) + preservedNewsletterBonus,
+    [bonusById, bonusRules, baseTickets, preservedNewsletterBonus],
   );
 
   useEffect(() => {
