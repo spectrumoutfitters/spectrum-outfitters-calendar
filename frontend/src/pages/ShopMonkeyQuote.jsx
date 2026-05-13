@@ -12,6 +12,8 @@ const embedSrc =
     ? import.meta.env.VITE_SHOPMONKEY_QUOTE_URL.trim()
     : DEFAULT_EMBED_SRC;
 
+const GOLD = '#D4A017';
+
 export default function ShopMonkeyQuote() {
   useEffect(() => {
     const onMessage = (e) => {
@@ -27,12 +29,21 @@ export default function ShopMonkeyQuote() {
 
   return (
     <div className="h-[100dvh] flex flex-col overflow-hidden bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100">
-      <header className="shrink-0 z-10 border-b border-neutral-200 dark:border-neutral-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur px-4 py-3 shadow-sm">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <Logo size="md" />
-          <div>
-            <h1 className="text-lg font-bold leading-tight">Start your request</h1>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">New clients · Spectrum Outfitters</p>
+      <header className="shrink-0 z-10 bg-white dark:bg-neutral-900 border-b-4 px-4 py-4 shadow-md dark:shadow-neutral-950/80" style={{ borderBottomColor: GOLD }}>
+        <div className="max-w-4xl mx-auto flex items-center gap-4">
+          <div className="shrink-0">
+            <Logo size="lg" />
+          </div>
+          <div
+            className="min-w-0 flex-1 pl-4 border-l-[3px] border-y-0 border-r-0 border-solid border-transparent"
+            style={{ borderLeftColor: GOLD }}
+          >
+            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-neutral-50 tracking-tight leading-tight">
+              Start your request
+            </h1>
+            <p className="mt-1.5 text-sm sm:text-[15px] font-semibold text-neutral-700 dark:text-neutral-200 leading-snug">
+              New clients · Spectrum Outfitters
+            </p>
           </div>
         </div>
       </header>
