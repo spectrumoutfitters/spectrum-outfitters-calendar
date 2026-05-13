@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import Logo from '../components/Logo';
 
 const SM_ORIGIN = 'https://app.shopmonkey.cloud';
-/** Override in frontend/.env: VITE_SHOPMONKEY_QUOTE_URL=https://app.shopmonkey.cloud/public/quote-request/… */
+/** Override: VITE_SHOPMONKEY_QUOTE_URL — ShopMonkey public work-request / quote embed URL */
 const DEFAULT_EMBED_SRC =
   'https://app.shopmonkey.cloud/public/quote-request/b6ddd723-82be-48b3-9166-59ac434cda7c';
 
@@ -31,8 +31,8 @@ export default function ShopMonkeyQuote() {
         <div className="max-w-4xl mx-auto flex items-center gap-3">
           <Logo size="md" />
           <div>
-            <h1 className="text-lg font-bold leading-tight">Request a quote</h1>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">Spectrum Outfitters · ShopMonkey</p>
+            <h1 className="text-lg font-bold leading-tight">Start your request</h1>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">New clients · Spectrum Outfitters</p>
           </div>
         </div>
       </header>

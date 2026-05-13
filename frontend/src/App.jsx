@@ -81,7 +81,9 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/book" element={<CustomerBooking />} />
-      <Route path="/quote" element={<ShopMonkeyQuote />} />
+      <Route path="/new-client" element={<ShopMonkeyQuote />} />
+      <Route path="/new-customer" element={<Navigate to="/new-client" replace />} />
+      <Route path="/quote" element={<Navigate to="/new-client" replace />} />
       <Route path="/pay/:token" element={<PayInvoice />} />
       <Route
         path="/dashboard"

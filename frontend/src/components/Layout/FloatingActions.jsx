@@ -17,7 +17,14 @@ export default function FloatingActions() {
   // Show quick clock FAB on all pages except login, dispatch, and customer status
   const path = location.pathname.toLowerCase();
   // Public customer-facing pages shouldn't show employee floating actions / clock.
-  if (path === '/book' || path === '/quote' || path.startsWith('/pay/')) return null;
+  if (
+    path === '/book' ||
+    path === '/new-client' ||
+    path === '/new-customer' ||
+    path === '/quote' ||
+    path.startsWith('/pay/')
+  )
+    return null;
 
   const showClockFab = path !== '/login' && !path.startsWith('/status') && path !== '/dispatch';
 
