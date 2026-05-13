@@ -2,7 +2,11 @@ import { google } from 'googleapis';
 import crypto from 'crypto';
 import db from '../database/db.js';
 
-const SCOPES = ['https://www.googleapis.com/auth/calendar'];
+export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
+export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+export const GOOGLE_BOOKING_SCOPES = [CALENDAR_SCOPE, GMAIL_SEND_SCOPE];
+
+const SCOPES = [...GOOGLE_BOOKING_SCOPES];
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -52,6 +56,10 @@ async function ensureConfigRow() {
     const hasSyncCalendarIds = (cols || []).some((c) => c.name === 'sync_calendar_ids');
     if (!hasSyncCalendarIds) {
       await db.runAsync(`ALTER TABLE google_calendar_config ADD COLUMN sync_calendar_ids TEXT`);
+    }
+    const hasOauthScopes = (cols || []).some((c) => c.name === 'oauth_scopes');
+    if (!hasOauthScopes) {
+      await db.runAsync(`ALTER TABLE google_calendar_config ADD COLUMN oauth_scopes TEXT`);
     }
   } catch (_) {}
 }
@@ -205,13 +213,27 @@ export async function handleOAuthCallback({ code, state }) {
     calendar_id: cfg.calendar_id || 'primary',
     // reset incremental sync on new connection
     sync_token: null,
-    last_synced_at: null
+    last_synced_at: null,
+    ...(tokens.scope && typeof tokens.scope === 'string' ? { oauth_scopes: tokens.scope.trim() || null } : {})
   });
 
   return { connected: true };
 }
 
-async function getAuthedCalendarClient() {
+/** Persist refreshed access tokens from google-auth-library. */
+function wireTokenPersistence(oauth2Client) {
+  oauth2Client.removeAllListeners('tokens');
+  oauth2Client.on('tokens', (tokens) => {
+    const patch = {};
+    if (tokens.access_token) patch.access_token = tokens.access_token;
+    if (tokens.refresh_token) patch.refresh_token = tokens.refresh_token;
+    if (tokens.expiry_date) patch.token_expiry = new Date(tokens.expiry_date).toISOString();
+    if (Object.keys(patch).length === 0) return;
+    updateGoogleCalendarConfig(patch).catch((e) => console.warn('Failed to persist Google tokens:', e?.message || e));
+  });
+}
+
+async function createAuthedOAuth2Client() {
   const oauth2Client = getOAuth2Client();
   if (!oauth2Client) {
     throw new Error('Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend/.env');
@@ -227,11 +249,37 @@ async function getAuthedCalendarClient() {
     refresh_token: cfg.refresh_token || undefined,
     expiry_date: cfg.token_expiry ? new Date(cfg.token_expiry).getTime() : undefined
   });
+  wireTokenPersistence(oauth2Client);
 
+  return { oauth2Client, cfg };
+}
+
+async function getAuthedCalendarClient() {
+  const { oauth2Client, cfg } = await createAuthedOAuth2Client();
   return {
     calendar: google.calendar({ version: 'v3', auth: oauth2Client }),
+    oauth2Client,
     cfg
   };
+}
+
+export function hasGmailSendScope(oauthScopes) {
+  const s = (oauthScopes || '').toLowerCase();
+  return (
+    s.includes('gmail.send') ||
+    s.includes('auth/gmail.send') ||
+    s.includes('https://www.googleapis.com/auth/gmail.send')
+  );
+}
+
+export async function getGoogleOAuthScopesNormalized() {
+  const cfg = await getGoogleCalendarConfig();
+  const raw = cfg?.oauth_scopes;
+  const list = [];
+  if (raw && typeof raw === 'string') {
+    raw.split(/\s+/).filter(Boolean).forEach((x) => list.push(x));
+  }
+  return { raw: typeof raw === 'string' ? raw : null, list, has_gmail_send: hasGmailSendScope(raw || '') };
 }
 
 function typeLabel(type) {
@@ -620,8 +668,179 @@ export async function disconnectGoogleCalendar() {
     token_expiry: null,
     sync_token: null,
     last_synced_at: null,
-    is_connected: 0
+    is_connected: 0,
+    oauth_scopes: null
   });
+}
+
+/** Query FreeBusy across multiple calendars (merge busy internally). Returns ISO strings. */
+export async function queryCalendarFreeBusy({ calendarIds, timeMinIso, timeMaxIso }) {
+  if (!Array.isArray(calendarIds) || calendarIds.length === 0) {
+    return { calendars: {}, busyIntervals: [], errors: [] };
+  }
+
+  const { calendar } = await getAuthedCalendarClient();
+  const resp = await calendar.freebusy.query({
+    requestBody: {
+      timeMin: timeMinIso,
+      timeMax: timeMaxIso,
+      items: calendarIds.filter(Boolean).map((id) => ({ id }))
+    }
+  });
+
+  const calMap = resp.data.calendars || {};
+  const merged = [];
+
+  function mergeIntervals(intervals) {
+    if (!intervals.length) return [];
+    intervals.sort((a, b) => a.start.localeCompare(b.start));
+    const out = [{ ...intervals[0] }];
+    for (let i = 1; i < intervals.length; i++) {
+      const cur = intervals[i];
+      const last = out[out.length - 1];
+      const lastEndMs = Date.parse(last.end);
+      const curStartMs = Date.parse(cur.start);
+      const curEndMs = Date.parse(cur.end);
+      if (curStartMs <= lastEndMs) {
+        if (curEndMs > lastEndMs) last.end = cur.end > last.end ? cur.end : last.end;
+      } else {
+        out.push({ ...cur });
+      }
+    }
+    return out;
+  }
+
+  for (const cid of calendarIds) {
+    const b = calMap[cid]?.busy || [];
+    for (const slice of b) {
+      merged.push({ start: slice.start, end: slice.end });
+    }
+  }
+
+  const errors = [];
+  for (const [cid, v] of Object.entries(calMap)) {
+    const err = v?.errors;
+    if (err && Array.isArray(err)) {
+      for (const e of err) errors.push({ calendarId: cid, domain: e.domain, reason: e.reason });
+    }
+  }
+
+  return { calendars: calMap, busyIntervals: mergeIntervals(merged), errors };
+}
+
+/** Timed Calendar event for customer portal drop-offs. */
+export async function insertTimedCalendarBookingEvent({
+  calendarId,
+  summary,
+  description,
+  startIso,
+  endIso,
+  timeZone,
+  extendedPrivate = {}
+}) {
+  const { calendar } = await getAuthedCalendarClient();
+
+  const start = startIso.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(startIso)
+    ? { dateTime: startIso }
+    : { dateTime: startIso, timeZone: timeZone || 'UTC' };
+  const end = endIso.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(endIso)
+    ? { dateTime: endIso }
+    : { dateTime: endIso, timeZone: timeZone || 'UTC' };
+
+  const event = {
+    summary,
+    description: description || '',
+    start,
+    end,
+    extendedProperties: {
+      private: {
+        bookingSource: 'customer_portal',
+        appLastPushAt: nowIso(),
+        ...extendedPrivate
+      }
+    }
+  };
+
+  const created = await calendar.events.insert({
+    calendarId,
+    requestBody: event
+  });
+  return {
+    google_event_id: created.data?.id || null,
+    google_html_link: created.data?.htmlLink || null,
+    updated: created.data?.updated || null
+  };
+}
+
+/** Send email as the authenticated Google user (needs gmail.send consent). */
+export async function sendMailViaGoogle({ to, subject, text, html }) {
+  const recipients = (Array.isArray(to) ? to : [to])
+    .map((e) => String(e || '').trim().toLowerCase())
+    .filter(Boolean);
+  if (!recipients.length) throw new Error('No recipients');
+  if (!subject || typeof subject !== 'string') throw new Error('subject is required');
+
+  const { oauth2Client } = await createAuthedOAuth2Client();
+
+  const cfg = await getGoogleCalendarConfig();
+  if (!hasGmailSendScope(cfg.oauth_scopes)) {
+    throw new Error('Gmail send is not authorized yet. Disconnect and reconnect Google in Admin with Gmail permission.');
+  }
+
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+  const profile = await gmail.users.getProfile({ userId: 'me' }).catch(() => null);
+  const fromAddr = profile?.data?.emailAddress;
+  if (!fromAddr) {
+    throw new Error('Could not resolve sender email from Gmail profile.');
+  }
+
+  const boundary = `sobooking_${crypto.randomBytes(12).toString('hex')}`;
+  const plain = text || '';
+
+  let bodyMime;
+  if (html && String(html).trim()) {
+    bodyMime = [
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      `Content-Type: text/plain; charset=UTF-8`,
+      `Content-Transfer-Encoding: 8bit`,
+      '',
+      plain,
+      '',
+      `--${boundary}`,
+      `Content-Type: text/html; charset=UTF-8`,
+      `Content-Transfer-Encoding: 8bit`,
+      '',
+      String(html),
+      '',
+      `--${boundary}--`
+    ].join('\r\n');
+  } else {
+    bodyMime = [
+      `MIME-Version: 1.0`,
+      `Content-Type: text/plain; charset=UTF-8`,
+      `Content-Transfer-Encoding: 8bit`,
+      '',
+      plain
+    ].join('\r\n');
+  }
+
+  const rawMail = [`From: ${fromAddr}`, `To: ${recipients.join(', ')}`, `Subject: ${subject}`, '', bodyMime].join('\r\n');
+
+  const encoded = Buffer.from(rawMail, 'utf8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: encoded }
+  });
+
+  return { from: fromAddr, recipients };
 }
 
 export async function listCalendars() {

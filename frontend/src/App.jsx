@@ -24,6 +24,7 @@ import NewInvoice from './pages/NewInvoice';
 import PayInvoice from './pages/PayInvoice';
 import QuickJobsAdmin from './pages/QuickJobsAdmin';
 import CustomerStatus from './pages/CustomerStatus';
+import CustomerBooking from './pages/CustomerBooking';
 import DispatchBoard from './pages/DispatchBoard';
 import Layout from './components/Layout/Layout';
 import FloatingActions from './components/Layout/FloatingActions';
@@ -78,6 +79,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/book" element={<CustomerBooking />} />
       <Route path="/pay/:token" element={<PayInvoice />} />
       <Route
         path="/dashboard"

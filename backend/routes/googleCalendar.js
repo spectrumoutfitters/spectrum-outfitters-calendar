@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import {
   getGoogleCalendarConfig,
+  getGoogleOAuthScopesNormalized,
   getAuthUrl,
   handleOAuthCallback,
   pullChangesFromGoogle,
@@ -73,11 +74,15 @@ router.get('/status', async (req, res) => {
         if (Array.isArray(parsed)) sync_calendar_ids = parsed;
       } catch (_) {}
     }
+    const oauth = await getGoogleOAuthScopesNormalized();
+
     res.json({
       connected: cfg.is_connected === 1 && !!cfg.refresh_token,
       calendar_id: cfg.calendar_id || 'primary',
       sync_calendar_ids: sync_calendar_ids,
-      last_synced_at: cfg.last_synced_at || null
+      last_synced_at: cfg.last_synced_at || null,
+      oauth_scopes: oauth.raw,
+      has_gmail_send: oauth.has_gmail_send
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to get Google Calendar status', details: error.message });

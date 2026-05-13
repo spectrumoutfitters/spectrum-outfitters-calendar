@@ -40,6 +40,7 @@
     "geoip-lite": "^1.4.10",
     "googleapis": "^171.4.0",
     "jsonwebtoken": "^9.0.2",
+    "luxon": "^3.7.2",
     "multer": "^2.0.2",
     "pdf-parse": "^2.4.5",
     "plaid": "^41.2.0",

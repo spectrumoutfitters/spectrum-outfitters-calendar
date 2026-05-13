@@ -8,7 +8,8 @@ const GoogleCalendarSettings = () => {
     connected: false,
     calendar_id: 'primary',
     sync_calendar_ids: null,
-    last_synced_at: null
+    last_synced_at: null,
+    has_gmail_send: false
   });
   const [calendars, setCalendars] = useState([]);
   const [calendarIdInput, setCalendarIdInput] = useState('primary');
@@ -34,7 +35,8 @@ const GoogleCalendarSettings = () => {
         connected: !!next.connected,
         calendar_id: next.calendar_id || 'primary',
         sync_calendar_ids: next.sync_calendar_ids || null,
-        last_synced_at: next.last_synced_at || null
+        last_synced_at: next.last_synced_at || null,
+        has_gmail_send: !!next.has_gmail_send
       });
       setCalendarIdInput(next.calendar_id || 'primary');
       setSelectedSyncIds(Array.isArray(next.sync_calendar_ids) ? [...next.sync_calendar_ids] : []);
@@ -291,6 +293,13 @@ const GoogleCalendarSettings = () => {
           }`}
         >
           {message.text}
+        </div>
+      )}
+
+      {status.connected && !status.has_gmail_send && (
+        <div className="text-sm rounded-lg p-3 border border-orange-300 bg-orange-50 text-orange-950 dark:bg-orange-950/40 dark:border-orange-700 dark:text-orange-50">
+          <strong>Gmail booking emails:</strong> disconnect and reconnect here so Google can grant Gmail send permission. Needed for
+          customer booking notifications under Admin → Settings → Customer booking.
         </div>
       )}
 

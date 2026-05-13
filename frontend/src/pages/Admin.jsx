@@ -14,6 +14,7 @@ import OrderManagement from '../components/Admin/OrderManagement';
 import PayrollManagement from '../components/Admin/PayrollManagement';
 import EmployeeShopFinancing from '../components/Admin/EmployeeShopFinancing';
 import Settings from '../components/Admin/Settings';
+import BookingSettings from '../components/Admin/BookingSettings';
 import AdminWorkList from '../components/Admin/AdminWorkList';
 import ComplianceCenter from '../components/Admin/ComplianceCenter';
 import FinanceDashboard from '../components/Admin/FinanceDashboard';
@@ -60,6 +61,7 @@ const SUB_TABS = {
   ],
   settings: [
     { id: 'general', label: 'General' },
+    { id: 'customer_booking', label: 'Customer booking' },
     { id: 'security', label: 'Security' },
     { id: 'updates', label: 'Updates' },
   ],
@@ -521,6 +523,7 @@ const Admin = () => {
       <>
         <SubTabBar tabs={SUB_TABS.settings} activeId={sub} onSelect={(id) => selectSubTab('settings', id)} />
         {sub === 'general' && <Settings />}
+        {sub === 'customer_booking' && <BookingSettings />}
         {sub === 'security' && <SecuritySessions />}
         {sub === 'updates' && <SystemUpdates />}
       </>

@@ -24,6 +24,7 @@ import { addQuantityLogTaskUsage } from './add_quantity_log_task_usage.js';
 import { addCustomerStatusTable } from './add_customer_status.js';
 import { addShortLinksTable } from './add_short_links.js';
 import { addEmployeeShopFinancingTables } from './add_employee_shop_financing.js';
+import { addCustomerBookingsTable } from './add_customer_bookings.js';
 import { addQuoteAffiliateTables } from './add_quote_affiliates.js';
 
 export async function ensureUserColumns() {
@@ -291,6 +292,7 @@ export async function runStartupMigrations() {
   await ensurePayrollSystemPayHistoryTable();
   await runPayrollHistoryStartupBackfill();
   await addEmployeeShopFinancingTables();
+  await addCustomerBookingsTable();
 }
 
 /** Persist Payroll System pay stubs for reimbursements / reporting (server has no local JSON on Linux). */

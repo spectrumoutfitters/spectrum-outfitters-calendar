@@ -60,6 +60,7 @@ import { pullChangesFromGoogle } from './utils/googleCalendarService.js';
 import { getSocketClientIP, startSession, endSession, heartbeatSession } from './utils/security.js';
 import shortLinksRoutes from './routes/shortLinks.js';
 import publicInvoicesRoutes from './routes/publicInvoices.js';
+import { bookingPublicRouter, bookingAdminRouter } from './routes/customerBooking.js';
 // import affiliatesRoutes from './routes/affiliates.js'; // DISABLED — not in active use
 
 const __filename = fileURLToPath(import.meta.url);
@@ -788,6 +789,8 @@ app.use('/api/geocode', geocodeRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/dashboard', dashboardRevenueRoutes);
 app.use('/api/customer-status', customerStatusRoutes);
+app.use('/api/public/booking', bookingPublicRouter);
+app.use('/api/admin/booking', bookingAdminRouter);
 app.use('/api/admin/dispatch', dispatchRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use(shortLinksRoutes);
