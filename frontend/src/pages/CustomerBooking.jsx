@@ -2,12 +2,30 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Logo from '../components/Logo';
 import { getBookingConfig, getBookingSlots, submitBooking } from '../utils/publicBookingApi';
 
-function formatSlotPretty(iso, timeZone, slotMinutes) {
+function formatTimeOnly(iso, timeZone) {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone
+    }).format(new Date(iso));
+  } catch {
+    return '';
+  }
+}
+
+/** Single readable line for confirmation + errors (duration shown once). */
+function formatSelectedSlotSummary(iso, timeZone, slotMinutes) {
   try {
     const d = new Date(iso);
-    const day = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone }).format(d);
-    const timeFmt = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone }).format(d);
-    return `${day} · ${timeFmt} (${slotMinutes} min drop-off)`;
+    const dateLine = new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      timeZone
+    }).format(d);
+    const timeLine = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone }).format(d);
+    return `${dateLine} at ${timeLine} · ${slotMinutes}-minute drop-off`;
   } catch {
     return iso;
   }
@@ -41,7 +59,14 @@ function groupSlots(slots, timeZone, slotMinutes) {
         : dayKey === '_'
           ? 'Suggested times'
           : dayKey;
-    return { dayKey, label, isoList };
+    const compactDay =
+      first && !Number.isNaN(Date.parse(first))
+        ? new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone }).format(new Date(first))
+        : dayKey === '_'
+          ? 'Open times'
+          : dayKey;
+
+    return { dayKey, label, compactDay, isoList };
   });
 }
 
@@ -62,6 +87,8 @@ const CustomerBooking = () => {
   const [notes, setNotes] = useState('');
   const [selectedServices, setSelectedServices] = useState(() => new Set());
   const [slotStartIso, setSlotStartIso] = useState('');
+  /** Which calendar day’s times are visible (yyyy-mm-dd in shop TZ). */
+  const [activeDayKey, setActiveDayKey] = useState('');
   const [websiteHoneypot, setWebsiteHoneypot] = useState(''); // bots fill this
 
   useEffect(() => {
@@ -98,6 +125,28 @@ const CustomerBooking = () => {
     () => groupSlots(slots, config?.timezone || 'America/Chicago', config?.slot_minutes || 30),
     [slots, config]
   );
+
+  const tz = config?.timezone || 'America/Chicago';
+  const slotMinutes = config?.slot_minutes || 30;
+
+  useEffect(() => {
+    if (!slotGroups.length) return;
+    const stillValid = slotGroups.some((g) => g.dayKey === activeDayKey);
+    if (!activeDayKey || !stillValid) {
+      setActiveDayKey(slotGroups[0].dayKey);
+    }
+  }, [slotGroups, activeDayKey]);
+
+  const activeGroup = useMemo(
+    () => slotGroups.find((g) => g.dayKey === activeDayKey) || slotGroups[0] || null,
+    [slotGroups, activeDayKey]
+  );
+
+  const pickDayAndMaybeClearSlot = (dayKey) => {
+    const g = slotGroups.find((x) => x.dayKey === dayKey);
+    setActiveDayKey(dayKey);
+    setSlotStartIso((prev) => (g?.isoList?.includes(prev) ? prev : ''));
+  };
 
   const toggleSvc = (id) => {
     setSelectedServices((prev) => {
@@ -175,8 +224,6 @@ const CustomerBooking = () => {
       </div>
     );
   }
-
-  const tz = config?.timezone || 'America/Chicago';
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 pb-24">
@@ -351,32 +398,93 @@ const CustomerBooking = () => {
               />
             </section>
 
-            {/* Time */}
+            {/* Time — date first, then times (reduces overwhelm) */}
             <section className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5 space-y-4 shadow-sm">
-              <h2 className="text-base font-semibold">Drop-off time</h2>
+              <div className="space-y-1">
+                <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">Drop-off time</h2>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 leading-snug">
+                  Choose a day, then a start time. Each visit is booked as a{' '}
+                  <span className="text-neutral-700 dark:text-neutral-300 font-medium">{slotMinutes}-minute</span> drop-off slot.
+                </p>
+              </div>
               {!slots?.length ? (
                 <p className="text-sm text-amber-800 dark:text-amber-100 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 rounded-xl border border-amber-200 dark:border-amber-800">
                   No openings right now. Please call the shop—we still want to help.
                 </p>
               ) : (
-                slotGroups.map((g) => (
-                  <div key={g.dayKey}>
-                    <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 mb-2">{g.label}</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {g.isoList.map((iso) => (
-                        <button
-                          key={iso}
-                          type="button"
-                          onClick={() => setSlotStartIso(iso)}
-                          className={`px-3 py-2 rounded-xl text-xs font-semibold transition border ${slotStartIso === iso ? 'text-white border-[#D4A017]' : 'border-neutral-200 dark:border-neutral-700 hover:border-[#D4A017]/50'}`}
-                          style={slotStartIso === iso ? { backgroundColor: '#D4A017' } : {}}
-                        >
-                          {formatSlotPretty(iso, tz, config?.slot_minutes || 30).split('·')[1]?.trim() || iso}
-                        </button>
-                      ))}
+                <>
+                  <div>
+                    <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-2">Day</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory">
+                      {slotGroups.map((g) => {
+                        const on = activeDayKey === g.dayKey;
+                        return (
+                          <button
+                            key={g.dayKey}
+                            type="button"
+                            onClick={() => pickDayAndMaybeClearSlot(g.dayKey)}
+                            className={`shrink-0 snap-start rounded-xl border px-3 py-2.5 text-center min-w-[5.75rem] transition ${
+                              on
+                                ? 'border-[#D4A017] bg-[#D4A017]/15 dark:bg-[#D4A017]/25 ring-1 ring-[#D4A017]/35'
+                                : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50/80 dark:bg-neutral-950/80'
+                            }`}
+                          >
+                            <span className="block text-[13px] font-semibold text-neutral-900 dark:text-neutral-100 leading-tight">
+                              {g.compactDay}
+                            </span>
+                            <span className="block text-[11px] text-neutral-500 dark:text-neutral-400 mt-1">
+                              {g.isoList.length} open
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                ))
+
+                  {activeGroup ? (
+                    <div className="space-y-2">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">Time</p>
+                        <p className="text-xs text-neutral-400 dark:text-neutral-500 truncate max-w-[60%]" title={activeGroup.label}>
+                          {activeGroup.label}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {activeGroup.isoList.map((iso) => {
+                          const selected = slotStartIso === iso;
+                          return (
+                            <button
+                              key={iso}
+                              type="button"
+                              onClick={() => setSlotStartIso(iso)}
+                              className={`rounded-xl py-2.5 px-1 text-sm font-medium tabular-nums transition border ${
+                                selected
+                                  ? 'text-white border-[#D4A017] shadow-sm'
+                                  : 'border-neutral-200 dark:border-neutral-700 hover:border-[#D4A017]/55 text-neutral-800 dark:text-neutral-100 bg-neutral-50/50 dark:bg-neutral-950'
+                              }`}
+                              style={selected ? { backgroundColor: '#D4A017' } : {}}
+                            >
+                              {formatTimeOnly(iso, tz)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {slotStartIso ? (
+                    <div className="rounded-xl border border-[#D4A017]/35 bg-[#D4A017]/08 dark:bg-[#D4A017]/15 px-4 py-3 text-sm text-neutral-800 dark:text-neutral-200">
+                      <span className="text-neutral-500 dark:text-neutral-400 font-medium uppercase text-[11px] tracking-wide mr-2">
+                        Your slot
+                      </span>
+                      {formatSelectedSlotSummary(slotStartIso, tz, slotMinutes)}
+                    </div>
+                  ) : slots?.length ? (
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                      Tap a time to continue. Scroll horizontally if there are multiple days available.
+                    </p>
+                  ) : null}
+                </>
               )}
             </section>
 
