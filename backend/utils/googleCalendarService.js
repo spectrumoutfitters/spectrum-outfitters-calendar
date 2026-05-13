@@ -178,7 +178,7 @@ export async function getAuthUrl({ userId }) {
   return { url, state };
 }
 
-export async function handleOAuthCallback({ code, state }) {
+export async function handleOAuthCallback({ code, state, scopeFromCallbackQuery }) {
   if (!code) throw new Error('Missing OAuth code');
   if (!state) throw new Error('Missing OAuth state');
 
@@ -200,9 +200,25 @@ export async function handleOAuthCallback({ code, state }) {
     throw new Error('Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend/.env');
   }
 
-  const { tokens } = await oauth2Client.getToken(code);
-  // Note: refresh_token may only be returned the first time (prompt=consent helps).
+  let tokens;
+  try {
+    const res = await oauth2Client.getToken(code);
+    tokens = res?.tokens ?? res;
+  } catch (e) {
+    const msg = String(e?.message || e || 'Token exchange failed');
+    if (/invalid_grant/i.test(msg)) {
+      throw new Error(
+        'Google rejected this sign-in (often: this page was refreshed, or Connect ran twice—the code is single-use). Close this tab and click Connect Google Calendar again.'
+      );
+    }
+    throw e;
+  }
+
   const cfg = await getGoogleCalendarConfig();
+
+  const scopeFromTokens = tokens?.scope && typeof tokens.scope === 'string' ? tokens.scope.trim() : null;
+  const scopeFromRedirect =
+    scopeFromCallbackQuery && typeof scopeFromCallbackQuery === 'string' ? scopeFromCallbackQuery.trim() : null;
 
   await updateGoogleCalendarConfig({
     access_token: tokens.access_token || cfg.access_token || null,
@@ -214,7 +230,7 @@ export async function handleOAuthCallback({ code, state }) {
     // reset incremental sync on new connection
     sync_token: null,
     last_synced_at: null,
-    ...(tokens.scope && typeof tokens.scope === 'string' ? { oauth_scopes: tokens.scope.trim() || null } : {})
+    oauth_scopes: scopeFromTokens || scopeFromRedirect || cfg.oauth_scopes || null
   });
 
   return { connected: true };

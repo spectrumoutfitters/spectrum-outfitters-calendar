@@ -15,17 +15,71 @@ import {
 
 const router = express.Router();
 
+function firstQueryParam(val) {
+  if (val == null) return undefined;
+  const v = Array.isArray(val) ? val[0] : val;
+  const s = typeof v === 'string' ? v.trim() : '';
+  return s ? s : undefined;
+}
+
+/** Where the SPA runs (OAuth popup notifies opener on this origin). */
+function oauthPostMessageTargetOrigin() {
+  const raw = (process.env.FRONTEND_URL || process.env.PUBLIC_FRONTEND_ORIGIN || '').trim();
+  if (raw) {
+    try {
+      const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      return new URL(withProto).origin;
+    } catch {
+      /* fall through */
+    }
+  }
+  const port = process.env.FRONTEND_PORT || 5173;
+  const useHttpsLocal = process.env.FRONTEND_USE_HTTPS === '1';
+  return `${useHttpsLocal ? 'https' : 'http'}://localhost:${port}`;
+}
+
+function oauthFallbackRedirectUrl() {
+  const raw = (process.env.FRONTEND_URL || '').trim();
+  if (/^https?:\/\//i.test(raw)) {
+    return raw.replace(/\/+$/, '');
+  }
+  const port = process.env.FRONTEND_PORT || 5173;
+  const useHttpsLocal = process.env.FRONTEND_USE_HTTPS === '1';
+  return `${useHttpsLocal ? 'https' : 'http'}://localhost:${port}`;
+}
+
 // Callback does NOT require auth (Google redirects here)
 router.get('/callback', async (req, res) => {
+  const qerr = firstQueryParam(req.query.error);
+  const qh = firstQueryParam(req.query.error_description);
   try {
-    const { code, state } = req.query;
-    await handleOAuthCallback({ code, state });
+    if (qerr) {
+      let desc = '';
+      if (qh) {
+        try {
+          desc = ` — ${decodeURIComponent(qh)}`;
+        } catch {
+          desc = ` — ${qh}`;
+        }
+      }
+      throw new Error(`Google OAuth: ${qerr}${desc}`);
+    }
 
-    // Simple success page (works even if the app isn't open)
-    res
-      .status(200)
-      .send(
-        `<!doctype html>
+    const code = firstQueryParam(req.query.code);
+    const state = firstQueryParam(req.query.state);
+    const scope = firstQueryParam(req.query.scope);
+    await handleOAuthCallback({
+      code,
+      state,
+      scopeFromCallbackQuery: scope || undefined
+    });
+
+    const openerTargetOrigin = oauthPostMessageTargetOrigin();
+    const openerTargetJs = JSON.stringify(openerTargetOrigin);
+    const fallbackJs = JSON.stringify(oauthFallbackRedirectUrl());
+
+    const successHtml =
+      `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -42,21 +96,47 @@ router.get('/callback', async (req, res) => {
   <body>
     <div class="card">
       <div class="ok">✅ Google Calendar connected successfully</div>
-      <div class="muted">You can close this window and return to the app.</div>
-      <div class="muted">If you don’t see it update, use <code>Sync Now</code> in the admin schedule view.</div>
+      <div class="muted">You can close this window — the settings page refreshes automatically when opened from the app.</div>
+      <div class="muted">If you don’t see it update, use <code>Refresh</code> near Google Calendar, or <code>Sync Now</code> in schedule.</div>
+      <div class="muted" id="closeHint"></div>
     </div>
+    <script>
+      (function () {
+        var target = ${openerTargetJs};
+        var fallback = ${fallbackJs};
+        try {
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage({ type: 'spectrum_google_calendar_connected' }, target);
+            window.close();
+            setTimeout(function () {
+              var el = document.getElementById('closeHint');
+              if (el && !document.hidden)
+                el.textContent = 'If this tab stayed open, close it manually and return to the app.';
+            }, 320);
+          } else {
+            window.location.href = fallback;
+          }
+        } catch (e) {
+          window.location.href = fallback;
+          console.warn(e);
+        }
+      })();
+    </script>
   </body>
-</html>`
-      );
+</html>`;
+
+    res.status(200).send(successHtml);
   } catch (error) {
-    res
-      .status(400)
-      .send(
-        `<!doctype html><html><body style="font-family:system-ui;padding:24px;">
+    const safe = String(error?.message || error)
+      .replace(/</g, '&lt;')
+      .replace(/&/g, '&amp;');
+    res.status(400).send(
+      `<!doctype html><html><body style="font-family:system-ui;padding:24px;">
           <h2>❌ Google Calendar connection failed</h2>
-          <pre>${String(error?.message || error)}</pre>
+          <pre style="white-space:pre-wrap;word-break:break-word;">${safe}</pre>
+          <p style="margin-top:12px;"><a href="javascript:window.close()">Close this tab</a> and click Connect again in the app.</p>
         </body></html>`
-      );
+    );
   }
 });
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../utils/api';
 
 const GoogleCalendarSettings = () => {
@@ -25,7 +25,7 @@ const GoogleCalendarSettings = () => {
     }
   }, [status.last_synced_at]);
 
-  const loadStatus = async () => {
+  const loadStatus = useCallback(async () => {
     setLoading(true);
     setMessage(null);
     try {
@@ -60,11 +60,34 @@ const GoogleCalendarSettings = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadStatus();
-  }, []);
+  }, [loadStatus]);
+
+  useEffect(() => {
+    const host = typeof window.location.hostname === 'string' ? window.location.hostname : 'localhost';
+    const origins = new Set([
+      window.location.origin,
+      `http://${host}:5000`,
+      `https://${host}:5000`,
+      'http://localhost:5000',
+      'https://localhost:5000',
+      'http://127.0.0.1:5000',
+      'https://127.0.0.1:5000'
+    ]);
+
+    function onOAuthPopupMessage(event) {
+      if (!event?.data || event.data.type !== 'spectrum_google_calendar_connected') return;
+      if (!origins.has(event.origin)) return;
+      setMessage({ type: 'success', text: 'Google authorization completed — refreshing status.' });
+      loadStatus();
+    }
+
+    window.addEventListener('message', onOAuthPopupMessage);
+    return () => window.removeEventListener('message', onOAuthPopupMessage);
+  }, [loadStatus]);
 
   const connect = async () => {
     setWorking(true);
@@ -73,10 +96,11 @@ const GoogleCalendarSettings = () => {
       const res = await api.get('/google-calendar/auth-url');
       const url = res.data?.url;
       if (!url) throw new Error('No auth URL returned');
-      window.open(url, '_blank', 'noopener,noreferrer');
+      // Do NOT use noopener/noreferrer — Google redirects back here and posts to window.opener; those flags null out opener.
+      window.open(url, 'google_calendar_oauth', 'width=520,height=700,scrollbars=yes');
       setMessage({
         type: 'info',
-        text: 'Google authorization opened in a new tab. After approving, come back here and click Refresh.'
+        text: 'Complete Google sign-in in the popup. This screen updates automatically when finished (or click Refresh).'
       });
     } catch (err) {
       setMessage({
