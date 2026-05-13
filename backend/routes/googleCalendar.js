@@ -162,7 +162,9 @@ router.get('/status', async (req, res) => {
       sync_calendar_ids: sync_calendar_ids,
       last_synced_at: cfg.last_synced_at || null,
       oauth_scopes: oauth.raw,
-      has_gmail_send: oauth.has_gmail_send
+      has_gmail_send: oauth.has_gmail_send,
+      has_sender_identity: oauth.has_sender_identity,
+      has_booking_mail: oauth.has_booking_mail
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to get Google Calendar status', details: error.message });

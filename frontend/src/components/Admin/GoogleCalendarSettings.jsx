@@ -9,7 +9,9 @@ const GoogleCalendarSettings = () => {
     calendar_id: 'primary',
     sync_calendar_ids: null,
     last_synced_at: null,
-    has_gmail_send: false
+    has_gmail_send: false,
+    has_sender_identity: false,
+    has_booking_mail: false
   });
   const [calendars, setCalendars] = useState([]);
   const [calendarIdInput, setCalendarIdInput] = useState('primary');
@@ -36,7 +38,9 @@ const GoogleCalendarSettings = () => {
         calendar_id: next.calendar_id || 'primary',
         sync_calendar_ids: next.sync_calendar_ids || null,
         last_synced_at: next.last_synced_at || null,
-        has_gmail_send: !!next.has_gmail_send
+        has_gmail_send: !!next.has_gmail_send,
+        has_sender_identity: !!next.has_sender_identity,
+        has_booking_mail: !!next.has_booking_mail
       });
       setCalendarIdInput(next.calendar_id || 'primary');
       setSelectedSyncIds(Array.isArray(next.sync_calendar_ids) ? [...next.sync_calendar_ids] : []);
@@ -324,6 +328,13 @@ const GoogleCalendarSettings = () => {
         <div className="text-sm rounded-lg p-3 border border-orange-300 bg-orange-50 text-orange-950 dark:bg-orange-950/40 dark:border-orange-700 dark:text-orange-50">
           <strong>Gmail booking emails:</strong> disconnect and reconnect here so Google can grant Gmail send permission. Needed for
           customer booking notifications under Admin → Settings → Customer booking.
+        </div>
+      )}
+
+      {status.connected && status.has_gmail_send && !status.has_sender_identity && (
+        <div className="text-sm rounded-lg p-3 border border-orange-300 bg-orange-50 text-orange-950 dark:bg-orange-950/40 dark:border-orange-700 dark:text-orange-50">
+          <strong>Booking email “From” address:</strong> Google did not grant permission to read your account email alongside Gmail send.
+          Disconnect and reconnect here so consent includes your primary Google email — required to build outbound messages.
         </div>
       )}
 

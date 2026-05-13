@@ -236,8 +236,8 @@ export default function BookingSettings() {
 
       {googleOk && !gmailOk && (
         <div className="rounded-xl border border-orange-400 bg-orange-50 dark:bg-orange-950/30 px-4 py-3 text-sm text-orange-950 dark:text-orange-100">
-          Gmail send permission is missing. Open Google Calendar settings, disconnect, then reconnect to grant Gmail access so staff
-          get emails when customers book.
+          Google is connected, but outbound booking mail isn’t fully authorized. Open <strong className="font-semibold">Settings → Schedule / Google Calendar</strong>,
+          disconnect, then reconnect and accept prompts for Calendar, Gmail send, and your Google account email (needed for the “From:” address on staff notices).
         </div>
       )}
 

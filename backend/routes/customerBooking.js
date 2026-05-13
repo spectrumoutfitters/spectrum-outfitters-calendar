@@ -8,7 +8,13 @@ import {
   getAdminBookingSnapshot,
   persistBookingSettings
 } from '../utils/customerBookingService.js';
-import { sendMailViaGoogle, hasGmailSendScope, getGoogleCalendarConfig, isGoogleCalendarConnected } from '../utils/googleCalendarService.js';
+import {
+  sendMailViaGoogle,
+  hasGmailSendScope,
+  hasSenderIdentityScope,
+  getGoogleCalendarConfig,
+  isGoogleCalendarConnected
+} from '../utils/googleCalendarService.js';
 
 export const bookingPublicRouter = express.Router();
 
@@ -119,6 +125,12 @@ bookingAdminRouter.post('/test-email', async (req, res) => {
     if (!hasGmailSendScope(cfg.oauth_scopes)) {
       return res.status(400).json({
         error: 'Gmail send permission missing. Disconnect and reconnect Google in Admin.'
+      });
+    }
+    if (!hasSenderIdentityScope(cfg.oauth_scopes)) {
+      return res.status(400).json({
+        error:
+          'Google needs permission to read your primary email address (for the "From:" line). Disconnect and reconnect Google in Admin → Google Calendar.'
       });
     }
 

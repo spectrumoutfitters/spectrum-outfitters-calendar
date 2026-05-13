@@ -6,7 +6,7 @@ import {
   insertTimedCalendarBookingEvent,
   sendMailViaGoogle,
   isGoogleCalendarConnected,
-  hasGmailSendScope
+  hasBookingOutboundMailScopes
 } from './googleCalendarService.js';
 
 const SETTINGS_DEFAULTS = {
@@ -231,7 +231,8 @@ export async function getResolvedBookingConfig() {
     intro_text: (await loadSetting('booking_intro_text')) || '',
     success_message: (await loadSetting('booking_success_message')) || '',
     google_connected: !!(await isGoogleCalendarConnected()),
-    gmail_send_allowed: !!(await isGoogleCalendarConnected()) && hasGmailSendScope(gcfg.oauth_scopes)
+    gmail_send_allowed:
+      !!(await isGoogleCalendarConnected()) && hasBookingOutboundMailScopes(gcfg.oauth_scopes)
   };
 }
 
@@ -522,8 +523,9 @@ export async function submitCustomerBooking(payload) {
 
   let email_error = null;
   let sent = false;
-  if (!(await hasGmailSendScope(gcfg.oauth_scopes))) {
-    email_error = 'Gmail send permission missing — reconnect Google in Admin.';
+  if (!hasBookingOutboundMailScopes(gcfg.oauth_scopes)) {
+    email_error =
+      'Gmail send or account-email permission missing — disconnect and reconnect Google in Admin.';
   } else {
     try {
       const subject = `[SO Booking] Drop-off scheduled — ${name}`;
@@ -597,6 +599,7 @@ export async function getAdminBookingSnapshot() {
     raw_settings_defaults: SETTINGS_DEFAULTS,
     google_primary_calendar_id: gcfg.calendar_id || 'primary',
     google_calendar_list_hint: uniqCalendarIds(calendarIdsFromGoogleCfg(gcfg)),
-    gmail_send_allowed: !!(await isGoogleCalendarConnected()) && hasGmailSendScope(gcfg.oauth_scopes)
+    gmail_send_allowed:
+      !!(await isGoogleCalendarConnected()) && hasBookingOutboundMailScopes(gcfg.oauth_scopes)
   };
 }

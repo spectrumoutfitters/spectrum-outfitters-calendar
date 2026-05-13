@@ -4,7 +4,9 @@ import db from '../database/db.js';
 
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
-export const GOOGLE_BOOKING_SCOPES = [CALENDAR_SCOPE, GMAIL_SEND_SCOPE];
+/** Needed to read the authenticated account email for MIME "From"; gmail.send alone does not allow Gmail getProfile. */
+export const USERINFO_EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email';
+export const GOOGLE_BOOKING_SCOPES = [CALENDAR_SCOPE, GMAIL_SEND_SCOPE, USERINFO_EMAIL_SCOPE];
 
 const SCOPES = [...GOOGLE_BOOKING_SCOPES];
 
@@ -312,6 +314,25 @@ export function hasGmailSendScope(oauthScopes) {
   );
 }
 
+/** Scopes sufficient to learn the Gmail "From" address (UserInfo API or Gmail getProfile). */
+export function hasSenderIdentityScope(oauthScopes) {
+  const s = (oauthScopes || '').toLowerCase();
+  return (
+    s.includes('userinfo.email') ||
+    s.includes('/auth/userinfo.email') ||
+    s.includes('gmail.readonly') ||
+    s.includes('gmail.metadata') ||
+    s.includes('gmail.modify') ||
+    s.includes('gmail.compose') ||
+    s.includes('https://mail.google.com/')
+  );
+}
+
+/** Calendar + Gmail send + ability to resolve the connected account email (booking notifications From:). */
+export function hasBookingOutboundMailScopes(oauthScopes) {
+  return hasGmailSendScope(oauthScopes) && hasSenderIdentityScope(oauthScopes);
+}
+
 export async function getGoogleOAuthScopesNormalized() {
   const cfg = await getGoogleCalendarConfig();
   const raw = cfg?.oauth_scopes;
@@ -319,7 +340,14 @@ export async function getGoogleOAuthScopesNormalized() {
   if (raw && typeof raw === 'string') {
     raw.split(/\s+/).filter(Boolean).forEach((x) => list.push(x));
   }
-  return { raw: typeof raw === 'string' ? raw : null, list, has_gmail_send: hasGmailSendScope(raw || '') };
+  const r = typeof raw === 'string' ? raw : '';
+  return {
+    raw: typeof raw === 'string' ? raw : null,
+    list,
+    has_gmail_send: hasGmailSendScope(r || ''),
+    has_sender_identity: hasSenderIdentityScope(r || ''),
+    has_booking_mail: hasBookingOutboundMailScopes(r || '')
+  };
 }
 
 function typeLabel(type) {
@@ -812,6 +840,26 @@ export async function insertTimedCalendarBookingEvent({
   };
 }
 
+async function resolveOutboundFromAddress(oauth2Client) {
+  try {
+    const oauth2Api = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const { data } = await oauth2Api.userinfo.get();
+    if (data?.email) return String(data.email).trim();
+  } catch (e) {
+    console.warn('[Google] oauth2.userinfo.get failed:', e?.message || e);
+  }
+  try {
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    const { data } = await gmail.users.getProfile({ userId: 'me' });
+    if (data?.emailAddress) return String(data.emailAddress).trim();
+  } catch (e) {
+    console.warn('[Google] gmail.users.getProfile failed:', e?.message || e);
+  }
+  throw new Error(
+    'Could not resolve sender email. Disconnect Google in Admin Settings and reconnect so consent includes your account email. If it persists, verify the Gmail API is enabled for this Google Cloud project.'
+  );
+}
+
 /** Send email as the authenticated Google user (needs gmail.send consent). */
 export async function sendMailViaGoogle({ to, subject, text, html }) {
   const recipients = (Array.isArray(to) ? to : [to])
@@ -826,13 +874,15 @@ export async function sendMailViaGoogle({ to, subject, text, html }) {
   if (!hasGmailSendScope(cfg.oauth_scopes)) {
     throw new Error('Gmail send is not authorized yet. Disconnect and reconnect Google in Admin with Gmail permission.');
   }
+  if (!hasSenderIdentityScope(cfg.oauth_scopes)) {
+    throw new Error(
+      'Missing permission to read your Google account email (needed for From:). Disconnect and reconnect Google so User Info (email) is granted.'
+    );
+  }
+
+  const fromAddr = await resolveOutboundFromAddress(oauth2Client);
 
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-  const profile = await gmail.users.getProfile({ userId: 'me' }).catch(() => null);
-  const fromAddr = profile?.data?.emailAddress;
-  if (!fromAddr) {
-    throw new Error('Could not resolve sender email from Gmail profile.');
-  }
 
   const boundary = `sobooking_${crypto.randomBytes(12).toString('hex')}`;
   const plain = text || '';
