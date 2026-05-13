@@ -26,8 +26,8 @@ export default function ShopMonkeyQuote() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 pb-16">
-      <header className="sticky top-0 z-10 border-b border-neutral-200 dark:border-neutral-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur px-4 py-4 shadow-sm">
+    <div className="h-[100dvh] flex flex-col overflow-hidden bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100">
+      <header className="shrink-0 z-10 border-b border-neutral-200 dark:border-neutral-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur px-4 py-3 shadow-sm">
         <div className="max-w-4xl mx-auto flex items-center gap-3">
           <Logo size="md" />
           <div>
@@ -37,16 +37,16 @@ export default function ShopMonkeyQuote() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 pt-6">
-        <section className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm overflow-hidden">
+      <main className="flex-1 flex flex-col min-h-0 max-w-4xl w-full mx-auto px-4 pt-2 pb-2">
+        <section className="flex-1 min-h-0 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm overflow-hidden">
           <iframe
             title="ShopMonkey online quote request"
             src={embedSrc}
-            className="w-full border-0 block bg-neutral-50 dark:bg-neutral-950 min-h-[50vh] h-[700px] max-h-[90vh] sm:max-h-none"
+            className="h-full w-full border-0 bg-white dark:bg-neutral-950 block"
             allow="clipboard-write"
           />
         </section>
-        <p className="mt-4 text-xs text-neutral-500 dark:text-neutral-400 text-center">
+        <p className="shrink-0 pt-2 text-[11px] text-neutral-500 dark:text-neutral-400 text-center leading-snug">
           Form powered by ShopMonkey — your request goes straight to our shop.
         </p>
       </main>
