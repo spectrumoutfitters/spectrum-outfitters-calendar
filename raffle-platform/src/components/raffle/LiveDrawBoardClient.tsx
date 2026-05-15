@@ -239,9 +239,10 @@ export function LiveDrawBoardClient({ slug, event }: Props) {
             {event.name}
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-sm text-neutral-500 dark:text-neutral-400">
-            Staff runs the official draw from the admin dashboard — this board shows the{" "}
-            <span className="font-medium text-neutral-700 dark:text-neutral-300">same result</span> a
-            moment later. Cheer along; taps don&apos;t change the pick.
+            Winners are selected using our official, verified drawing process. This page stays in sync and shows each
+            winner shortly after they&apos;re drawn—no refresh needed.{" "}
+            <span className="font-medium text-neutral-700 dark:text-neutral-300">Tap to cheer</span> is only for fun
+            (extra confetti) and doesn&apos;t change who wins.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             <Link

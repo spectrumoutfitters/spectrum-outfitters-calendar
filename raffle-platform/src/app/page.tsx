@@ -50,7 +50,7 @@ export default function Home() {
             <span className="hidden text-neutral-600 sm:inline" aria-hidden>
               ·
             </span>
-            <span className="text-center text-xs text-neutral-500">Same results as staff run in admin</span>
+            <span className="text-center text-xs text-neutral-500">Synced with each official drawing</span>
           </div>
         </div>
       </section>
@@ -84,9 +84,11 @@ export default function Home() {
 
       <section className="mx-auto max-w-4xl px-4 py-12 md:px-8">
         <h2 className="text-base font-semibold text-white">Active event</h2>
-        <p className="mt-1 text-sm text-neutral-500">Tap to enter the live giveaway.</p>
-        <div className="mt-5 rounded-2xl border border-neutral-800 bg-neutral-950/80 p-6 transition hover:border-neutral-600">
-          <Link href={entryPath} className="-m-6 block rounded-2xl p-6 pb-5 text-left">
+        <p className="mt-1 text-sm text-neutral-500">
+          Enter the giveaway below, or open the crowd-friendly winner screen for drawings.
+        </p>
+        <div className="mt-5 overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/80 transition hover:border-neutral-600">
+          <Link href={entryPath} className="block p-6 pb-5 text-left transition hover:bg-neutral-900/35">
             <span
               className="w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold text-black"
               style={{ background: GOLD }}
@@ -101,17 +103,19 @@ export default function Home() {
                 {entryPath}
               </span>
             </p>
-            <span className="mt-5 inline-block text-sm font-medium text-neutral-400">Tap to enter →</span>
+            <span className="mt-5 inline-block text-sm font-medium text-neutral-400">Enter giveaway →</span>
           </Link>
 
-          <div className="mt-px flex flex-col gap-3 border-t border-neutral-800 pt-5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="relative z-10 flex flex-col gap-3 border-t border-neutral-800 bg-neutral-950/95 p-6 pt-5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <Link
               href={livePath}
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 px-4 text-sm font-semibold text-white transition hover:border-neutral-500"
+              className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 px-4 text-sm font-semibold text-white transition hover:border-neutral-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
             >
               Live draw board
             </Link>
-            <span className="text-xs text-neutral-500">Crowd/projector view — pairs with admin Draw</span>
+            <p className="text-xs leading-relaxed text-neutral-400">
+              Share this on a TV or projector—or everyone can open it on their phone—when winners are announced.
+            </p>
           </div>
         </div>
       </section>

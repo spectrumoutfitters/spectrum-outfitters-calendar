@@ -15,7 +15,7 @@ export async function generateMetadata(props: PageProps): Promise<Metadata> {
   if (!res.ok) return { title: "Live draw" };
   return {
     title: `Live draw · ${res.event.name}`,
-    description: "Watch giveaway results live — same picks as staff run in admin.",
+    description: "Watch winners as they're drawn—in sync with the official giveaway.",
   };
 }
 
