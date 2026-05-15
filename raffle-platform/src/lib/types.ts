@@ -275,6 +275,20 @@ export type AdminEventEditable = {
   newsletterBonusTickets: number;
 };
 
+/** One row returned by Apps Script GET `getPublicWinnersFeed` (no PII beyond display name). */
+export type PublicWinnerRow = {
+  drawId: string;
+  drewAt: string;
+  raffleId: string;
+  raffleTitle: string;
+  winnerName: string;
+  ticketsInPool: number;
+};
+
+export type PublicWinnersFeedResponse =
+  | { ok: true; slug: string; winners: PublicWinnerRow[]; lastUpdated: string }
+  | { ok: false; error: string };
+
 export type DrawWinnerResult =
   | {
       ok: true;

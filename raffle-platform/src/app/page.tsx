@@ -5,7 +5,10 @@ const GOLD = "#D4A017";
 
 export default function Home() {
   const year = new Date().getFullYear();
-  const entryPath = "/e/grand-opening";
+  const eventSlug = "grand-opening";
+  const entryPath = `/e/${eventSlug}`;
+  const livePath = `${entryPath}/live`;
+  const host = "raffle.spectrumoutfitters.com";
 
   return (
     <main className="min-h-screen bg-black text-neutral-100">
@@ -37,6 +40,18 @@ export default function Home() {
           >
             Enter Grand Opening Raffle
           </Link>
+          <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-5">
+            <Link
+              href={livePath}
+              className="text-sm font-semibold text-neutral-200 underline decoration-neutral-600 underline-offset-4 transition hover:text-white"
+            >
+              Watch live draw board
+            </Link>
+            <span className="hidden text-neutral-600 sm:inline" aria-hidden>
+              ·
+            </span>
+            <span className="text-center text-xs text-neutral-500">Same results as staff run in admin</span>
+          </div>
         </div>
       </section>
 
@@ -70,22 +85,35 @@ export default function Home() {
       <section className="mx-auto max-w-4xl px-4 py-12 md:px-8">
         <h2 className="text-base font-semibold text-white">Active event</h2>
         <p className="mt-1 text-sm text-neutral-500">Tap to enter the live giveaway.</p>
-        <Link
-          href={entryPath}
-          className="mt-5 flex flex-col gap-2 rounded-2xl border border-neutral-800 bg-neutral-950/80 p-6 text-left transition hover:border-neutral-600"
-        >
-          <span
-            className="w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold text-black"
-            style={{ background: GOLD }}
-          >
-            Live
-          </span>
-          <h3 className="mt-1 text-lg font-semibold text-white">Grand Opening Giveaway</h3>
-          <p className="text-sm text-neutral-400">Celebrate our grand opening — multiple prizes.</p>
-          <p className="mt-2 text-xs text-neutral-600">
-            <span className="font-mono text-neutral-500">raffle.spectrumoutfitters.com{entryPath}</span>
-          </p>
-        </Link>
+        <div className="mt-5 rounded-2xl border border-neutral-800 bg-neutral-950/80 p-6 transition hover:border-neutral-600">
+          <Link href={entryPath} className="-m-6 block rounded-2xl p-6 pb-5 text-left">
+            <span
+              className="w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold text-black"
+              style={{ background: GOLD }}
+            >
+              Live
+            </span>
+            <h3 className="mt-1 text-lg font-semibold text-white">Grand Opening Giveaway</h3>
+            <p className="text-sm text-neutral-400">Celebrate our grand opening — multiple prizes.</p>
+            <p className="mt-2 text-xs text-neutral-600">
+              <span className="font-mono text-neutral-500">
+                {host}
+                {entryPath}
+              </span>
+            </p>
+            <span className="mt-5 inline-block text-sm font-medium text-neutral-400">Tap to enter →</span>
+          </Link>
+
+          <div className="mt-px flex flex-col gap-3 border-t border-neutral-800 pt-5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <Link
+              href={livePath}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 px-4 text-sm font-semibold text-white transition hover:border-neutral-500"
+            >
+              Live draw board
+            </Link>
+            <span className="text-xs text-neutral-500">Crowd/projector view — pairs with admin Draw</span>
+          </div>
+        </div>
       </section>
 
       <footer className="border-t border-neutral-900">

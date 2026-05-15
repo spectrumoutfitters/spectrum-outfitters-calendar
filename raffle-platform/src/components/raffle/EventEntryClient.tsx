@@ -834,6 +834,13 @@ export function EventEntryClient({ event }: Props) {
 
         <footer className="mt-10 flex flex-wrap justify-center gap-x-8 gap-y-3 px-2 pb-28 text-sm text-stone-500 dark:text-neutral-500 sm:mt-12 sm:pb-6 sm:text-xs md:pb-4">
           <Link
+            href={`/e/${encodeURIComponent(event.slug)}/live`}
+            className="min-h-11 touch-manipulation py-2 font-semibold hover:text-stone-800 dark:hover:text-neutral-200"
+            style={{ color: accent }}
+          >
+            Live draw board
+          </Link>
+          <Link
             href="/legal/rules"
             className="min-h-11 touch-manipulation py-2 font-medium hover:text-stone-800 dark:hover:text-neutral-200"
           >

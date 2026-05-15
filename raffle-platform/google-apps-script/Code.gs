@@ -51,6 +51,10 @@
  * Winners (optional but recommended)
  *   drawId, timestamp, slug, raffleId, winnerName, winnerPhone, winnerEmail, ticketsInPool, isTest
  *
+ * Public GET on the deployed web URL (no auth):
+ *   ?action=getEvent&slug=… — event JSON for the entry page
+ *   ?action=getPublicWinnersFeed&slug=… — latest non-test winner rows for the public live-board (names + pools only)
+ *
  * Admin (POST, requires Events.adminKey or ADMIN_MASTER_KEY):
  *   getAdminEventConfig — { slug, adminKey } → { event, raffles } for the admin UI (no adminKey in response).
  *   saveEventConfig — { slug, adminKey, event: partial fields, raffles: [{ raffleId, title, subtitle, imageUrl, valueLabel, sortOrder, active }] }
@@ -1072,13 +1076,146 @@ function buildTicketSplitPlan_(p, raffles, totalEntries) {
   return { rows: rowsC, evenly: false, poolIds: poolIdsC };
 }
 
+/**
+ * Public GET: latest non-test draws for slug (no phone/email). Used by /e/{slug}/live.
+ */
+function handleGetPublicWinnersFeedGet_(slug) {
+  var found = findEventRow_(slug);
+  if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
+  var o = recordToObject_(found.headers, found.record);
+  var active = String(o.active || '').toUpperCase() === 'TRUE' || o.active === true;
+  if (!active) return jsonResponse({ ok: false, error: 'event_inactive' }, 403);
+
+  var raffleList = getRafflesAllForSlug_(slug);
+  var titleById = {};
+  for (var ri = 0; ri < raffleList.length; ri++) {
+    titleById[String(raffleList[ri].id).trim()] = String(raffleList[ri].title || raffleList[ri].id);
+  }
+
+  var wsh = getSpreadsheet_().getSheetByName(SHEET_WINNERS);
+  if (!wsh) {
+    return jsonResponse({
+      ok: true,
+      slug: slug,
+      winners: [],
+      lastUpdated: new Date().toISOString(),
+    });
+  }
+
+  var values = wsh.getDataRange().getValues();
+  if (!values.length) {
+    return jsonResponse({
+      ok: true,
+      slug: slug,
+      winners: [],
+      lastUpdated: new Date().toISOString(),
+    });
+  }
+
+  var hasHeader =
+    values.length &&
+    String(values[0][0] || '')
+      .trim()
+      .toLowerCase() === 'drawid';
+
+  function colIdx(headerName) {
+    if (!hasHeader) return -1;
+    var want = String(headerName).toLowerCase();
+    for (var c = 0; c < values[0].length; c++) {
+      if (
+        String(values[0][c] || '')
+          .trim()
+          .toLowerCase() === want
+      ) {
+        return c;
+      }
+    }
+    return -1;
+  }
+
+  var cDrawId = hasHeader ? colIdx('drawId') : 0;
+  var cTs = hasHeader ? colIdx('timestamp') : 1;
+  var cSlug = hasHeader ? colIdx('slug') : 2;
+  var cRaffleId = hasHeader ? colIdx('raffleId') : 3;
+  var cName = hasHeader ? colIdx('winnerName') : 4;
+  var cTickets = hasHeader ? colIdx('ticketsInPool') : 7;
+  var cTest = hasHeader ? colIdx('isTest') : 8;
+
+  if (cDrawId < 0) cDrawId = 0;
+  if (cTs < 0) cTs = 1;
+  if (cSlug < 0) cSlug = 2;
+  if (cRaffleId < 0) cRaffleId = 3;
+  if (cName < 0) cName = 4;
+  if (cTickets < 0) cTickets = 7;
+  if (cTest < 0) cTest = 8;
+
+  var startR = hasHeader ? 1 : 0;
+  var rawRows = [];
+  for (var r = startR; r < values.length; r++) {
+    var row = values[r];
+    if (String(row[cSlug] || '').trim() !== String(slug).trim()) continue;
+    var testCell = row[cTest];
+    var isTest = String(testCell || '').toUpperCase() === 'TRUE' || testCell === true;
+    if (isTest) continue;
+
+    var drawId = String(row[cDrawId] || '').trim();
+    if (!drawId) continue;
+
+    var tsVal = row[cTs];
+    var drewAtMs = tsVal instanceof Date ? tsVal.getTime() : new Date(tsVal).getTime();
+    if (isNaN(drewAtMs)) drewAtMs = 0;
+
+    var rid = String(row[cRaffleId] || '').trim();
+    var ticketsInPool = Math.max(0, Math.floor(Number(row[cTickets]) || 0));
+    rawRows.push({
+      drawId: drawId,
+      drewAtMs: drewAtMs,
+      raffleId: rid,
+      raffleTitle: titleById[rid] || rid,
+      winnerName: String(row[cName] || '').trim(),
+      ticketsInPool: ticketsInPool,
+    });
+  }
+
+  rawRows.sort(function (a, b) {
+    return b.drewAtMs - a.drewAtMs;
+  });
+
+  var limit = 15;
+  var out = [];
+  for (var k = 0; k < rawRows.length && k < limit; k++) {
+    var x = rawRows[k];
+    out.push({
+      drawId: x.drawId,
+      drewAt: x.drewAtMs ? new Date(x.drewAtMs).toISOString() : new Date().toISOString(),
+      raffleId: x.raffleId,
+      raffleTitle: x.raffleTitle,
+      winnerName: x.winnerName,
+      ticketsInPool: x.ticketsInPool,
+    });
+  }
+
+  return jsonResponse({
+    ok: true,
+    slug: slug,
+    winners: out,
+    lastUpdated: new Date().toISOString(),
+  });
+}
+
 function doGet(e) {
   try {
     var action = (e.parameter && e.parameter.action) || '';
+    var slug = (e.parameter && e.parameter.slug) || '';
+
+    if (action === 'getPublicWinnersFeed') {
+      if (!slug) return jsonResponse({ ok: false, error: 'missing_slug' }, 400);
+      return handleGetPublicWinnersFeedGet_(slug);
+    }
+
     if (action !== 'getEvent') {
       return jsonResponse({ ok: false, error: 'unknown_action' }, 400);
     }
-    var slug = (e.parameter && e.parameter.slug) || '';
     if (!slug) return jsonResponse({ ok: false, error: 'missing_slug' }, 400);
 
     var found = findEventRow_(slug);

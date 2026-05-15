@@ -8,6 +8,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: rootDir,
   },
+  async redirects() {
+    return [
+      { source: "/u/:slug", destination: "/e/:slug", permanent: false },
+      { source: "/u/:slug/live", destination: "/e/:slug/live", permanent: false },
+      { source: "/u/:slug/my-entry", destination: "/e/:slug/my-entry", permanent: false },
+      { source: "/u/:slug/buy/success", destination: "/e/:slug/buy/success", permanent: false },
+    ];
+  },
   // Staff app (login.*) embeds /admin/* in an iframe — allow framing (no X-Frame-Options: SAMEORIGIN).
   async headers() {
     return [
