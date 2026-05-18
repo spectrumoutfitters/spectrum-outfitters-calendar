@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { format, startOfMonth, parseISO, isValid } from 'date-fns';
+import { format, startOfMonth, parseISO, isValid, subDays } from 'date-fns';
+import { computeW2Deductions } from './payrollTaxUS';
 
 export function parsePayDate(raw) {
   if (!raw) return new Date();
@@ -14,9 +15,43 @@ function moneyUsd(n) {
   return x.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
-export function computePeriodLabel(periodEndDate) {
-  const end = periodEndDate;
-  const start = startOfMonth(end);
+/**
+ * Inclusive pay-period range for stub wording, anchored on the employer-entered period end date.
+ * @param {Date} periodEndDate
+ * @param {string} [payFrequency]
+ * @returns {{ start: Date, end: Date }}
+ */
+export function computePayPeriodBounds(periodEndDate, payFrequency = 'Monthly') {
+  const end =
+    periodEndDate instanceof Date && isValid(periodEndDate) ? periodEndDate : new Date();
+
+  switch (`${payFrequency || 'Monthly'}`.trim()) {
+    case 'Weekly':
+      return { start: subDays(end, 6), end };
+    case 'Bi-weekly':
+      return { start: subDays(end, 13), end };
+    case 'Semi-monthly': {
+      const y = end.getFullYear();
+      const m = end.getMonth();
+      const day = end.getDate();
+      const start = day <= 15 ? new Date(y, m, 1) : new Date(y, m, 16);
+      return { start, end };
+    }
+    case 'Monthly':
+      return { start: startOfMonth(end), end };
+    /** Approximate generic period when schedule is unspecified */
+    case 'Other':
+      return { start: subDays(end, 13), end };
+    default:
+      return { start: startOfMonth(end), end };
+  }
+}
+
+/**
+ * Printable "MMM d, yyyy – MMM d, yyyy" line for PDF / preview (matches Pay frequency selection).
+ */
+export function computePeriodLabel(periodEndDate, payFrequency = 'Monthly') {
+  const { start, end } = computePayPeriodBounds(periodEndDate, payFrequency);
   return `${format(start, 'MMM d, yyyy')} – ${format(end, 'MMM d, yyyy')}`;
 }
 
@@ -30,17 +65,109 @@ function calculateNetYTD(gross, fed, ss, medC, medA, state, other) {
 }
 
 /**
- * Calendar-year running totals through each stub: sums all periods in this export with the same tax year and
- * period-end on or before the current row, optional prior payroll YTD baseline (same year).
- * @typedef {{ taxYear?: number, gross?: number, federal?: number, socialSecurity?: number, medicareBase?: number, medicareAdditional?: number, state?: number, other?: number }} PriorYtdInput
+ * @typedef {{ gross?: number, federal?: number, socialSecurity?: number, medicareBase?: number, medicareAdditional?: number, state?: number, other?: number, taxYear?: number }} PriorYtdInput
+ * @typedef {{ monthlyJanBackfill?: boolean, payFrequency?: string, filingStatus?: string, workerState?: string, priorSsTaxableWages?: number }} PaystubYtdOptions
  */
+
+function emptyPriorParts() {
+  return { g: 0, f: 0, ss: 0, mc: 0, ma: 0, st: 0, o: 0 };
+}
+
+function addPriorParts(a, b) {
+  return {
+    g: a.g + b.g,
+    f: a.f + b.f,
+    ss: a.ss + b.ss,
+    mc: a.mc + b.mc,
+    ma: a.ma + b.ma,
+    st: a.st + b.st,
+    o: a.o + b.o,
+  };
+}
+
+/**
+ * When pay frequency is Monthly, infer prior months Jan..(month before earliest exported period in that calendar year).
+ * Contractor: gross only (no withheld lines).
+ *
+ * Multi-year batches skip extrapolation — user should use manual prior or split exports.
+ *
+ * @param {Array<{ y: number; d: Date; gross: number }>} normalizedRows
+ * @param {boolean} contractor
+ * @param {PaystubYtdOptions} opts
+ * @returns {{ byYear: Record<number, ReturnType<emptyPriorParts>>, runningSsConsumed: boolean, suppressedReason: string }}
+ */
+function phantomJanThroughMonthPrior(normalizedRows, contractor, opts) {
+  /** @type {Record<number, ReturnType<emptyPriorParts>>} */
+  const byYear = {};
+  let suppressedReason = '';
+
+  if (!opts?.monthlyJanBackfill || contractor || (opts.payFrequency || '') !== 'Monthly') {
+    return { byYear, runningSsConsumed: false, suppressedReason };
+  }
+  if (normalizedRows.length === 0) {
+    return { byYear, runningSsConsumed: false, suppressedReason };
+  }
+
+  const years = [...new Set(normalizedRows.map((r) => r.y))];
+  if (years.length > 1) {
+    suppressedReason =
+      'Automatic Jan→month YTD needs a single calendar year in this PDF; use manual prior YTD or export one year at a time.';
+    return { byYear, runningSsConsumed: false, suppressedReason };
+  }
+
+  const year = years[0];
+  const inYear = normalizedRows.filter((r) => r.y === year);
+  const sorted = [...inYear].sort((a, b) => +a.d - +b.d);
+  const earliest = sorted[0];
+  const earliestMonthIdx = earliest.d.getMonth(); // 0 January
+  /** January = 1 ... December =12 */
+  const earliestMonthHuman = earliestMonthIdx + 1;
+
+  /** Representative monthly gross — first chronological export in year */
+  const grossRef = Math.max(0, Number(earliest.gross) || 0);
+
+  if (earliestMonthHuman <= 1 || grossRef <= 0) {
+    return { byYear, runningSsConsumed: false, suppressedReason };
+  }
+
+  /** Jan .. earliestMonthHuman-1 */
+  let phantom = emptyPriorParts();
+  let priorSs = Math.max(0, Number(opts.priorSsTaxableWages) || 0);
+
+  for (let m = 1; m < earliestMonthHuman; m++) {
+    phantom.g += grossRef;
+    if (!contractor) {
+      const c = computeW2Deductions({
+        gross: grossRef,
+        payFrequency: 'Monthly',
+        filingStatus: opts.filingStatus === 'mfj' ? 'mfj' : 'single',
+        workStateCode: opts.workerState || 'TX',
+        priorYtdSocSecWages: priorSs,
+      });
+      priorSs += c.oasdiWagesNow ?? 0;
+      phantom.f += Number(c.federal) || 0;
+      phantom.ss += Number(c.socialSecurity) || 0;
+      phantom.mc += Number(c.medicareBase) || 0;
+      phantom.ma += Number(c.medicareAdditional) || 0;
+      phantom.st += Number(c.state) || 0;
+    }
+  }
+
+  byYear[year] = phantom;
+  return {
+    byYear,
+    runningSsConsumed: earliestMonthHuman > 1 && !contractor && grossRef > 0,
+    suppressedReason,
+  };
+}
 
 /**
  * @param {object[]} months
  * @param {boolean} contractor
  * @param {PriorYtdInput} prior
+ * @param {PaystubYtdOptions} [ytdOpts]
  */
-export function buildPreparedPaystubPages(months, contractor, prior) {
+export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
   /** @type {ReturnType<typeof parsePayDate>[]} */
 
   const rows = months.map((m, inputOrder) => {
@@ -138,10 +265,33 @@ export function buildPreparedPaystubPages(months, contractor, prior) {
       priorOther >
     1e-6;
 
+  const phantomSynthetic = phantomJanThroughMonthPrior(
+    rows.map((r) => ({ y: r.y, d: r.d, gross: r.gross })),
+    contractor,
+    ytdOpts || {},
+  );
+  const phantomByYear = phantomSynthetic.byYear || {};
+  /** Earliest chronological row (for phantom label) */
+  const earliestExported =
+    rows.length > 0
+      ? [...rows].reduce((min, r) => (+r.d < +min.d ? r : min), rows[0])
+      : null;
+  let phantomInclusiveLabel = '';
+  if (
+    phantomByYear[earliestExported?.y] &&
+    earliestExported &&
+    earliestExported.gross > 0
+  ) {
+    const y = earliestExported.y;
+    const em = earliestExported.d.getMonth();
+    const lastPhMonthIdx = Math.max(0, em - 1);
+    phantomInclusiveLabel = `Jan–${format(new Date(y, lastPhMonthIdx, 1), 'MMM yyyy')}`;
+  }
+
   /**
    * @param {number} stubYear
    */
-  function priorBundleForStubYear(stubYear) {
+  function userManualPriorBundle(stubYear) {
     if (!hasPriorAmounts) {
       return { g: 0, f: 0, ss: 0, mc: 0, ma: 0, st: 0, o: 0 };
     }
@@ -159,9 +309,18 @@ export function buildPreparedPaystubPages(months, contractor, prior) {
     };
   }
 
+  /**
+   * @param {number} stubYear
+   */
+  function combinedPriorBundle(stubYear) {
+    const userPb = userManualPriorBundle(stubYear);
+    const phant = phantomByYear[stubYear] || emptyPriorParts();
+    return addPriorParts(userPb, phant);
+  }
+
   const prepared = rows.map((row) => {
     const cohort = rows.filter((o) => o.y === row.y && +o.d <= +row.d);
-    const pb = priorBundleForStubYear(row.y);
+    const pb = combinedPriorBundle(row.y);
 
     const sumGross = cohort.reduce((s, o) => s + o.gross, 0);
     const sumFed = cohort.reduce((s, o) => s + o.federal, 0);
@@ -205,10 +364,20 @@ export function buildPreparedPaystubPages(months, contractor, prior) {
       totalDedYtd,
       netCurr,
       netYtd,
-      ytdBannerNote:
+      ytdBannerNote: [
         hasPriorAmounts && priorYearResolved === null
           ? 'Prior YTD baseline skipped: set Tax year for baseline when periods span multiple calendar years.'
           : '',
+        phantomSynthetic.suppressedReason,
+        phantomByYear[row.y]?.g > 1e-6 &&
+        phantomInclusiveLabel &&
+        earliestExported
+          ? `YTD counts ${phantomInclusiveLabel} at ${moneyUsd(earliestExported.gross)}/period (Monthly auto-backfill matching first listed gross).`
+          : '',
+      ]
+        .map((x) => String(x || '').trim())
+        .filter(Boolean)
+        .join(' '),
     };
   });
 
@@ -281,8 +450,15 @@ export function generatePayStubsPdf(data) {
   const contractor = String(data.employmentType || '').toUpperCase().includes('1099');
   const months = Array.isArray(data.months) ? data.months.slice(0, 36) : [];
   const printedAt = format(new Date(), 'MMM d, yyyy h:mm a');
+  const payFreqResolved = String(data.payFrequency ?? 'Monthly').trim() || 'Monthly';
 
-  const prepared = buildPreparedPaystubPages(months, contractor, data.priorYtd || {});
+  const prepared = buildPreparedPaystubPages(months, contractor, data.priorYtd || {}, {
+    monthlyJanBackfill: data.monthlyJanBackfillCalendarYtd === true,
+    payFrequency: payFreqResolved,
+    filingStatus: data.filingStatus === 'mfj' ? 'mfj' : 'single',
+    workerState: data.workerState || 'TX',
+    priorSsTaxableWages: Math.max(0, Number(data.priorSsTaxableWages) || 0),
+  });
 
   prepared.forEach((P, idx) => {
     if (idx > 0) {
@@ -431,7 +607,7 @@ export function generatePayStubsPdf(data) {
     doc.setTextColor(55, 60, 70);
     const metaLeft = [
       ['Pay date', format(payDateObj, 'MMM d, yyyy')],
-      ['Pay period ending', computePeriodLabel(payDateObj)],
+      ['Pay period', computePeriodLabel(payDateObj, payFreqResolved)],
       ['Deposit / voucher ref.', refNo || 'Direct deposit'],
     ];
     metaLeft.forEach(([k, v], i) => {
@@ -475,7 +651,7 @@ export function generatePayStubsPdf(data) {
           'Employee ID',
           eeId,
           'Pay frequency',
-          String(data.payFrequency || 'Payroll schedule'),
+          payFreqResolved,
         ],
         [
           contractor ? 'TIN presentation' : 'Social Security Number',

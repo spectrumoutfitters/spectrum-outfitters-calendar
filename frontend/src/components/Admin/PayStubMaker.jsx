@@ -165,7 +165,8 @@ const PayStubMaker = () => {
   const [employeeName, setEmployeeName] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [last4Ssn, setLast4Ssn] = useState('');
-  const [payFrequency, setPayFrequency] = useState('Bi-weekly');
+  /** Month-end stubs are the common case here; Monthly enables Jan→stub-month auto YTD. */
+  const [payFrequency, setPayFrequency] = useState('Monthly');
   const [sameAmountsAllPeriods, setSameAmountsAllPeriods] = useState(true);
   const [employmentType, setEmploymentType] = useState('w2');
   const [filingStatus, setFilingStatus] = useState('single');
@@ -186,6 +187,8 @@ const PayStubMaker = () => {
   const [priorYtdTaxableSocSecWages, setPriorYtdTaxableSocSecWages] = useState('');
   const [annualSalary, setAnnualSalary] = useState('');
   const [applyAnnualSalaryToMonthlyGross, setApplyAnnualSalaryToMonthlyGross] = useState(false);
+  /** When Monthly + checked, pretend month-end paychecks ran each prior month Jan..M−1 same gross as earliest listed stub */
+  const [monthlyJanBackfillYtd, setMonthlyJanBackfillYtd] = useState(true);
 
   const onEmployerLogoFile = useCallback((e) => {
     const input = e.target;
@@ -461,8 +464,13 @@ const PayStubMaker = () => {
       employeeId,
       last4Ssn,
       payFrequency,
+      filingStatus,
       employmentType,
       workerState: workStateCode,
+      monthlyJanBackfillCalendarYtd:
+        employmentType !== '1099' && monthlyJanBackfillYtd && payFrequency === 'Monthly',
+      priorSsTaxableWages:
+        employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
       taxCalculationNote:
         employmentType === '1099'
           ? 'Independent contractor payouts — payer does not withhold FICA.'
@@ -709,7 +717,35 @@ const PayStubMaker = () => {
                 </option>
               ))}
             </select>
+            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
+              The stub&apos;s printed <strong className="font-normal">pay period</strong> follows this schedule: weekly = 7
+              days ending on your date; bi-weekly = 14 days; semi-monthly = 1st–15th or 16th–month-end; monthly =
+              calendar month through that date. For month-end payroll, Monthly also enables optional Jan-through-prior-month
+              YTD backfill below.
+            </p>
           </div>
+          <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-neutral-200 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="mt-0.5 rounded border-gray-400 dark:border-neutral-500 shrink-0"
+              checked={monthlyJanBackfillYtd}
+              disabled={employmentType !== 'w2' || payFrequency !== 'Monthly'}
+              onChange={(e) => setMonthlyJanBackfillYtd(e.target.checked)}
+            />
+            <span>
+              Auto YTD: count Jan through the month before the earliest pay date (monthly W-2). Additive with manual prior YTD below—leave that empty unless you need extra outside this range.
+              {payFrequency !== 'Monthly' ? (
+                <span className="block text-gray-500 dark:text-neutral-400 mt-0.5">
+                  Turn on by setting pay frequency to Monthly.
+                </span>
+              ) : null}
+              {employmentType !== 'w2' ? (
+                <span className="block text-gray-500 dark:text-neutral-400 mt-0.5">
+                  W-2 only (1099 uses listed periods for YTD).
+                </span>
+              ) : null}
+            </span>
+          </label>
 
           <h2 className="text-lg font-semibold text-gray-800 dark:text-neutral-100 pt-2">Classification & tax basis</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -838,7 +874,7 @@ const PayStubMaker = () => {
                     Period {i + 1}
                   </legend>
                   <div>
-                    <label className={labelClass}>Pay period end (month paid)</label>
+                    <label className={labelClass}>Pay period end date</label>
                     <input
                       type="date"
                       className={fieldClass}
@@ -862,7 +898,9 @@ const PayStubMaker = () => {
 
       {sameAmountsAllPeriods && (
         <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:border dark:border-neutral-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-neutral-100 mb-4">Pay period end dates</h2>
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-neutral-100 mb-4">
+            Pay period end dates (one per stub)
+          </h2>
           <div className="grid gap-4 sm:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <div key={i}>
