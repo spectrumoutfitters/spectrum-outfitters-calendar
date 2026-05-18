@@ -289,28 +289,6 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     ytdOpts || {},
   );
   const phantomByYear = phantomSynthetic.byYear || {};
-  /** Earliest chronological row (for phantom label) */
-  const earliestExported =
-    rows.length > 0
-      ? [...rows].reduce((min, r) => (+r.d < +min.d ? r : min), rows[0])
-      : null;
-  let phantomInclusiveLabel = '';
-  if (
-    phantomByYear[earliestExported?.y] &&
-    earliestExported &&
-    earliestExported.gross > 0
-  ) {
-    const y = earliestExported.y;
-    const em = earliestExported.d.getMonth();
-    const lastPhMonthIdx = Math.max(0, em - 1);
-    phantomInclusiveLabel = `Jan–${format(new Date(y, lastPhMonthIdx, 1), 'MMM yyyy')}`;
-  }
-
-  let monthPhantomEquivalent = 0;
-  if (earliestExported && earliestExported.gross > 0) {
-    const periodsExplain = payPeriodsPerYear(pfResolved);
-    monthPhantomEquivalent = earliestExported.gross * (periodsExplain / 12);
-  }
 
   /**
    * @param {number} stubYear
@@ -388,21 +366,6 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
       totalDedYtd,
       netCurr,
       netYtd,
-      ytdBannerNote: [
-        hasPriorAmounts && priorYearResolved === null
-          ? 'Prior YTD baseline skipped: set Tax year for baseline when periods span multiple calendar years.'
-          : '',
-        phantomSynthetic.suppressedReason,
-        phantomByYear[row.y]?.g > 1e-6 &&
-        phantomInclusiveLabel &&
-        earliestExported &&
-        monthPhantomEquivalent > 1e-6
-          ? `YTD includes phantom prior months (${phantomInclusiveLabel}) ≈ ${moneyUsd(monthPhantomEquivalent)}/mo from earliest listed paycheck ${moneyUsd(earliestExported.gross)} (${pfResolved}). `
-          : '',
-      ]
-        .map((x) => String(x || '').trim())
-        .filter(Boolean)
-        .join(' '),
     };
   });
 
@@ -889,14 +852,18 @@ export function generatePayStubsPdf(data) {
 
     drawCorporateSectionLabel(doc, side, y, 'Pay summary');
 
+    /** Panel height accommodates net line + YTD net subtitle without clipping footer text */
+    const paySumBoxTop = y + 8;
+    const paySumBoxH = 100;
+
     doc.setFillColor(BANNER[0], BANNER[1], BANNER[2]);
-    doc.roundedRect(side, y + 8, pageW - side * 2, 78, 2, 2, 'F');
+    doc.roundedRect(side, paySumBoxTop, pageW - side * 2, paySumBoxH, 2, 2, 'F');
     doc.setDrawColor(GOLD[0], GOLD[1], GOLD[2]);
     doc.setLineWidth(1);
-    doc.line(side + 14, y + 18, side + 14, y + 76);
+    doc.line(side + 14, paySumBoxTop + 12, side + 14, paySumBoxTop + paySumBoxH - 14);
 
     const sumX = side + 26;
-    let sy = y + 34;
+    let sy = paySumBoxTop + 26;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(220, 224, 230);
@@ -924,7 +891,7 @@ export function generatePayStubsPdf(data) {
     doc.setTextColor(200, 205, 214);
     doc.text(`Year-to-date net (calendar YTD shown): ${moneyUsd(netYtd)}`, sumX, sy);
 
-    y = y + 8 + 78 + 20;
+    y = paySumBoxTop + paySumBoxH + 20;
 
     doc.setDrawColor(BORDER_GRAY[0], BORDER_GRAY[1], BORDER_GRAY[2]);
     doc.setLineWidth(0.35);
@@ -935,22 +902,11 @@ export function generatePayStubsPdf(data) {
     doc.setFontSize(6.75);
     doc.setTextColor(110, 115, 122);
     const ytdExplain = doc.splitTextToSize(
-      `YTD columns use calendar-year ${format(payDateObj, 'yyyy')}: summed gross and withholdings for every exported stub with the same year and period-end on or before ${format(payDateObj, 'MMM d, yyyy')} (chronological by date). Optional baseline adds earlier-in-year totals.`,
+      `Year-to-date totals are on a calendar-year basis through periods ending on or before ${format(payDateObj, 'MMM d, yyyy')}; prior-in-year baseline may apply when configured.`,
       pageW - side * 2,
     );
     doc.text(ytdExplain, side, y);
     y += ytdExplain.length * 9 + 8;
-
-    if (P.ytdBannerNote) {
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(6.75);
-      doc.setTextColor(160, 90, 50);
-      const warnLines = doc.splitTextToSize(P.ytdBannerNote, pageW - side * 2);
-      doc.text(warnLines, side, y);
-      y += warnLines.length * 10 + 4;
-      doc.setTextColor(120, 126, 135);
-      doc.setFontSize(7);
-    }
 
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(7);

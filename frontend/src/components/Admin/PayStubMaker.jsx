@@ -195,7 +195,8 @@ const PayStubMaker = () => {
   /** When checked, phantom full calendar months before earliest listed paycheck (contractors gross-only; works with Weekly/Bi‑weekly etc.). */
   const [calendarYtdBackfill, setCalendarYtdBackfill] = useState(true);
   /** When pay frequency ≠ Monthly and checked, typed gross is one month total split across checks (weekly = ÷ 52 × 12). */
-  const [spreadMonthlyAcrossPaychecks, setSpreadMonthlyAcrossPaychecks] = useState(false);
+  /** Monthly rate ÷ paychecks/year for Weekly/Bi-weekly/etc.; unchecked when gross is literal per-paycheck amount. */
+  const [spreadMonthlyAcrossPaychecks, setSpreadMonthlyAcrossPaychecks] = useState(true);
 
   const onEmployerLogoFile = useCallback((e) => {
     const input = e.target;
@@ -762,8 +763,9 @@ const PayStubMaker = () => {
                 onChange={(e) => setSpreadMonthlyAcrossPaychecks(e.target.checked)}
               />
               <span>
-                <strong className="font-normal">Gross typed is monthly installments</strong> spread across paychecks
-                (e.g. $10k/mo ⇒ weekly gross ≈ $10k ÷ (52 ÷ 12)). Turn off when the amount already matches one paycheck.
+                <strong className="font-normal">Gross typed is monthly installments</strong> spread across paychecks (on by
+                default for weekly‑style frequencies). Weekly example: enter $10,000/month → each stub shows roughly
+                $10,000 × 12 ÷ 52. Turn this off only when gross is already the amount for one check.
               </span>
             </label>
           ) : null}
