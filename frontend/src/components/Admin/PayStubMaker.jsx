@@ -170,6 +170,7 @@ const PayStubMaker = () => {
   const [employeeName, setEmployeeName] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [last4Ssn, setLast4Ssn] = useState('');
+  const [payFrequency, setPayFrequency] = useState('Monthly');
   const [sameAmountsAllPeriods, setSameAmountsAllPeriods] = useState(true);
   const [employmentType, setEmploymentType] = useState('w2');
   const [filingStatus, setFilingStatus] = useState('single');
@@ -177,6 +178,7 @@ const PayStubMaker = () => {
   const [manualWithholdings, setManualWithholdings] = useState(false);
   const [employerLogoDataUrl, setEmployerLogoDataUrl] = useState('');
   const [logoHint, setLogoHint] = useState('');
+  const [priorYtdTaxYear, setPriorYtdTaxYear] = useState('');
   const [priorYtdGross, setPriorYtdGross] = useState('');
   const [priorYtdFederal, setPriorYtdFederal] = useState('');
   const [priorYtdSocialSecurity, setPriorYtdSocialSecurity] = useState('');
@@ -184,6 +186,7 @@ const PayStubMaker = () => {
   const [priorYtdMedicareAdditional, setPriorYtdMedicareAdditional] = useState('');
   const [priorYtdState, setPriorYtdState] = useState('');
   const [priorYtdOther, setPriorYtdOther] = useState('');
+  const [priorYtdTaxableSocSecWages, setPriorYtdTaxableSocSecWages] = useState('');
   const [annualSalary, setAnnualSalary] = useState('');
   const [applyAnnualSalaryToMonthlyGross, setApplyAnnualSalaryToMonthlyGross] = useState(false);
   const [calendarYtdBackfill, setCalendarYtdBackfill] = useState(true);
