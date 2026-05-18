@@ -12,6 +12,7 @@ import ProductManagement from '../components/Admin/ProductManagement';
 import InventoryManagement from '../components/Admin/InventoryManagement';
 import OrderManagement from '../components/Admin/OrderManagement';
 import PayrollManagement from '../components/Admin/PayrollManagement';
+import PayStubMaker from '../components/Admin/PayStubMaker';
 import EmployeeShopFinancing from '../components/Admin/EmployeeShopFinancing';
 import Settings from '../components/Admin/Settings';
 import BookingSettings from '../components/Admin/BookingSettings';
@@ -53,6 +54,7 @@ const SUB_TABS = {
   ],
   finance: [
     { id: 'payroll', label: 'Payroll' },
+    { id: 'paystub_maker', label: 'Pay stub PDF' },
     { id: 'shop_financing', label: 'Shop Financing' },
     { id: 'finance', label: 'P&L / Summary' },
     { id: 'analytics', label: 'Analytics' },
@@ -508,6 +510,7 @@ const Admin = () => {
       <>
         <SubTabBar tabs={SUB_TABS.finance} activeId={sub} onSelect={(id) => selectSubTab('finance', id)} />
         {sub === 'payroll' && <PayrollManagement />}
+        {sub === 'paystub_maker' && <PayStubMaker />}
         {sub === 'shop_financing' && <EmployeeShopFinancing />}
         {sub === 'finance' && <FinanceDashboard />}
         {sub === 'analytics' && <Analytics />}
