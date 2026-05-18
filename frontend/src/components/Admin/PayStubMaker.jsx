@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { format, endOfMonth, subMonths } from 'date-fns';
-import { generatePayStubsPdf, parsePayDate, paycheckGrossFromEntry } from '../../utils/payStubPdf';
+import { generatePayStubsPdf, parsePayDate, paycheckGrossFromEntry, weeklyChecksSharePayWeekDay } from '../../utils/payStubPdf';
 import { computeContractorDeductions, computeW2Deductions } from '../../utils/payrollTaxUS';
 
 const PAY_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Other'];
@@ -355,11 +355,74 @@ const PayStubMaker = () => {
     spreadMonthlyAcrossPaychecks,
   ]);
 
+  /** 1099 + Weekly + calendar YTD uses discrete weekdays from Jan 1 — every check date must agree. */
+  const weekly1099CalendarMisaligned = useMemo(() => {
+    if (employmentType !== '1099' || payFrequency !== 'Weekly' || !calendarYtdBackfill) return false;
+    const gateNums = {
+      gross: priorYtdGross,
+      federal: priorYtdFederal,
+      socialSecurity: priorYtdSocialSecurity,
+      medicareBase: priorYtdMedicareBase,
+      medicareAdditional: priorYtdMedicareAdditional,
+      state: priorYtdState,
+      other: priorYtdOther,
+    };
+    if (anyPriorYtdFieldFilled(gateNums) || parseOptionalTaxYear(priorYtdTaxYear) != null)
+      return false;
+    const ends = [...baselineRowsForCalc.map((r) => r.periodEnd)].sort(
+      (a, b) => +parsePayDate(a) - +parsePayDate(b),
+    );
+    return !weeklyChecksSharePayWeekDay(ends).ok;
+  }, [
+    employmentType,
+    payFrequency,
+    calendarYtdBackfill,
+    priorYtdGross,
+    priorYtdFederal,
+    priorYtdSocialSecurity,
+    priorYtdMedicareBase,
+    priorYtdMedicareAdditional,
+    priorYtdState,
+    priorYtdOther,
+    priorYtdTaxYear,
+    baselineRowsForCalc,
+    periodDriverKey,
+  ]);
+
   const handleDownload = () => {
     const rowsRaw =
       sameAmountsAllPeriods && perPeriod.length === 3
         ? baselineRowsForCalc.map((r) => ({ ...r }))
         : perPeriod.map((row) => ({ ...row }));
+
+    const priorGateNums = {
+      gross: priorYtdGross,
+      federal: priorYtdFederal,
+      socialSecurity: priorYtdSocialSecurity,
+      medicareBase: priorYtdMedicareBase,
+      medicareAdditional: priorYtdMedicareAdditional,
+      state: priorYtdState,
+      other: priorYtdOther,
+    };
+    const hasPdfPriorManual =
+      anyPriorYtdFieldFilled(priorGateNums) || parseOptionalTaxYear(priorYtdTaxYear) != null;
+    const sortedForWeeklyGate = [...rowsRaw].sort(
+      (a, b) => +parsePayDate(a.periodEnd) - +parsePayDate(b.periodEnd),
+    );
+    const weeklyGate = weeklyChecksSharePayWeekDay(sortedForWeeklyGate.map((r) => r.periodEnd));
+
+    if (
+      employmentType === '1099' &&
+      calendarYtdBackfill &&
+      payFrequency === 'Weekly' &&
+      !hasPdfPriorManual &&
+      !weeklyGate.ok
+    ) {
+      alert(
+        'Weekly year-to-date needs every listed check date on the same weekday (January 1 through each check counts one pay date every seven days). Align your dates, fill optional prior YTD instead, or turn off “Earlier months rolled into year-to-date”.',
+      );
+      return;
+    }
 
     const isContractor = employmentType === '1099';
     const priorSocSeed =
@@ -620,6 +683,11 @@ const PayStubMaker = () => {
             Override tax withholdings
           </label>
         </div>
+        {employmentType === '1099' && payFrequency === 'Weekly' && calendarYtdBackfill && weekly1099CalendarMisaligned ? (
+          <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-100">
+            Gross year‑to‑date counts paychecks weekly on one weekday starting from January 1. Listed check dates do not share the same weekday—align those dates or turn off earlier‑months YTD, or use optional prior‑year‑to‑date fields. Export is blocked until this is fixed or prior YTD is used.
+          </p>
+        ) : null}
 
         <details className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900/50">
           <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-neutral-300">Optional · logo image</summary>
