@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { format, endOfMonth, subMonths } from 'date-fns';
-import { generatePayStubsPdf, parsePayDate } from '../../utils/payStubPdf';
+import { generatePayStubsPdf, parsePayDate, paycheckGrossFromEntry } from '../../utils/payStubPdf';
 import { computeContractorDeductions, computeW2Deductions } from '../../utils/payrollTaxUS';
 
 const PAY_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Other'];
@@ -101,13 +101,18 @@ function sequentialW2DeductionsInRowOrder(
   filingStatus,
   workStateCode,
   priorSocSeed = 0,
+  spreadMonthlyAcrossPaychecks = false,
 ) {
   const tagged = rows.map((row, idx) => ({ row, idx }));
   tagged.sort((a, b) => +parsePayDate(a.row.periodEnd) - +parsePayDate(b.row.periodEnd));
   let priorSocSec = Number(priorSocSeed) || 0;
   const calcByIdx = {};
   tagged.forEach(({ row, idx }) => {
-    const gross = Math.max(0, Number(row.gross) || 0);
+    const gross = paycheckGrossFromEntry(
+      Math.max(0, Number(row.gross) || 0),
+      payFrequency,
+      spreadMonthlyAcrossPaychecks,
+    );
     const calc = computeW2Deductions({
       gross,
       payFrequency,
@@ -165,7 +170,7 @@ const PayStubMaker = () => {
   const [employeeName, setEmployeeName] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [last4Ssn, setLast4Ssn] = useState('');
-  /** Month-end stubs are the common case here; Monthly enables Jan→stub-month auto YTD. */
+  /** Month-end is common here; phantom YTD checkbox below works for Monthly and weekly-style schedules alike. */
   const [payFrequency, setPayFrequency] = useState('Monthly');
   const [sameAmountsAllPeriods, setSameAmountsAllPeriods] = useState(true);
   const [employmentType, setEmploymentType] = useState('w2');
@@ -187,8 +192,10 @@ const PayStubMaker = () => {
   const [priorYtdTaxableSocSecWages, setPriorYtdTaxableSocSecWages] = useState('');
   const [annualSalary, setAnnualSalary] = useState('');
   const [applyAnnualSalaryToMonthlyGross, setApplyAnnualSalaryToMonthlyGross] = useState(false);
-  /** When Monthly + checked, pretend month-end paychecks ran each prior month Jan..M−1 same gross as earliest listed stub */
-  const [monthlyJanBackfillYtd, setMonthlyJanBackfillYtd] = useState(true);
+  /** When checked, phantom full calendar months before earliest listed paycheck (contractors gross-only; works with Weekly/Bi‑weekly etc.). */
+  const [calendarYtdBackfill, setCalendarYtdBackfill] = useState(true);
+  /** When pay frequency ≠ Monthly and checked, typed gross is one month total split across checks (weekly = ÷ 52 × 12). */
+  const [spreadMonthlyAcrossPaychecks, setSpreadMonthlyAcrossPaychecks] = useState(false);
 
   const onEmployerLogoFile = useCallback((e) => {
     const input = e.target;
@@ -317,6 +324,7 @@ const PayStubMaker = () => {
       filingStatus,
       workStateCode,
       employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
+      spreadMonthlyAcrossPaychecks,
     );
     const chronFirstIdx =
       baselineRowsForCalc.length === 0
@@ -349,6 +357,7 @@ const PayStubMaker = () => {
     sameAmountsAllPeriods,
     perPeriod.length,
     priorYtdTaxableSocSecWages,
+    spreadMonthlyAcrossPaychecks,
   ]);
 
   const handleDownload = () => {
@@ -370,6 +379,7 @@ const PayStubMaker = () => {
         filingStatus,
         workStateCode,
         priorSocSeed,
+        spreadMonthlyAcrossPaychecks,
       );
       working = working.map((row, i) => ({
         ...row,
@@ -383,7 +393,11 @@ const PayStubMaker = () => {
     }
 
     const months = working.map((row) => {
-      const grossNum = Math.max(0, Number(row.gross) || 0);
+      const grossNum = paycheckGrossFromEntry(
+        Math.max(0, Number(row.gross) || 0),
+        payFrequency,
+        spreadMonthlyAcrossPaychecks,
+      );
       let deductions;
 
       if (isContractor) {
@@ -467,8 +481,9 @@ const PayStubMaker = () => {
       filingStatus,
       employmentType,
       workerState: workStateCode,
-      monthlyJanBackfillCalendarYtd:
-        employmentType !== '1099' && monthlyJanBackfillYtd && payFrequency === 'Monthly',
+      calendarYtdBackfill,
+      monthlyJanBackfillCalendarYtd: calendarYtdBackfill,
+      spreadMonthlyAcrossPaychecks,
       priorSsTaxableWages:
         employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
       taxCalculationNote:
@@ -718,34 +733,40 @@ const PayStubMaker = () => {
               ))}
             </select>
             <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
-              The stub&apos;s printed <strong className="font-normal">pay period</strong> follows this schedule: weekly = 7
-              days ending on your date; bi-weekly = 14 days; semi-monthly = 1st–15th or 16th–month-end; monthly =
-              calendar month through that date. For month-end payroll, Monthly also enables optional Jan-through-prior-month
-              YTD backfill below.
+              The stub&apos;s printed <strong className="font-normal">pay period dates</strong> follow this cadence:
+              weekly = 7 days ending on your date; bi‑weekly = 14 days; semi‑monthly = 1st–15th vs 16th–month‑end;
+              monthly = calendar month through that date.
             </p>
           </div>
           <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-neutral-200 cursor-pointer select-none">
             <input
               type="checkbox"
               className="mt-0.5 rounded border-gray-400 dark:border-neutral-500 shrink-0"
-              checked={monthlyJanBackfillYtd}
-              disabled={employmentType !== 'w2' || payFrequency !== 'Monthly'}
-              onChange={(e) => setMonthlyJanBackfillYtd(e.target.checked)}
+              checked={calendarYtdBackfill}
+              onChange={(e) => setCalendarYtdBackfill(e.target.checked)}
             />
             <span>
-              Auto YTD: count Jan through the month before the earliest pay date (monthly W-2). Additive with manual prior YTD below—leave that empty unless you need extra outside this range.
-              {payFrequency !== 'Monthly' ? (
-                <span className="block text-gray-500 dark:text-neutral-400 mt-0.5">
-                  Turn on by setting pay frequency to Monthly.
-                </span>
-              ) : null}
-              {employmentType !== 'w2' ? (
-                <span className="block text-gray-500 dark:text-neutral-400 mt-0.5">
-                  W-2 only (1099 uses listed periods for YTD).
-                </span>
-              ) : null}
+              <strong className="font-normal">Phantom calendar YTD</strong>: pretend each prior calendar month in the
+              year already paid (January through the month <em>before</em> the earliest period date you list). Gross phantom
+              is derived from each listed paycheck and your pay frequency. Works for contractors (gross only) and
+              non‑Monthly schedules. Additive with manual prior YTD—leave manual blank unless you need more outside this
+              model.
             </span>
           </label>
+          {payFrequency !== 'Monthly' ? (
+            <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-neutral-200 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="mt-0.5 rounded border-gray-400 dark:border-neutral-500 shrink-0"
+                checked={spreadMonthlyAcrossPaychecks}
+                onChange={(e) => setSpreadMonthlyAcrossPaychecks(e.target.checked)}
+              />
+              <span>
+                <strong className="font-normal">Gross typed is monthly installments</strong> spread across paychecks
+                (e.g. $10k/mo ⇒ weekly gross ≈ $10k ÷ (52 ÷ 12)). Turn off when the amount already matches one paycheck.
+              </span>
+            </label>
+          ) : null}
 
           <h2 className="text-lg font-semibold text-gray-800 dark:text-neutral-100 pt-2">Classification & tax basis</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
