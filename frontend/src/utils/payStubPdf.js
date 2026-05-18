@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { format, startOfMonth, parseISO, isValid } from 'date-fns';
 
 function parsePayDate(raw) {
@@ -13,157 +14,617 @@ function moneyUsd(n) {
   return x.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
-function periodLabel(periodEndDate) {
+export function computePeriodLabel(periodEndDate) {
   const end = periodEndDate;
   const start = startOfMonth(end);
   return `${format(start, 'MMM d, yyyy')} – ${format(end, 'MMM d, yyyy')}`;
 }
 
+const BORDER_GRAY = [198, 202, 210];
+const BORDER_LIGHT = [230, 233, 238];
+const BANNER = [38, 42, 52];
+const BANNER_MUTED = [70, 75, 86];
+const GOLD = [212, 160, 23];
+const PANEL_BG = [250, 251, 253];
+const ZEBRA = [246, 248, 251];
+
+/** @param {string} uri */
+function detectPdfImageFormat(uri) {
+  const head = String(uri).slice(0, 64).toLowerCase();
+  if (head.includes('image/png')) return 'PNG';
+  if (head.includes('image/jpeg') || head.includes('image/jpg')) return 'JPEG';
+  if (head.includes('image/webp')) return 'WEBP';
+  return null;
+}
+
 /**
- * Multi-page PDF: one payslip-style stub per entry.
+ * @param {import('jspdf').default} doc
+ * @param {string} uri
+ * @param {number} maxH
+ * @param {number} maxW
+ */
+function measureLogoForPdf(doc, uri, maxH, maxW) {
+  try {
+    const dims = doc.getImageProperties(uri);
+    const iw = Number(dims?.width) || 1;
+    const ih = Number(dims?.height) || 1;
+    let h = maxH;
+    let w = (iw / ih) * h;
+    if (w > maxW) {
+      w = maxW;
+      h = (ih / iw) * w;
+    }
+    return { w, h };
+  } catch {
+    return null;
+  }
+}
+
+/** @param {import('jspdf').default} doc */
+function drawCorporateSectionLabel(doc, x, y, label) {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 105, 115);
+  doc.text(String(label || '').toUpperCase(), x, y);
+}
+
+/**
+ * Sequential YTD totals (each page sums prior stubs + current).
+ * Corporate-style layout suitable for SMB presentation (readable, formal sections).
  * @param {object} data
- * @param {string} data.employerName
- * @param {string} data.employerAddress
- * @param {string} data.employeeName
- * @param {string} [data.employeeId]
- * @param {string} [data.last4Ssn]
- * @param {string} data.payFrequency
- * @param {Array<object>} data.months — length 3; each has periodEnd (yyyy-mm-dd), gross, federal, state, socialSecurity, medicare, otherLabel?, otherAmount?
  */
 export function generatePayStubsPdf(data) {
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const margin = 48;
-  const rightCol = pageW - margin;
-  const contentW = pageW - margin * 2;
 
-  const months = Array.isArray(data.months) ? data.months : [];
+  const side = 42;
+  const topBarH = 4;
+  /** Content starts below gold bar */
+  let yOrigin = side + topBarH + 6;
+
+  const contractor = String(data.employmentType || '').toUpperCase().includes('1099');
+  const months = Array.isArray(data.months) ? data.months.slice(0, 36) : [];
+  const printedAt = format(new Date(), 'MMM d, yyyy h:mm a');
+
+  let cumGross = 0;
+  let cumFed = 0;
+  let cumSs = 0;
+  let cumMedClassic = 0;
+  let cumMedAdd = 0;
+  let cumState = 0;
+  let cumOther = 0;
+  let cumRegEarn = 0;
 
   months.forEach((month, idx) => {
-    if (idx > 0) doc.addPage();
+    if (idx > 0) {
+      doc.addPage();
+      yOrigin = side + topBarH + 6;
+    }
 
-    const pe = parsePayDate(month.periodEnd);
-    const gross = Number(month.gross) || 0;
-    const federal = Number(month.federal) || 0;
-    const state = Number(month.state) || 0;
-    const ss = Number(month.socialSecurity) || 0;
-    const med = Number(month.medicare) || 0;
-    const other = Number(month.otherAmount) || 0;
-    const net = Math.max(0, gross - federal - state - ss - med - other);
+    const payDateObj = parsePayDate(month.periodEnd);
+    const gross = Math.max(0, Number(month.gross) || 0);
+    const federal = contractor ? 0 : Math.max(0, Number(month.federal) || 0);
+    const stateInc = contractor ? 0 : Math.max(0, Number(month.state) || 0);
+    const ssAmt = contractor ? 0 : Math.max(0, Number(month.socialSecurity) || 0);
+    const medicareTotal = contractor ? 0 : Math.max(0, Number(month.medicare) || 0);
+    let medClassic = contractor ? 0 : Math.max(0, Number(month.medicareBase) || 0);
+    let medAdditional = contractor
+      ? 0
+      : Math.max(0, Number(month.medicareAdditional) || 0);
 
-    let y = margin;
+    if (!contractor && medClassic <= 1e-4 && medAdditional <= 1e-4 && medicareTotal > 0) {
+      medClassic = medicareTotal;
+    }
+    if (
+      !contractor &&
+      medClassic + medAdditional > medicareTotal + 0.03 &&
+      medicareTotal > 0
+    ) {
+      medClassic = medicareTotal - medAdditional;
+    }
+
+    const otherAmt = Math.max(0, Number(month.otherAmount) || 0);
+    const otherLbl =
+      contractor ? '' : `${month.otherLabel || ''}`.trim() || 'Other after-tax deduction';
+
+    cumGross += gross;
+    cumFed += federal;
+    cumSs += ssAmt;
+    cumMedClassic += medClassic;
+    cumMedAdd += medAdditional;
+    cumState += stateInc;
+    cumOther += otherAmt;
+
+    const hrs =
+      contractor ? '' : Number(month.regularHours) > 0 ? String(Number(month.regularHours)) : '';
+    let rateStr = '';
+    let regEarnCurr = gross;
+    if (!contractor && Number(month.hourlyRate) > 0) {
+      const r = Number(month.hourlyRate);
+      rateStr = moneyUsd(r);
+      if (Number(month.regularHours) > 0) {
+        const calc = Number(month.regularHours) * r;
+        if (calc > 0) regEarnCurr = Math.min(calc, gross);
+      }
+    }
+    const supplementalCurr = contractor ? 0 : Math.max(0, gross - regEarnCurr);
+    cumRegEarn += regEarnCurr;
+
+    const totalDedCurr =
+      federal + stateInc + ssAmt + medClassic + medAdditional + otherAmt;
+    const totalDedYtd =
+      cumFed + cumSs + cumMedClassic + cumMedAdd + cumState + cumOther;
+
+    const netCurr =
+      gross - federal - stateInc - ssAmt - medClassic - medAdditional - otherAmt;
+
+    const netYtd = calculateNetYTD(
+      cumGross,
+      cumFed,
+      cumSs,
+      cumMedClassic,
+      cumMedAdd,
+      cumState,
+      cumOther,
+    );
+
+    const statementRef = `PS-${format(payDateObj, 'yyyyMMdd')}-${String(idx + 1).padStart(2, '0')}`;
+    const refNo = `${month.referenceNumber ?? data.referenceNumber ?? ''}`.trim();
+
+    /** ─── Top accent bar ─── */
+    doc.setFillColor(GOLD[0], GOLD[1], GOLD[2]);
+    doc.rect(0, 0, pageW, topBarH, 'F');
+
+    let y = yOrigin;
+
+    /** Outer frame (professional “form” edge) */
+    doc.setDrawColor(BORDER_GRAY[0], BORDER_GRAY[1], BORDER_GRAY[2]);
+    doc.setLineWidth(0.75);
+    doc.roundedRect(side - 2, topBarH + 4, pageW - (side - 2) * 2, pageH - topBarH - side - 2, 1, 1, 'S');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(120, 125, 135);
+    doc.text(`Statement ${statementRef}`, pageW - side, y, { align: 'right' });
+    doc.text(`Page ${idx + 1} of ${months.length}`, pageW - side, y + 10, {
+      align: 'right',
+    });
+
+    /** Company + document title strip */
+    doc.setFillColor(PANEL_BG[0], PANEL_BG[1], PANEL_BG[2]);
+    doc.setDrawColor(BORDER_LIGHT[0], BORDER_LIGHT[1], BORDER_LIGHT[2]);
+    doc.roundedRect(side, y + 20, pageW - side * 2, 112, 2, 2, 'FD');
+
+    doc.setDrawColor(GOLD[0], GOLD[1], GOLD[2]);
+    doc.setLineWidth(2);
+    doc.line(side + 14, y + 28, side + 14, y + 20 + 98);
+    doc.setLineWidth(0.75);
+
+    const logoUri = `${data.logoDataUrl || data.employerLogoDataUrl || ''}`.trim();
+    const logoMaxH =
+      typeof data.logoMaxHeightPt === 'number' && Number.isFinite(data.logoMaxHeightPt)
+        ? Math.min(80, Math.max(22, data.logoMaxHeightPt))
+        : 52;
+    /** Text block starts here; shifts right when logo draws successfully */
+    let leftBlockX = side + 26;
+    let ly = y + 40;
+    const logoFmt = logoUri ? detectPdfImageFormat(logoUri) : null;
+    if (logoFmt) {
+      const measured = measureLogoForPdf(doc, logoUri, logoMaxH, 118);
+      if (measured) {
+        try {
+          const lx = side + 26;
+          const panelInsetTop = y + 24;
+          const panelInnerH = 104;
+          const lyLogo =
+            measured.h <= panelInnerH
+              ? panelInsetTop + (panelInnerH - measured.h) / 2
+              : panelInsetTop;
+          doc.addImage(logoUri, logoFmt, lx, lyLogo, measured.w, measured.h);
+          leftBlockX = lx + measured.w + 14;
+        } catch {
+          leftBlockX = side + 26;
+        }
+      }
+    }
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
-    doc.setTextColor(30, 30, 30);
-    doc.text(data.employerName || 'Employer', margin, y);
-    y += 22;
+    doc.setTextColor(22, 24, 31);
+    doc.text(String(data.employerName || 'Employer').trim(), leftBlockX, ly);
+    ly += 18;
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    const addr = (data.employerAddress || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    if (addr.length === 0) {
-      doc.setTextColor(120, 120, 120);
-      doc.text('(Add employer address on the form)', margin, y);
-      y += 14;
-      doc.setTextColor(30, 30, 30);
+    doc.setFontSize(8.5);
+    doc.setTextColor(72, 78, 88);
+    if (data.employerEin && String(data.employerEin).trim()) {
+      doc.text(`Federal Employer ID Number (FEIN): ${String(data.employerEin).trim()}`, leftBlockX, ly);
+      ly += 13;
+    }
+    const addrParts = `${data.employerAddress || ''}`
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!addrParts.length) {
+      doc.setTextColor(156, 160, 170);
+      doc.text('Employer mailing address…', leftBlockX, ly);
+      ly += 13;
     } else {
-      addr.forEach((line) => {
-        doc.text(line, margin, y);
-        y += 13;
+      addrParts.forEach((line) => {
+        doc.text(line, leftBlockX, ly);
+        ly += 12;
       });
     }
-    y += 8;
 
-    doc.setDrawColor(200, 200, 200);
-    doc.line(margin, y, pageW - margin, y);
-    y += 20;
-
+    const rightPaneX = pageW / 2 + 18;
+    let ry = y + 42;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.text('Pay stub', margin, y);
-    y += 22;
+    doc.setFontSize(11);
+    doc.setTextColor(BANNER[0], BANNER[1], BANNER[2]);
+    doc.text(
+      contractor ? 'Contractor payout advice' : 'Earnings statement',
+      pageW - side - 16,
+      ry,
+      { align: 'right' },
+    );
+    ry += 16;
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    const row = (label, value) => {
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${label}:`, margin, y);
-      doc.setFont('helvetica', 'normal');
-      const v = value == null || value === '' ? '—' : String(value);
-      doc.text(v, margin + 128, y, { maxWidth: contentW - 128 });
-      y += 16;
-    };
-
-    row('Employee', data.employeeName || '—');
-    row('Employee ID', data.employeeId || month.employeeId || '—');
-    if (data.last4Ssn && String(data.last4Ssn).trim()) {
-      row('SSN (last 4)', `***-**-${String(data.last4Ssn).trim()}`);
-    }
-    row('Pay frequency', data.payFrequency || '—');
-    row('Pay period', periodLabel(pe));
-    row('Pay date', format(pe, 'MMM d, yyyy'));
-    y += 6;
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Earnings & deductions', margin, y);
-    y += 16;
-    doc.setDrawColor(230, 230, 230);
-    doc.line(margin, y, rightCol, y);
-    y += 18;
-
-    const lineAmount = (label, amount, opts = {}) => {
-      doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
-      doc.setFontSize(opts.size || 10);
-      doc.text(label, margin, y);
-      doc.text(moneyUsd(amount), rightCol, y, { align: 'right' });
-      y += opts.gap ?? 17;
-    };
-
-    doc.setFont('helvetica', 'normal');
-    lineAmount('Gross pay', gross);
-
-    doc.setFontSize(9);
-    doc.setTextColor(90, 90, 90);
-    doc.text('Deductions', margin, y);
-    y += 14;
-    doc.setTextColor(30, 30, 30);
-    doc.setFontSize(10);
-
-    const deds = [
-      ['Federal income tax', federal],
-      ['Social Security', ss],
-      ['Medicare', med],
-      ['State income tax', state],
-    ];
-    if (other > 0) {
-      const ol = month.otherLabel?.trim() || 'Other deduction';
-      deds.push([ol, other]);
-    }
-
-    deds.forEach(([label, amt]) => {
-      if (amt > 0) lineAmount(label, amt);
-    });
-
-    doc.line(margin, y + 4, rightCol, y + 4);
-    y += 22;
-    lineAmount('Net pay', net, { bold: true, size: 11, gap: 20 });
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(BORDER_GRAY[0], BORDER_GRAY[1], BORDER_GRAY[2]);
+    doc.roundedRect(rightPaneX - 6, ry - 4, pageW - side - rightPaneX + 6, 74, 1.5, 1.5, 'FD');
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.setTextColor(110, 110, 110);
-    const disc =
-      'Unofficial worksheet for your records only. Figures are entered on this screen — not payroll tax advice. Verify all amounts against your official payroll provider.';
-    const splitDisc = doc.splitTextToSize(disc, contentW);
-    doc.text(splitDisc, margin, pageH - 52);
-    doc.setTextColor(30, 30, 30);
+    doc.setTextColor(55, 60, 70);
+    const metaLeft = [
+      ['Pay date', format(payDateObj, 'MMM d, yyyy')],
+      ['Pay period ending', computePeriodLabel(payDateObj)],
+      ['Deposit / voucher ref.', refNo || 'Direct deposit'],
+    ];
+    metaLeft.forEach(([k, v], i) => {
+      const yy = ry + i * 20;
+      doc.setTextColor(110, 115, 125);
+      doc.setFont('helvetica', 'normal');
+      doc.text(k + ':', rightPaneX + 6, yy + 6);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(38, 42, 50);
+      doc.text(String(v), rightPaneX + 96, yy + 6);
+    });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(138, 142, 150);
+    doc.text(`Printed · ${printedAt}`, pageW - side - 16, ry + 70, { align: 'right' });
+
+    y = y + 20 + 112 + 16;
+
+    drawCorporateSectionLabel(doc, side, y, 'Employee information');
+
+    /** Employee info grid (classic two-column KV) */
+    const legalName = `${data.employeeName || ''}`.trim() || '—';
+    const eeId = `${data.employeeId || ''}`.trim() || '—';
+    const lastFour = `${data.last4Ssn || ''}`.trim();
+    const ssnShown = contractor
+      ? 'Masked TIN'
+      : lastFour.length === 4
+        ? `XXX-XX-${lastFour}`
+        : '—';
+
+    autoTable(doc, {
+      body: [
+        [
+          'Legal name',
+          legalName,
+          'Classification',
+          contractor ? '1099 · Independent contractor' : 'W‑2 · Employee',
+        ],
+        [
+          'Employee ID',
+          eeId,
+          'Pay frequency',
+          String(data.payFrequency || 'Payroll schedule'),
+        ],
+        [
+          contractor ? 'TIN presentation' : 'Social Security Number',
+          ssnShown,
+          'Primary work jurisdiction',
+          `${data.workerState || ''}`.trim().length ? String(data.workerState).trim() : '—',
+        ],
+        ...(data.jobTitle?.trim?.() || month.jobTitle?.trim?.() ||
+        data.department?.trim?.() ||
+        month.department?.trim?.()
+          ? [
+              [
+                'Department / unit',
+                `${data.department || month.department || '—'}`.trim(),
+                'Job title',
+                `${data.jobTitle || month.jobTitle || '—'}`.trim(),
+              ],
+            ]
+          : []),
+      ],
+      startY: y + 8,
+      margin: { left: side, right: side },
+      theme: 'grid',
+      tableWidth: pageW - side * 2,
+      styles: {
+        fontSize: 9,
+        cellPadding: { top: 7, bottom: 7, left: 8, right: 8 },
+        lineColor: BORDER_LIGHT,
+        lineWidth: 0.35,
+        valign: 'middle',
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold', textColor: BANNER_MUTED, fillColor: PANEL_BG, cellWidth: 104 },
+        1: { textColor: 38 },
+        2: { fontStyle: 'bold', textColor: BANNER_MUTED, fillColor: PANEL_BG, cellWidth: 104 },
+        3: { textColor: 38 },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 18;
+
+    drawCorporateSectionLabel(doc, side, y, contractor ? 'Gross earnings' : 'Earnings breakdown');
+
+    const earnBody = [];
+    if (!contractor) {
+      earnBody.push([
+        'Regular wages',
+        hrs || '—',
+        rateStr || 'Salary / flat',
+        moneyUsd(regEarnCurr),
+        moneyUsd(cumRegEarn),
+      ]);
+      if (supplementalCurr > 1e-2) {
+        earnBody.push(['Supplemental / bonus earnings', '—', '—', moneyUsd(supplementalCurr), '—']);
+      }
+    } else {
+      earnBody.push(['Contract gross (statutory payout)', '—', '—', moneyUsd(gross), moneyUsd(cumGross)]);
+    }
+    const earnSummaryRowIndex = earnBody.length;
+    earnBody.push(['TOTAL GROSS EARNINGS', '', '', moneyUsd(gross), moneyUsd(cumGross)]);
+
+    autoTable(doc, {
+      head: [['Earnings · description', 'Hours / qty.', 'Rate', 'Amount · current period', 'Amount · year-to-date']],
+      body: earnBody,
+      startY: y + 10,
+      margin: { left: side, right: side },
+      theme: 'grid',
+      styles: {
+        fontSize: 9,
+        lineColor: BORDER_LIGHT,
+        cellPadding: 5,
+        valign: 'middle',
+      },
+      headStyles: {
+        fillColor: BANNER,
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 8.5,
+        halign: 'left',
+      },
+      bodyStyles: { textColor: 38 },
+      columnStyles: { 3: { halign: 'right', fontStyle: 'normal' }, 4: { halign: 'right' }, 0: { cellWidth: 186 } },
+      didParseCell: (hookData) => {
+        if (hookData.section !== 'body') return;
+        if (hookData.row.index === earnSummaryRowIndex) {
+          hookData.cell.styles.fillColor = PANEL_BG;
+          hookData.cell.styles.fontStyle = 'bold';
+          hookData.cell.styles.textColor = BANNER[0];
+          return;
+        }
+        if (hookData.row.index % 2 === 1) {
+          hookData.cell.styles.fillColor = ZEBRA;
+        }
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 22;
+
+    drawCorporateSectionLabel(
+      doc,
+      side,
+      y,
+      contractor ? 'Withholdings summary' : 'Taxes · insurance · deductions',
+    );
+
+    const dedBody = [];
+    if (!contractor) {
+      dedBody.push([
+        'Federal income tax withholding (employee estimate)',
+        moneyUsd(federal),
+        moneyUsd(cumFed),
+      ]);
+      dedBody.push([
+        `Social Security (OASDI) · EE share · statutory 6.${2}%`,
+        moneyUsd(ssAmt),
+        moneyUsd(cumSs),
+      ]);
+      dedBody.push([
+        medicareTotal > 0 && medClassic + medAdditional > 1e-2
+          ? 'Medicare Hospital Insurance · EE · 1.45% base'
+          : 'Medicare (HI)',
+        moneyUsd(medClassic),
+        moneyUsd(cumMedClassic),
+      ]);
+      if (medAdditional > 1e-2) {
+        dedBody.push(['Additional Medicare tax (0.9% over threshold)', moneyUsd(medAdditional), moneyUsd(cumMedAdd)]);
+      }
+      dedBody.push(
+        [
+          data.workerState && String(data.workerState).trim().length > 0
+            ? `State income tax withholdings (${String(data.workerState).trim()})`
+            : 'State / local withholdings (estimate)',
+          moneyUsd(stateInc),
+          moneyUsd(cumState),
+        ],
+      );
+      if (otherAmt > 1e-4) {
+        dedBody.push([`${otherLbl} (after-tax)`, moneyUsd(otherAmt), moneyUsd(cumOther)]);
+      }
+      const deductionTotalRowIx = dedBody.length;
+      dedBody.push([
+        'Total deductions · all categories',
+        moneyUsd(totalDedCurr),
+        moneyUsd(totalDedYtd),
+      ]);
+
+      autoTable(doc, {
+        head: [['Deductions · description', 'Current period total', 'Year-to-date total']],
+        body: dedBody,
+        startY: y + 10,
+        margin: { left: side, right: side },
+        theme: 'grid',
+        styles: {
+          fontSize: 9,
+          lineColor: BORDER_LIGHT,
+          cellPadding: 5,
+          valign: 'middle',
+        },
+        headStyles: {
+          fillColor: BANNER,
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 8.5,
+        },
+        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 0: { cellWidth: 310 } },
+        didParseCell: (hookData) => {
+          if (hookData.section !== 'body') return;
+          if (hookData.row.index === deductionTotalRowIx) {
+            hookData.cell.styles.fillColor = PANEL_BG;
+            hookData.cell.styles.fontStyle = 'bold';
+            hookData.cell.styles.textColor = BANNER[0];
+            return;
+          }
+          if (hookData.row.index % 2 === 1) {
+            hookData.cell.styles.fillColor = ZEBRA;
+          }
+        },
+      });
+    } else {
+      dedBody.push(['Statutory withholdings withheld by payer', moneyUsd(0), moneyUsd(0)]);
+      dedBody.push([
+        'Self-employment obligations (estimated separately)',
+        '—',
+        '—',
+      ]);
+      autoTable(doc, {
+        head: [['Withholdings · description', 'Current period total', 'Year-to-date total']],
+        body: dedBody,
+        startY: y + 10,
+        margin: { left: side, right: side },
+        theme: 'grid',
+        styles: { fontSize: 9, lineColor: BORDER_LIGHT, cellPadding: 5 },
+        headStyles: { fillColor: BANNER, textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 0: { cellWidth: 310 } },
+      });
+    }
+
+    y = doc.lastAutoTable.finalY + 22;
+
+    drawCorporateSectionLabel(doc, side, y, 'Pay summary');
+
+    doc.setFillColor(BANNER[0], BANNER[1], BANNER[2]);
+    doc.roundedRect(side, y + 8, pageW - side * 2, 78, 2, 2, 'F');
+    doc.setDrawColor(GOLD[0], GOLD[1], GOLD[2]);
+    doc.setLineWidth(1);
+    doc.line(side + 14, y + 18, side + 14, y + 76);
+
+    const sumX = side + 26;
+    let sy = y + 34;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(220, 224, 230);
+    doc.text('Total gross earnings', sumX, sy);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(moneyUsd(gross), pageW - side - 18, sy, { align: 'right' });
+    sy += 16;
+
+    doc.setFont('helvetica', 'normal');
+    doc.text(contractor ? 'Less: statutory withholdings' : 'Less: total deductions · taxes · other', sumX, sy);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`(${moneyUsd(totalDedCurr)})`, pageW - side - 18, sy, { align: 'right' });
+    sy += 22;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(GOLD[0], GOLD[1], GOLD[2]);
+    doc.text('Net payment to worker', sumX, sy);
+    doc.text(moneyUsd(netCurr), pageW - side - 18, sy, { align: 'right' });
+
+    sy += 18;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(200, 205, 214);
+    doc.text(`Year-to-date net amount (this export): ${moneyUsd(netYtd)}`, sumX, sy);
+
+    y = y + 8 + 78 + 20;
+
+    doc.setDrawColor(BORDER_GRAY[0], BORDER_GRAY[1], BORDER_GRAY[2]);
+    doc.setLineWidth(0.35);
+    doc.line(side, y, pageW - side, y);
+
+    y += 14;
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7);
+    doc.setTextColor(120, 126, 135);
+    doc.text(
+      contractor
+        ? 'This payout advice summarizes contractor compensation. It does not constitute a payroll tax withholding record.'
+        : 'This earnings statement summarizes compensation for informational purposes.',
+      side,
+      y,
+      { maxWidth: pageW - side * 2 },
+    );
+
+    const legalExtra = contractor
+      ? `${
+          data.contractorDisclaimer || ''
+        }`.trim()
+      : `${
+          data.payStubDisclaimer || data.taxCalculationNote || ''
+        }`.trim();
+
+    if (legalExtra.length) {
+      y += 12;
+      const wrapped = doc.splitTextToSize(legalExtra, pageW - side * 2);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(110, 115, 125);
+      doc.text(wrapped, side, Math.min(pageH - 56, y));
+      y += wrapped.length * 9;
+    }
+
+    y += legalExtra.length ? 6 : 10;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(150, 155, 164);
+    const footParts = [
+      'Not a negotiable instrument or check substitute.',
+      contractor ? '' : 'Withholding projections are illustrative only—defer to payroll service tax tables.',
+      'Retain for your permanent records.',
+    ].filter(Boolean);
+    doc.text(footParts.join(' '), side, Math.min(pageH - 42, Math.max(y, pageH - 58)), {
+      maxWidth: pageW - side * 2,
+    });
+
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(7);
+    doc.text(`DOCUMENT REF · ${statementRef}`, side, Math.min(pageH - 26, pageH - 34));
+    doc.text(`Generated electronically`, pageW - side, Math.min(pageH - 26, pageH - 34), {
+      align: 'right',
+    });
   });
 
-  const safeName =
-    (data.employeeName || 'pay-stubs')
-      .replace(/[^\w\s-]/g, '')
-      .trim()
-      .replace(/\s+/g, '-') || 'pay-stubs';
-  doc.save(`pay-stubs-3-months-${safeName}.pdf`);
+  const safeStem = `${data.employeeName || 'earning-statement'}`
+    .replace(/[^\w\s-]/gu, '')
+    .replace(/\s+/g, '-');
+
+  doc.save(`${safeStem || 'pay-documentation'}-${months.length}-periods.pdf`);
+}
+
+function calculateNetYTD(gross, fed, ss, medC, medA, state, other) {
+  return Math.max(0, gross - fed - ss - medC - medA - state - other);
 }
