@@ -170,8 +170,6 @@ const PayStubMaker = () => {
   const [employeeName, setEmployeeName] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [last4Ssn, setLast4Ssn] = useState('');
-  /** Month-end is common here; phantom YTD checkbox below works for Monthly and weekly-style schedules alike. */
-  const [payFrequency, setPayFrequency] = useState('Monthly');
   const [sameAmountsAllPeriods, setSameAmountsAllPeriods] = useState(true);
   const [employmentType, setEmploymentType] = useState('w2');
   const [filingStatus, setFilingStatus] = useState('single');
@@ -179,8 +177,6 @@ const PayStubMaker = () => {
   const [manualWithholdings, setManualWithholdings] = useState(false);
   const [employerLogoDataUrl, setEmployerLogoDataUrl] = useState('');
   const [logoHint, setLogoHint] = useState('');
-  /** Optional calendar-year amounts already earned before earliest period-date in this PDF */
-  const [priorYtdTaxYear, setPriorYtdTaxYear] = useState('');
   const [priorYtdGross, setPriorYtdGross] = useState('');
   const [priorYtdFederal, setPriorYtdFederal] = useState('');
   const [priorYtdSocialSecurity, setPriorYtdSocialSecurity] = useState('');
@@ -188,14 +184,9 @@ const PayStubMaker = () => {
   const [priorYtdMedicareAdditional, setPriorYtdMedicareAdditional] = useState('');
   const [priorYtdState, setPriorYtdState] = useState('');
   const [priorYtdOther, setPriorYtdOther] = useState('');
-  /** W-2 SS taxable wages already earned before first period (for withholding sequence only) */
-  const [priorYtdTaxableSocSecWages, setPriorYtdTaxableSocSecWages] = useState('');
   const [annualSalary, setAnnualSalary] = useState('');
   const [applyAnnualSalaryToMonthlyGross, setApplyAnnualSalaryToMonthlyGross] = useState(false);
-  /** When checked, phantom full calendar months before earliest listed paycheck (contractors gross-only; works with Weekly/Bi‑weekly etc.). */
   const [calendarYtdBackfill, setCalendarYtdBackfill] = useState(true);
-  /** When pay frequency ≠ Monthly and checked, typed gross is one month total split across checks (weekly = ÷ 52 × 12). */
-  /** Monthly rate ÷ paychecks/year for Weekly/Bi-weekly/etc.; unchecked when gross is literal per-paycheck amount. */
   const [spreadMonthlyAcrossPaychecks, setSpreadMonthlyAcrossPaychecks] = useState(true);
 
   const onEmployerLogoFile = useCallback((e) => {
@@ -487,10 +478,7 @@ const PayStubMaker = () => {
       spreadMonthlyAcrossPaychecks,
       priorSsTaxableWages:
         employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
-      taxCalculationNote:
-        employmentType === '1099'
-          ? 'Independent contractor payouts — payer does not withhold FICA.'
-          : 'Federal withholding projected from annual wage × pay periods minus standard deduction; not Publication 15-T exact.',
+      taxCalculationNote: '',
       months,
     });
   };
@@ -503,307 +491,96 @@ const PayStubMaker = () => {
 
   const labelClass = 'block text-xs font-medium text-gray-600 dark:text-neutral-400 mb-1';
 
-  return (
-    <div className="space-y-6 pb-12">
-      <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:border dark:border-neutral-700 p-6">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-neutral-100 mb-1">
-          Pay stub PDF (3 months)
-        </h1>
-        <p className="text-sm text-gray-600 dark:text-neutral-300 max-w-2xl">
-          One PDF with{' '}
-          <strong className="text-gray-900 dark:text-neutral-100">three professionally structured pages</strong>.
-          Figures update live as you type. YTD on each page sums periods in the <strong className="font-normal">same tax year </strong>
-          with end-dates{' '}
-          <strong className="font-normal">on or before that page&apos;s pay period-end </strong>
-          (sorted by calendar date; Month 3 can run before Month 2 if dates say so).
-          Optional baseline adds pay from earlier in that year before the dates you listed.
-          <span className="block mt-1 text-neutral-700 dark:text-neutral-300">
-            W‑2 mode estimates withholdings chronologically including Social Security wage base; toggle manual row edits if needed.
-          </span>
-          <span className="block mt-1 text-amber-800 dark:text-amber-200">
-            Estimated taxes only — defer to payroll software for withholding tables before relying legally.
-          </span>
-        </p>
-      </div>
+  const cardClass =
+    'rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-5 sm:p-6 shadow-sm dark:shadow-none';
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:border dark:border-neutral-700 p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-neutral-100">Employer</h2>
-          <div>
+  return (
+    <div className="mx-auto max-w-3xl space-y-5 px-4 pb-14 sm:px-0">
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-neutral-50">Pay stubs</h1>
+        <p className="mt-1 text-sm text-gray-600 dark:text-neutral-400">
+          QuickBooks-style earning statement — one PDF with three stubs. Enter only what you need;{' '}
+          <a
+            href="https://quickbooks.intuit.com/learn-support/en-us/help-article/payroll-preferences/customize-paycheck-layout-pay-stub/L2VLh4LXk_US_en_US"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-blue-700 dark:text-blue-400 underline underline-offset-2"
+          >
+            Intuit pay stub layout guidance
+          </a>
+          .
+        </p>
+      </header>
+
+      <section className={cardClass}>
+        <h2 className="sr-only">Company &amp; worker</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-3">
             <label className={labelClass}>Company name</label>
             <input className={fieldClass} value={employerName} onChange={(e) => setEmployerName(e.target.value)} />
+            <label className={labelClass}>Employer address</label>
+            <textarea className={`${fieldClass} min-h-[72px]`} rows={2} placeholder="" value={employerAddress} onChange={(e) => setEmployerAddress(e.target.value)} />
+            <label className={labelClass}>EIN</label>
+            <input className={fieldClass} placeholder="12-3456789" value={employerEin} onChange={(e) => setEmployerEin(e.target.value)} />
           </div>
-          <div>
-            <label className={labelClass}>Address (optional)</label>
-            <textarea
-              rows={3}
-              className={fieldClass}
-              placeholder="Street, City, ST ZIP"
-              value={employerAddress}
-              onChange={(e) => setEmployerAddress(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Federal EIN (optional)</label>
-            <input
-              className={fieldClass}
-              value={employerEin}
-              onChange={(e) => setEmployerEin(e.target.value)}
-              placeholder="12-3456789"
-              autoCapitalize="characters"
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Company logo (optional)</label>
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-              className={fieldClass}
-              onChange={onEmployerLogoFile}
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-neutral-500">
-              PNG, JPG, or WebP · shown to the left of the company block on each page · leave blank for text only
-            </p>
-            {logoHint ? (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{logoHint}</p>
-            ) : null}
-            {employerLogoDataUrl ? (
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <img
-                  src={employerLogoDataUrl}
-                  alt="Logo preview"
-                  className="h-14 max-w-[160px] object-contain rounded-lg border border-gray-300 dark:border-neutral-600 bg-neutral-900/40 p-1"
-                />
-                <button
-                  type="button"
-                  className="text-sm font-medium rounded-lg px-3 py-1.5 border border-gray-300 dark:border-neutral-600 text-gray-800 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-900"
-                  onClick={() => {
-                    setEmployerLogoDataUrl('');
-                    setLogoHint('');
-                  }}
-                >
-                  Remove logo
-                </button>
-              </div>
-            ) : null}
-          </div>
-
-          <fieldset className="border border-gray-200 dark:border-neutral-700 rounded-xl p-4 space-y-3">
-            <legend className="text-sm font-semibold px-2 text-gray-800 dark:text-neutral-100">
-              Prior calendar-year YTD (optional)
-            </legend>
-            <p className="text-xs text-gray-600 dark:text-neutral-400 leading-relaxed">
-              Enter amounts already paid{' '}
-              <strong className="font-normal text-gray-500">in the same tax year </strong>
-              before the earliest period date below. Leave blank when this PDF covers the full year-so-far. Totals columns on each page
-              add every exported period<strong className="font-normal text-gray-500"> that falls in the same calendar year and on/before </strong>
-              that page&apos;s period end (ordering is chronological, not Month 1/2/3 order).
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-3">
+            <label className={labelClass}>Employee name</label>
+            <input className={fieldClass} value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} placeholder="First Last" />
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelClass}>Baseline tax year</label>
+                <label className={labelClass}>Employee ID</label>
+                <input className={fieldClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} />
+              </div>
+              <div>
+                <label className={labelClass}>SSN last 4</label>
                 <input
                   className={fieldClass}
+                  maxLength={4}
                   inputMode="numeric"
-                  placeholder="e.g. 2026 (required if stubs cross two years)"
-                  value={priorYtdTaxYear}
-                  onChange={(e) => setPriorYtdTaxYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass}>Prior gross YTD (before first date above)</label>
-                <input
-                  className={fieldClass}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={priorYtdGross}
-                  onChange={(e) => setPriorYtdGross(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Prior federal withheld</label>
-                <input
-                  className={fieldClass}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={priorYtdFederal}
-                  onChange={(e) => setPriorYtdFederal(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Prior Social Security withheld</label>
-                <input
-                  className={fieldClass}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={priorYtdSocialSecurity}
-                  onChange={(e) => setPriorYtdSocialSecurity(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Prior Medicare base (1.45% tier)</label>
-                <input
-                  className={fieldClass}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={priorYtdMedicareBase}
-                  onChange={(e) => setPriorYtdMedicareBase(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Prior additional Medicare withheld</label>
-                <input
-                  className={fieldClass}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={priorYtdMedicareAdditional}
-                  onChange={(e) => setPriorYtdMedicareAdditional(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Prior state withheld</label>
-                <input
-                  className={fieldClass}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={priorYtdState}
-                  onChange={(e) => setPriorYtdState(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Prior other deductions</label>
-                <input
-                  className={fieldClass}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={priorYtdOther}
-                  onChange={(e) => setPriorYtdOther(e.target.value)}
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass}>Soc. Security taxable wages YTD before first period (W‑2)</label>
-                <input
-                  className={fieldClass}
-                  inputMode="decimal"
-                  disabled={employmentType !== 'w2'}
-                  placeholder="Feeds OASDI base only — unrelated to gross YTD boxes"
-                  value={priorYtdTaxableSocSecWages}
-                  onChange={(e) => setPriorYtdTaxableSocSecWages(e.target.value)}
+                  value={last4Ssn}
+                  onChange={(e) => setLast4Ssn(e.target.value.replace(/\D/g, ''))}
                 />
               </div>
             </div>
-          </fieldset>
+            <label className={labelClass}>Worker type</label>
+            <select className={fieldClass} value={employmentType} onChange={(e) => setEmploymentType(e.target.value)}>
+              {WORKER_TYPES.map((w) => (
+                <option key={w.value} value={w.value}>
+                  {w.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-neutral-100 pt-2">Employee</h2>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <div>
-            <label className={labelClass}>Legal name</label>
-            <input
-              className={fieldClass}
-              value={employeeName}
-              onChange={(e) => setEmployeeName(e.target.value)}
-              placeholder="First Last"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Employee ID</label>
-              <input className={fieldClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} />
-            </div>
-            <div>
-              <label className={labelClass}>SSN last 4 (optional)</label>
-              <input
-                className={fieldClass}
-                maxLength={4}
-                inputMode="numeric"
-                value={last4Ssn}
-                onChange={(e) => setLast4Ssn(e.target.value.replace(/\D/g, ''))}
-              />
-            </div>
-          </div>
-          <div>
-            <label className={labelClass}>Pay frequency</label>
-            <select
-              className={fieldClass}
-              value={payFrequency}
-              onChange={(e) => setPayFrequency(e.target.value)}
-            >
+            <label className={labelClass}>Pay schedule</label>
+            <select className={fieldClass} value={payFrequency} onChange={(e) => setPayFrequency(e.target.value)}>
               {PAY_FREQUENCIES.map((p) => (
                 <option key={p} value={p}>
                   {p}
                 </option>
               ))}
             </select>
-            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
-              The stub&apos;s printed <strong className="font-normal">pay period dates</strong> follow this cadence:
-              weekly = 7 days ending on your date; bi‑weekly = 14 days; semi‑monthly = 1st–15th vs 16th–month‑end;
-              monthly = calendar month through that date.
-            </p>
-          </div>
-          <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-neutral-200 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              className="mt-0.5 rounded border-gray-400 dark:border-neutral-500 shrink-0"
-              checked={calendarYtdBackfill}
-              onChange={(e) => setCalendarYtdBackfill(e.target.checked)}
-            />
-            <span>
-              <strong className="font-normal">Phantom calendar YTD</strong>: pretend each prior calendar month in the
-              year already paid (January through the month <em>before</em> the earliest period date you list). Gross phantom
-              is derived from each listed paycheck and your pay frequency. Works for contractors (gross only) and
-              non‑Monthly schedules. Additive with manual prior YTD—leave manual blank unless you need more outside this
-              model.
-            </span>
-          </label>
-          {payFrequency !== 'Monthly' ? (
-            <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-neutral-200 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                className="mt-0.5 rounded border-gray-400 dark:border-neutral-500 shrink-0"
-                checked={spreadMonthlyAcrossPaychecks}
-                onChange={(e) => setSpreadMonthlyAcrossPaychecks(e.target.checked)}
-              />
-              <span>
-                <strong className="font-normal">Gross typed is monthly installments</strong> spread across paychecks (on by
-                default for weekly‑style frequencies). Weekly example: enter $10,000/month → each stub shows roughly
-                $10,000 × 12 ÷ 52. Turn this off only when gross is already the amount for one check.
-              </span>
-            </label>
-          ) : null}
-
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-neutral-100 pt-2">Classification & tax basis</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Worker type</label>
-              <select
-                className={fieldClass}
-                value={employmentType}
-                onChange={(e) => setEmploymentType(e.target.value)}
-              >
-                {WORKER_TYPES.map((w) => (
-                  <option key={w.value} value={w.value}>
-                    {w.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Federal filing status</label>
-              <select
-                disabled={employmentType !== 'w2'}
-                className={fieldClass}
-                value={filingStatus}
-                onChange={(e) => setFilingStatus(e.target.value)}
-              >
-                <option value="single">Single (or married filing separately)</option>
-                <option value="mfj">Married filing jointly</option>
-              </select>
-            </div>
           </div>
           <div>
-            <label className={labelClass}>Primary work state</label>
+            <label className={labelClass}>Federal filing status</label>
             <select
-              className={fieldClass}
               disabled={employmentType !== 'w2'}
+              className={fieldClass}
+              value={filingStatus}
+              onChange={(e) => setFilingStatus(e.target.value)}
+            >
+              <option value="single">Single</option>
+              <option value="mfj">Married filing jointly</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Work state</label>
+            <select
+              disabled={employmentType !== 'w2'}
+              className={fieldClass}
               value={workStateCode}
               onChange={(e) => setWorkStateCode(e.target.value)}
             >
@@ -814,39 +591,116 @@ const PayStubMaker = () => {
               ))}
             </select>
           </div>
-          <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-neutral-200 cursor-pointer select-none">
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-gray-100 dark:border-neutral-800 pt-4 text-sm text-gray-800 dark:text-neutral-200">
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600" checked={calendarYtdBackfill} onChange={(e) => setCalendarYtdBackfill(e.target.checked)} />
+            Earlier months rolled into year-to-date
+          </label>
+          {payFrequency !== 'Monthly' ? (
+            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600" checked={spreadMonthlyAcrossPaychecks} onChange={(e) => setSpreadMonthlyAcrossPaychecks(e.target.checked)} />
+              Gross figures are monthly (split across checks)
+            </label>
+          ) : null}
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
-              className="mt-0.5 rounded border-gray-400 dark:border-neutral-500 shrink-0"
+              className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600"
               checked={manualWithholdings}
               disabled={employmentType !== 'w2'}
               onChange={(e) => setManualWithholdings(e.target.checked)}
             />
-            <span>
-              Manual withholding override (editable federal / Social Security / Medicare / state fields)
-            </span>
+            Override tax withholdings
           </label>
         </div>
 
-        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:border dark:border-neutral-700 p-6 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-neutral-100">Amounts</h2>
-            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-neutral-200 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                className="rounded border-gray-400 dark:border-neutral-500"
-                checked={sameAmountsAllPeriods}
-                onChange={(e) => setSameAmountsAllPeriods(e.target.checked)}
-              />
-              Same dollar amounts each period (dates can differ)
-            </label>
+        <details className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900/50">
+          <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-neutral-300">Optional · logo image</summary>
+          <div className="mt-3 space-y-3">
+            <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" className={fieldClass} onChange={onEmployerLogoFile} />
+            {logoHint ? <p className="text-xs text-red-600 dark:text-red-400">{logoHint}</p> : null}
+            {employerLogoDataUrl ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <img src={employerLogoDataUrl} alt="" className="h-12 max-w-[140px] object-contain rounded border border-gray-200 dark:border-neutral-700 p-1" />
+                <button
+                  type="button"
+                  className="text-sm text-gray-700 dark:text-neutral-300 underline-offset-4 hover:underline"
+                  onClick={() => {
+                    setEmployerLogoDataUrl('');
+                    setLogoHint('');
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : null}
           </div>
+        </details>
 
-          <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-4 space-y-3 bg-neutral-50/80 dark:bg-neutral-900/50">
-            <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-neutral-100 cursor-pointer select-none">
+        <details className="mt-2 rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900/50">
+          <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-neutral-300">Optional · prior paychecks this same year</summary>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className={labelClass}>Baseline year</label>
+              <input
+                className={fieldClass}
+                inputMode="numeric"
+                placeholder="2026"
+                value={priorYtdTaxYear}
+                onChange={(e) => setPriorYtdTaxYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={labelClass}>Prior gross before first stub listed</label>
+              <input className={fieldClass} inputMode="decimal" placeholder="0.00" value={priorYtdGross} onChange={(e) => setPriorYtdGross(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelClass}>Federal</label>
+              <input className={fieldClass} inputMode="decimal" placeholder="0.00" value={priorYtdFederal} onChange={(e) => setPriorYtdFederal(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelClass}>Social Security</label>
+              <input className={fieldClass} inputMode="decimal" placeholder="0.00" value={priorYtdSocialSecurity} onChange={(e) => setPriorYtdSocialSecurity(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelClass}>Medicare (1.45%)</label>
+              <input className={fieldClass} inputMode="decimal" placeholder="0.00" value={priorYtdMedicareBase} onChange={(e) => setPriorYtdMedicareBase(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelClass}>Addl. Medicare</label>
+              <input className={fieldClass} inputMode="decimal" placeholder="0.00" value={priorYtdMedicareAdditional} onChange={(e) => setPriorYtdMedicareAdditional(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelClass}>State</label>
+              <input className={fieldClass} inputMode="decimal" placeholder="0.00" value={priorYtdState} onChange={(e) => setPriorYtdState(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelClass}>Other</label>
+              <input className={fieldClass} inputMode="decimal" placeholder="0.00" value={priorYtdOther} onChange={(e) => setPriorYtdOther(e.target.value)} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={labelClass}>SS taxable wages YTD prior (W‑2 only)</label>
+              <input
+                className={fieldClass}
+                inputMode="decimal"
+                disabled={employmentType !== 'w2'}
+                placeholder=""
+                value={priorYtdTaxableSocSecWages}
+                onChange={(e) => setPriorYtdTaxableSocSecWages(e.target.value)}
+              />
+            </div>
+          </div>
+        </details>
+
+        <details className="mt-2 rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900/50">
+          <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-neutral-300">Shortcut · annual salary → monthly gross</summary>
+          <div className="mt-3 space-y-3">
+            <label className="flex items-start gap-2 cursor-pointer select-none text-sm dark:text-neutral-200">
               <input
                 type="checkbox"
-                className="mt-0.5 rounded border-gray-400 dark:border-neutral-500 shrink-0"
+                className="mt-0.5 h-4 w-4 rounded border-gray-400 dark:border-neutral-600"
                 checked={applyAnnualSalaryToMonthlyGross}
                 disabled={!sameAmountsAllPeriods}
                 onChange={(e) => {
@@ -855,103 +709,74 @@ const PayStubMaker = () => {
                   if (!on) setAnnualSalary('');
                 }}
               />
-              <span>
-                Auto-fill <strong className="font-normal">monthly gross = annual salary ÷ 12</strong> (same-dollar mode only)
-              </span>
+              Only when pay entries use the same dollars
             </label>
             {applyAnnualSalaryToMonthlyGross && sameAmountsAllPeriods ? (
-              <div>
-                <label className={labelClass}>Annual salary (USD)</label>
-                <input
-                  className={fieldClass}
-                  inputMode="decimal"
-                  placeholder="120000"
-                  value={annualSalary}
-                  onChange={(e) => setAnnualSalary(e.target.value)}
-                />
-              </div>
+              <>
+                <label className={labelClass}>Annual salary</label>
+                <input className={fieldClass} inputMode="decimal" placeholder="120000" value={annualSalary} onChange={(e) => setAnnualSalary(e.target.value)} />
+              </>
             ) : null}
           </div>
+        </details>
+      </section>
 
-          {sameAmountsAllPeriods ? (
-            <>
-              <p className="text-xs text-gray-500 dark:text-neutral-400">
-                These figures repeat on every page below. Dates order the math: YTD is cumulative by calendar date, not Month 1 / 2 / 3 slot.
-              </p>
-              <MoneyFields
-                values={shared}
-                onPatch={(p) => setShared((prev) => ({ ...prev, ...p }))}
-                fieldClass={fieldClass}
-                labelClass={labelClass}
-                taxFieldsLocked={disabledTaxFields}
-              />
-            </>
-          ) : (
-            <>
-              {[0, 1, 2].map((i) => (
-                <fieldset
-                  key={i}
-                  className="border border-gray-200 dark:border-neutral-700 rounded-xl p-4 space-y-3"
-                >
-                  <legend className="text-sm font-semibold px-2 text-gray-800 dark:text-neutral-100">
-                    Period {i + 1}
-                  </legend>
-                  <div>
-                    <label className={labelClass}>Pay period end date</label>
-                    <input
-                      type="date"
-                      className={fieldClass}
-                      value={perPeriod[i]?.periodEnd || ''}
-                      onChange={(e) => updatePeriod(i, { periodEnd: e.target.value })}
-                    />
-                  </div>
-                  <MoneyFields
-                    values={perPeriod[i]}
-                    onPatch={(p) => updatePeriod(i, p)}
-                    fieldClass={fieldClass}
-                    labelClass={labelClass}
-                    taxFieldsLocked={disabledTaxFields}
-                  />
-                </fieldset>
-              ))}
-            </>
-          )}
+      <section className={cardClass}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-neutral-100">Checks</h2>
+          <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700 dark:text-neutral-300">
+            <input type="checkbox" className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600" checked={sameAmountsAllPeriods} onChange={(e) => setSameAmountsAllPeriods(e.target.checked)} />
+            Same wages on each check
+          </label>
         </div>
-      </div>
 
-      {sameAmountsAllPeriods && (
-        <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:border dark:border-neutral-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-neutral-100 mb-4">
-            Pay period end dates (one per stub)
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-3">
+        {sameAmountsAllPeriods ? (
+          <>
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i}>
+                  <label className={labelClass}>Check #{i + 1} date</label>
+                  <input
+                    type="date"
+                    className={fieldClass}
+                    value={perPeriod[i]?.periodEnd || ''}
+                    onChange={(e) => updatePeriod(i, { periodEnd: e.target.value })}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mt-6">
+              <MoneyFields values={shared} onPatch={(p) => setShared((prev) => ({ ...prev, ...p }))} fieldClass={fieldClass} labelClass={labelClass} taxFieldsLocked={disabledTaxFields} />
+            </div>
+          </>
+        ) : (
+          <div className="mt-4 space-y-4">
             {[0, 1, 2].map((i) => (
-              <div key={i}>
-                <label className={labelClass}>Month {i + 1}</label>
-                <input
-                  type="date"
-                  className={fieldClass}
-                  value={perPeriod[i]?.periodEnd || ''}
-                  onChange={(e) => updatePeriod(i, { periodEnd: e.target.value })}
-                />
-              </div>
+              <fieldset key={i} className="rounded-xl border border-gray-100 p-4 dark:border-neutral-800">
+                <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-neutral-400">
+                  Stub {i + 1}
+                </legend>
+                <div className="mt-2">
+                  <label className={labelClass}>Check date</label>
+                  <input type="date" className={fieldClass} value={perPeriod[i]?.periodEnd || ''} onChange={(e) => updatePeriod(i, { periodEnd: e.target.value })} />
+                </div>
+                <div className="mt-3">
+                  <MoneyFields values={perPeriod[i]} onPatch={(p) => updatePeriod(i, p)} fieldClass={fieldClass} labelClass={labelClass} taxFieldsLocked={disabledTaxFields} />
+                </div>
+              </fieldset>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </section>
 
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4 px-1">
         <button
           type="button"
           onClick={handleDownload}
-          className="inline-flex h-12 items-center justify-center rounded-xl px-8 text-sm font-semibold text-black shadow-md transition hover:opacity-95"
-          style={{ background: 'linear-gradient(135deg, #D4A017, #a67c00)' }}
+          className="inline-flex h-12 min-w-[220px] items-center justify-center rounded-xl bg-neutral-900 px-8 text-sm font-semibold text-white shadow-sm hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
         >
-          Download PDF (3 pages)
+          Download PDF
         </button>
-        <p className="text-xs text-gray-500 dark:text-neutral-400 max-w-md">
-          Net pay = gross minus all deductions. Zero deductions are omitted from the PDF lines.
-        </p>
       </div>
     </div>
   );
@@ -1000,7 +825,7 @@ function MoneyFields({
         />
       </div>
       <div>
-        <label className={labelClass}>Federal income tax</label>
+        <label className={labelClass}>Federal withholding</label>
         <input
           className={lockedCls}
           inputMode="decimal"
@@ -1016,7 +841,7 @@ function MoneyFields({
         />
       </div>
       <div>
-        <label className={labelClass}>State income tax</label>
+        <label className={labelClass}>State withholding</label>
         <input
           className={lockedCls}
           inputMode="decimal"
@@ -1049,7 +874,7 @@ function MoneyFields({
         />
       </div>
       <div>
-        <label className={labelClass}>Other deduction label</label>
+        <label className={labelClass}>Other (label)</label>
         <input
           className={fieldClass}
           placeholder="e.g. Health insurance"
@@ -1058,7 +883,7 @@ function MoneyFields({
         />
       </div>
       <div>
-        <label className={labelClass}>Other deduction amount</label>
+        <label className={labelClass}>Other (amount)</label>
         <input
           className={fieldClass}
           inputMode="decimal"
