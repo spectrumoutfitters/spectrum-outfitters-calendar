@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, startOfMonth, parseISO, isValid } from 'date-fns';
 
-function parsePayDate(raw) {
+export function parsePayDate(raw) {
   if (!raw) return new Date();
   const d = typeof raw === 'string' ? parseISO(raw) : raw;
   return isValid(d) ? d : new Date();
@@ -18,6 +18,201 @@ export function computePeriodLabel(periodEndDate) {
   const end = periodEndDate;
   const start = startOfMonth(end);
   return `${format(start, 'MMM d, yyyy')} – ${format(end, 'MMM d, yyyy')}`;
+}
+
+function numUsdField(x) {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function calculateNetYTD(gross, fed, ss, medC, medA, state, other) {
+  return Math.max(0, gross - fed - ss - medC - medA - state - other);
+}
+
+/**
+ * Calendar-year running totals through each stub: sums all periods in this export with the same tax year and
+ * period-end on or before the current row, optional prior payroll YTD baseline (same year).
+ * @typedef {{ taxYear?: number, gross?: number, federal?: number, socialSecurity?: number, medicareBase?: number, medicareAdditional?: number, state?: number, other?: number }} PriorYtdInput
+ */
+
+/**
+ * @param {object[]} months
+ * @param {boolean} contractor
+ * @param {PriorYtdInput} prior
+ */
+export function buildPreparedPaystubPages(months, contractor, prior) {
+  /** @type {ReturnType<typeof parsePayDate>[]} */
+
+  const rows = months.map((m, inputOrder) => {
+    const d = parsePayDate(m.periodEnd);
+    const y = d.getFullYear();
+    const gross = Math.max(0, numUsdField(m.gross));
+    const federal = contractor ? 0 : Math.max(0, numUsdField(m.federal));
+    const stateInc = contractor ? 0 : Math.max(0, numUsdField(m.state));
+    const ssAmt = contractor ? 0 : Math.max(0, numUsdField(m.socialSecurity));
+    const medicareTotal = contractor ? 0 : Math.max(0, numUsdField(m.medicare));
+    let medClassic = contractor ? 0 : Math.max(0, numUsdField(m.medicareBase));
+    let medAdditional = contractor ? 0 : Math.max(0, numUsdField(m.medicareAdditional));
+
+    if (!contractor && medClassic <= 1e-4 && medAdditional <= 1e-4 && medicareTotal > 0) {
+      medClassic = medicareTotal;
+    }
+    if (
+      !contractor &&
+      medClassic + medAdditional > medicareTotal + 0.03 &&
+      medicareTotal > 0
+    ) {
+      medClassic = medicareTotal - medAdditional;
+    }
+
+    const otherAmt = Math.max(0, numUsdField(m.otherAmount));
+    const otherLbl =
+      contractor ? '' : `${m.otherLabel || ''}`.trim() || 'Other after-tax deduction';
+
+    const hrs =
+      contractor ? '' : Number(m.regularHours) > 0 ? String(Number(m.regularHours)) : '';
+    let rateStr = '';
+    let regEarnCurr = gross;
+    if (!contractor && Number(m.hourlyRate) > 0) {
+      const r = Number(m.hourlyRate);
+      rateStr = moneyUsd(r);
+      if (Number(m.regularHours) > 0) {
+        const calc = Number(m.regularHours) * r;
+        if (calc > 0) regEarnCurr = Math.min(calc, gross);
+      }
+    }
+    const supplementalCurr = contractor ? 0 : Math.max(0, gross - regEarnCurr);
+
+    return {
+      inputOrder,
+      d,
+      y,
+      m,
+      gross,
+      federal,
+      stateInc,
+      ssAmt,
+      medicareTotal,
+      medClassic,
+      medAdditional,
+      otherAmt,
+      otherLbl,
+      hrs,
+      rateStr,
+      regEarnCurr,
+      supplementalCurr,
+    };
+  });
+
+  const minYear =
+    rows.length > 0 ? Math.min(...rows.map((r) => r.y)) : new Date().getFullYear();
+  const uniqueYears = new Set(rows.map((r) => r.y));
+  const hasMultiYear = uniqueYears.size > 1;
+
+  const explicitPriorYearRaw = prior?.taxYear;
+  const explicitPriorYear =
+    explicitPriorYearRaw != null &&
+    `${explicitPriorYearRaw}`.trim() !== '' &&
+    Number.isFinite(Number(explicitPriorYearRaw))
+      ? Number(explicitPriorYearRaw)
+      : null;
+
+  const priorYearResolved =
+    explicitPriorYear !== null ? explicitPriorYear : hasMultiYear ? null : minYear;
+
+  const priorGross = Math.max(0, numUsdField(prior?.gross));
+  const priorFed = Math.max(0, numUsdField(prior?.federal));
+  const priorSs = Math.max(0, numUsdField(prior?.socialSecurity));
+  const priorMedC = Math.max(0, numUsdField(prior?.medicareBase));
+  const priorMedA = Math.max(0, numUsdField(prior?.medicareAdditional));
+  const priorState = Math.max(0, numUsdField(prior?.state));
+  const priorOther = Math.max(0, numUsdField(prior?.other));
+
+  const hasPriorAmounts =
+    priorGross +
+      priorFed +
+      priorSs +
+      priorMedC +
+      priorMedA +
+      priorState +
+      priorOther >
+    1e-6;
+
+  /**
+   * @param {number} stubYear
+   */
+  function priorBundleForStubYear(stubYear) {
+    if (!hasPriorAmounts) {
+      return { g: 0, f: 0, ss: 0, mc: 0, ma: 0, st: 0, o: 0 };
+    }
+    if (priorYearResolved === null || stubYear !== priorYearResolved) {
+      return { g: 0, f: 0, ss: 0, mc: 0, ma: 0, st: 0, o: 0 };
+    }
+    return {
+      g: priorGross,
+      f: priorFed,
+      ss: priorSs,
+      mc: priorMedC,
+      ma: priorMedA,
+      st: priorState,
+      o: priorOther,
+    };
+  }
+
+  const prepared = rows.map((row) => {
+    const cohort = rows.filter((o) => o.y === row.y && +o.d <= +row.d);
+    const pb = priorBundleForStubYear(row.y);
+
+    const sumGross = cohort.reduce((s, o) => s + o.gross, 0);
+    const sumFed = cohort.reduce((s, o) => s + o.federal, 0);
+    const sumSs = cohort.reduce((s, o) => s + o.ssAmt, 0);
+    const sumMedC = cohort.reduce((s, o) => s + o.medClassic, 0);
+    const sumMedA = cohort.reduce((s, o) => s + o.medAdditional, 0);
+    const sumState = cohort.reduce((s, o) => s + o.stateInc, 0);
+    const sumOther = cohort.reduce((s, o) => s + o.otherAmt, 0);
+    const sumReg = cohort.reduce((s, o) => s + o.regEarnCurr, 0);
+    const sumSup = cohort.reduce((s, o) => s + o.supplementalCurr, 0);
+
+    const ytdGross = pb.g + sumGross;
+    const ytdFed = pb.f + sumFed;
+    const ytdSs = pb.ss + sumSs;
+    const ytdMedC = pb.mc + sumMedC;
+    const ytdMedA = pb.ma + sumMedA;
+    const ytdState = pb.st + sumState;
+    const ytdOther = pb.o + sumOther;
+
+    const totalDedCurr =
+      row.federal + row.stateInc + row.ssAmt + row.medClassic + row.medAdditional + row.otherAmt;
+    const totalDedYtd = ytdFed + ytdSs + ytdMedC + ytdMedA + ytdState + ytdOther;
+
+    const netCurr =
+      row.gross - row.federal - row.stateInc - row.ssAmt - row.medClassic - row.medAdditional - row.otherAmt;
+    const netYtd = calculateNetYTD(ytdGross, ytdFed, ytdSs, ytdMedC, ytdMedA, ytdState, ytdOther);
+
+    return {
+      ...row,
+      payDateObj: row.d,
+      ytdGross,
+      ytdFed,
+      ytdSs,
+      ytdMedC,
+      ytdMedA,
+      ytdState,
+      ytdOther,
+      ytdRegEarn: sumReg,
+      ytdSupplemental: sumSup,
+      totalDedCurr,
+      totalDedYtd,
+      netCurr,
+      netYtd,
+      ytdBannerNote:
+        hasPriorAmounts && priorYearResolved === null
+          ? 'Prior YTD baseline skipped: set Tax year for baseline when periods span multiple calendar years.'
+          : '',
+    };
+  });
+
+  return prepared;
 }
 
 const BORDER_GRAY = [198, 202, 210];
@@ -87,87 +282,44 @@ export function generatePayStubsPdf(data) {
   const months = Array.isArray(data.months) ? data.months.slice(0, 36) : [];
   const printedAt = format(new Date(), 'MMM d, yyyy h:mm a');
 
-  let cumGross = 0;
-  let cumFed = 0;
-  let cumSs = 0;
-  let cumMedClassic = 0;
-  let cumMedAdd = 0;
-  let cumState = 0;
-  let cumOther = 0;
-  let cumRegEarn = 0;
+  const prepared = buildPreparedPaystubPages(months, contractor, data.priorYtd || {});
 
-  months.forEach((month, idx) => {
+  prepared.forEach((P, idx) => {
     if (idx > 0) {
       doc.addPage();
       yOrigin = side + topBarH + 6;
     }
 
-    const payDateObj = parsePayDate(month.periodEnd);
-    const gross = Math.max(0, Number(month.gross) || 0);
-    const federal = contractor ? 0 : Math.max(0, Number(month.federal) || 0);
-    const stateInc = contractor ? 0 : Math.max(0, Number(month.state) || 0);
-    const ssAmt = contractor ? 0 : Math.max(0, Number(month.socialSecurity) || 0);
-    const medicareTotal = contractor ? 0 : Math.max(0, Number(month.medicare) || 0);
-    let medClassic = contractor ? 0 : Math.max(0, Number(month.medicareBase) || 0);
-    let medAdditional = contractor
-      ? 0
-      : Math.max(0, Number(month.medicareAdditional) || 0);
+    const month = P.m;
+    const payDateObj = P.payDateObj;
+    const gross = P.gross;
+    const federal = P.federal;
+    const stateInc = P.stateInc;
+    const ssAmt = P.ssAmt;
+    const medicareTotal = P.medicareTotal;
+    const medClassic = P.medClassic;
+    const medAdditional = P.medAdditional;
+    const otherAmt = P.otherAmt;
+    const otherLbl = P.otherLbl;
+    const hrs = P.hrs;
+    const rateStr = P.rateStr;
+    const regEarnCurr = P.regEarnCurr;
+    const supplementalCurr = P.supplementalCurr;
 
-    if (!contractor && medClassic <= 1e-4 && medAdditional <= 1e-4 && medicareTotal > 0) {
-      medClassic = medicareTotal;
-    }
-    if (
-      !contractor &&
-      medClassic + medAdditional > medicareTotal + 0.03 &&
-      medicareTotal > 0
-    ) {
-      medClassic = medicareTotal - medAdditional;
-    }
+    const cumGross = P.ytdGross;
+    const cumFed = P.ytdFed;
+    const cumSs = P.ytdSs;
+    const cumMedClassic = P.ytdMedC;
+    const cumMedAdd = P.ytdMedA;
+    const cumState = P.ytdState;
+    const cumOther = P.ytdOther;
+    const cumRegEarn = P.ytdRegEarn;
 
-    const otherAmt = Math.max(0, Number(month.otherAmount) || 0);
-    const otherLbl =
-      contractor ? '' : `${month.otherLabel || ''}`.trim() || 'Other after-tax deduction';
-
-    cumGross += gross;
-    cumFed += federal;
-    cumSs += ssAmt;
-    cumMedClassic += medClassic;
-    cumMedAdd += medAdditional;
-    cumState += stateInc;
-    cumOther += otherAmt;
-
-    const hrs =
-      contractor ? '' : Number(month.regularHours) > 0 ? String(Number(month.regularHours)) : '';
-    let rateStr = '';
-    let regEarnCurr = gross;
-    if (!contractor && Number(month.hourlyRate) > 0) {
-      const r = Number(month.hourlyRate);
-      rateStr = moneyUsd(r);
-      if (Number(month.regularHours) > 0) {
-        const calc = Number(month.regularHours) * r;
-        if (calc > 0) regEarnCurr = Math.min(calc, gross);
-      }
-    }
-    const supplementalCurr = contractor ? 0 : Math.max(0, gross - regEarnCurr);
-    cumRegEarn += regEarnCurr;
-
-    const totalDedCurr =
-      federal + stateInc + ssAmt + medClassic + medAdditional + otherAmt;
-    const totalDedYtd =
-      cumFed + cumSs + cumMedClassic + cumMedAdd + cumState + cumOther;
-
-    const netCurr =
-      gross - federal - stateInc - ssAmt - medClassic - medAdditional - otherAmt;
-
-    const netYtd = calculateNetYTD(
-      cumGross,
-      cumFed,
-      cumSs,
-      cumMedClassic,
-      cumMedAdd,
-      cumState,
-      cumOther,
-    );
+    const totalDedCurr = P.totalDedCurr;
+    const totalDedYtd = P.totalDedYtd;
+    const netCurr = P.netCurr;
+    const netYtd = P.netYtd;
+    const ytdSupplementalAmt = P.ytdSupplemental ?? 0;
 
     const statementRef = `PS-${format(payDateObj, 'yyyyMMdd')}-${String(idx + 1).padStart(2, '0')}`;
     const refNo = `${month.referenceNumber ?? data.referenceNumber ?? ''}`.trim();
@@ -187,7 +339,7 @@ export function generatePayStubsPdf(data) {
     doc.setFontSize(7);
     doc.setTextColor(120, 125, 135);
     doc.text(`Statement ${statementRef}`, pageW - side, y, { align: 'right' });
-    doc.text(`Page ${idx + 1} of ${months.length}`, pageW - side, y + 10, {
+    doc.text(`Page ${idx + 1} of ${prepared.length}`, pageW - side, y + 10, {
       align: 'right',
     });
 
@@ -377,7 +529,13 @@ export function generatePayStubsPdf(data) {
         moneyUsd(cumRegEarn),
       ]);
       if (supplementalCurr > 1e-2) {
-        earnBody.push(['Supplemental / bonus earnings', '—', '—', moneyUsd(supplementalCurr), '—']);
+        earnBody.push([
+          'Supplemental / bonus earnings',
+          '—',
+          '—',
+          moneyUsd(supplementalCurr),
+          moneyUsd(ytdSupplementalAmt),
+        ]);
       }
     } else {
       earnBody.push(['Contract gross (statutory payout)', '—', '—', moneyUsd(gross), moneyUsd(cumGross)]);
@@ -558,7 +716,7 @@ export function generatePayStubsPdf(data) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(200, 205, 214);
-    doc.text(`Year-to-date net amount (this export): ${moneyUsd(netYtd)}`, sumX, sy);
+    doc.text(`Year-to-date net (calendar YTD shown): ${moneyUsd(netYtd)}`, sumX, sy);
 
     y = y + 8 + 78 + 20;
 
@@ -567,6 +725,27 @@ export function generatePayStubsPdf(data) {
     doc.line(side, y, pageW - side, y);
 
     y += 14;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.75);
+    doc.setTextColor(110, 115, 122);
+    const ytdExplain = doc.splitTextToSize(
+      `YTD columns use calendar-year ${format(payDateObj, 'yyyy')}: summed gross and withholdings for every exported stub with the same year and period-end on or before ${format(payDateObj, 'MMM d, yyyy')} (chronological by date). Optional baseline adds earlier-in-year totals.`,
+      pageW - side * 2,
+    );
+    doc.text(ytdExplain, side, y);
+    y += ytdExplain.length * 9 + 8;
+
+    if (P.ytdBannerNote) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(6.75);
+      doc.setTextColor(160, 90, 50);
+      const warnLines = doc.splitTextToSize(P.ytdBannerNote, pageW - side * 2);
+      doc.text(warnLines, side, y);
+      y += warnLines.length * 10 + 4;
+      doc.setTextColor(120, 126, 135);
+      doc.setFontSize(7);
+    }
+
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(7);
     doc.setTextColor(120, 126, 135);
@@ -622,9 +801,5 @@ export function generatePayStubsPdf(data) {
     .replace(/[^\w\s-]/gu, '')
     .replace(/\s+/g, '-');
 
-  doc.save(`${safeStem || 'pay-documentation'}-${months.length}-periods.pdf`);
-}
-
-function calculateNetYTD(gross, fed, ss, medC, medA, state, other) {
-  return Math.max(0, gross - fed - ss - medC - medA - state - other);
+  doc.save(`${safeStem || 'pay-documentation'}-${prepared.length}-periods.pdf`);
 }

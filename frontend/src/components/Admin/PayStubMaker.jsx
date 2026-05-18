@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { format, endOfMonth, subMonths } from 'date-fns';
-import { generatePayStubsPdf } from '../../utils/payStubPdf';
+import { generatePayStubsPdf, parsePayDate } from '../../utils/payStubPdf';
 import { computeContractorDeductions, computeW2Deductions } from '../../utils/payrollTaxUS';
 
 const PAY_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Other'];
@@ -95,12 +95,18 @@ function moneyFixed2(n) {
   return x.toFixed(2);
 }
 
-/**
- * Applies auto withholding per period while advancing Social Security wage base.
- */
-function sequentialW2Deductions(rows, payFrequency, filingStatus, workStateCode) {
-  let priorSocSec = 0;
-  return rows.map((row) => {
+function sequentialW2DeductionsInRowOrder(
+  rows,
+  payFrequency,
+  filingStatus,
+  workStateCode,
+  priorSocSeed = 0,
+) {
+  const tagged = rows.map((row, idx) => ({ row, idx }));
+  tagged.sort((a, b) => +parsePayDate(a.row.periodEnd) - +parsePayDate(b.row.periodEnd));
+  let priorSocSec = Number(priorSocSeed) || 0;
+  const calcByIdx = {};
+  tagged.forEach(({ row, idx }) => {
     const gross = Math.max(0, Number(row.gross) || 0);
     const calc = computeW2Deductions({
       gross,
@@ -110,6 +116,10 @@ function sequentialW2Deductions(rows, payFrequency, filingStatus, workStateCode)
       priorYtdSocSecWages: priorSocSec,
     });
     priorSocSec += calc.oasdiWagesNow ?? 0;
+    calcByIdx[idx] = calc;
+  });
+  return rows.map((_, idx) => {
+    const calc = calcByIdx[idx];
     return {
       federal: calc.federal,
       socialSecurity: calc.socialSecurity,
@@ -117,6 +127,7 @@ function sequentialW2Deductions(rows, payFrequency, filingStatus, workStateCode)
       medicareBase: calc.medicareBase,
       medicareAdditional: calc.medicareAdditional,
       state: calc.state,
+      oasdiWagesNow: calc.oasdiWagesNow ?? 0,
     };
   });
 }
@@ -130,6 +141,17 @@ function formatDeductionFields(d) {
     medicareAdditional: moneyFixed2(d.medicareAdditional),
     state: moneyFixed2(d.state),
   };
+}
+
+function parseOptionalTaxYear(raw) {
+  const t = `${raw ?? ''}`.trim();
+  if (!t) return undefined;
+  const y = Number(t);
+  return Number.isFinite(y) && y >= 1970 && y <= 2150 ? y : undefined;
+}
+
+function anyPriorYtdFieldFilled(fields) {
+  return Object.values(fields).some((v) => `${v ?? ''}`.trim() !== '');
 }
 
 const MAX_PAYSTUB_LOGO_BYTES = 2_500_000;
@@ -151,6 +173,19 @@ const PayStubMaker = () => {
   const [manualWithholdings, setManualWithholdings] = useState(false);
   const [employerLogoDataUrl, setEmployerLogoDataUrl] = useState('');
   const [logoHint, setLogoHint] = useState('');
+  /** Optional calendar-year amounts already earned before earliest period-date in this PDF */
+  const [priorYtdTaxYear, setPriorYtdTaxYear] = useState('');
+  const [priorYtdGross, setPriorYtdGross] = useState('');
+  const [priorYtdFederal, setPriorYtdFederal] = useState('');
+  const [priorYtdSocialSecurity, setPriorYtdSocialSecurity] = useState('');
+  const [priorYtdMedicareBase, setPriorYtdMedicareBase] = useState('');
+  const [priorYtdMedicareAdditional, setPriorYtdMedicareAdditional] = useState('');
+  const [priorYtdState, setPriorYtdState] = useState('');
+  const [priorYtdOther, setPriorYtdOther] = useState('');
+  /** W-2 SS taxable wages already earned before first period (for withholding sequence only) */
+  const [priorYtdTaxableSocSecWages, setPriorYtdTaxableSocSecWages] = useState('');
+  const [annualSalary, setAnnualSalary] = useState('');
+  const [applyAnnualSalaryToMonthlyGross, setApplyAnnualSalaryToMonthlyGross] = useState(false);
 
   const onEmployerLogoFile = useCallback((e) => {
     const input = e.target;
@@ -179,6 +214,14 @@ const PayStubMaker = () => {
     };
     reader.readAsDataURL(file);
   }, []);
+
+  useEffect(() => {
+    if (!applyAnnualSalaryToMonthlyGross || !sameAmountsAllPeriods) return;
+    const a = Number(`${annualSalary}`.replace(/,/g, ''));
+    if (!Number.isFinite(a) || a <= 0) return;
+    const monthly = a / 12;
+    setShared((prev) => ({ ...prev, gross: monthly.toFixed(2) }));
+  }, [applyAnnualSalaryToMonthlyGross, annualSalary, sameAmountsAllPeriods]);
 
   const [shared, setShared] = useState({
     gross: '',
@@ -265,8 +308,22 @@ const PayStubMaker = () => {
       return;
     }
 
-    const dedSeq = sequentialW2Deductions(baselineRowsForCalc, payFrequency, filingStatus, workStateCode);
-    const firstFmt = dedSeq[0] ? formatDeductionFields(dedSeq[0]) : zFmt;
+    const dedSeq = sequentialW2DeductionsInRowOrder(
+      baselineRowsForCalc,
+      payFrequency,
+      filingStatus,
+      workStateCode,
+      employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
+    );
+    const chronFirstIdx =
+      baselineRowsForCalc.length === 0
+        ? 0
+        : [...baselineRowsForCalc.map((r, idx) => ({ idx, t: +parsePayDate(r.periodEnd) }))].sort(
+            (a, b) => a.t - b.t,
+          )[0].idx;
+    const firstFmt = dedSeq[chronFirstIdx]
+      ? formatDeductionFields(dedSeq[chronFirstIdx])
+      : zFmt;
 
     if (sameAmountsAllPeriods && perPeriod.length === 3) {
       setShared((prev) => ({ ...prev, ...firstFmt }));
@@ -288,18 +345,41 @@ const PayStubMaker = () => {
     manualWithholdings,
     sameAmountsAllPeriods,
     perPeriod.length,
+    priorYtdTaxableSocSecWages,
   ]);
 
   const handleDownload = () => {
-    const rows =
+    const rowsRaw =
       sameAmountsAllPeriods && perPeriod.length === 3
-        ? baselineRowsForCalc
+        ? baselineRowsForCalc.map((r) => ({ ...r }))
         : perPeriod.map((row) => ({ ...row }));
 
-    let priorSocSec = 0;
     const isContractor = employmentType === '1099';
+    const priorSocSeed =
+      isContractor ? 0 : Number(`${priorYtdTaxableSocSecWages ?? ''}`.replace(/,/g, '')) || 0;
 
-    const months = rows.map((row) => {
+    /** Per-row withholding: auto W-2 recomputed in chronological period-end order */
+    let working = rowsRaw.map((r) => ({ ...r }));
+    if (!isContractor && !manualWithholdings) {
+      const seq = sequentialW2DeductionsInRowOrder(
+        working,
+        payFrequency,
+        filingStatus,
+        workStateCode,
+        priorSocSeed,
+      );
+      working = working.map((row, i) => ({
+        ...row,
+        federal: seq[i].federal,
+        socialSecurity: seq[i].socialSecurity,
+        medicare: seq[i].medicare,
+        medicareBase: seq[i].medicareBase,
+        medicareAdditional: seq[i].medicareAdditional,
+        state: seq[i].state,
+      }));
+    }
+
+    const months = working.map((row) => {
       const grossNum = Math.max(0, Number(row.gross) || 0);
       let deductions;
 
@@ -322,17 +402,14 @@ const PayStubMaker = () => {
           oasdiWagesNow: Math.min(grossNum, Number.MAX_SAFE_INTEGER),
         };
       } else {
-        deductions = computeW2Deductions({
-          gross: grossNum,
-          payFrequency,
-          filingStatus,
-          workStateCode,
-          priorYtdSocSecWages: priorSocSec,
-        });
-      }
-
-      if (!manualWithholdings && !isContractor) {
-        priorSocSec += deductions.oasdiWagesNow ?? 0;
+        deductions = {
+          federal: Number(row.federal) || 0,
+          socialSecurity: Number(row.socialSecurity) || 0,
+          medicare: Number(row.medicare) || 0,
+          medicareBase: Number(row.medicareBase) || 0,
+          medicareAdditional: Number(row.medicareAdditional) || 0,
+          state: Number(row.state) || 0,
+        };
       }
 
       return {
@@ -351,11 +428,35 @@ const PayStubMaker = () => {
       };
     });
 
+    const priorNums = {
+      gross: priorYtdGross,
+      federal: priorYtdFederal,
+      socialSecurity: priorYtdSocialSecurity,
+      medicareBase: priorYtdMedicareBase,
+      medicareAdditional: priorYtdMedicareAdditional,
+      state: priorYtdState,
+      other: priorYtdOther,
+    };
+    const priorYtdPdf =
+      anyPriorYtdFieldFilled(priorNums) || parseOptionalTaxYear(priorYtdTaxYear) != null
+        ? {
+            taxYear: parseOptionalTaxYear(priorYtdTaxYear),
+            gross: Number(`${priorYtdGross}`.replace(/,/g, '')) || 0,
+            federal: Number(`${priorYtdFederal}`.replace(/,/g, '')) || 0,
+            socialSecurity: Number(`${priorYtdSocialSecurity}`.replace(/,/g, '')) || 0,
+            medicareBase: Number(`${priorYtdMedicareBase}`.replace(/,/g, '')) || 0,
+            medicareAdditional: Number(`${priorYtdMedicareAdditional}`.replace(/,/g, '')) || 0,
+            state: Number(`${priorYtdState}`.replace(/,/g, '')) || 0,
+            other: Number(`${priorYtdOther}`.replace(/,/g, '')) || 0,
+          }
+        : undefined;
+
     generatePayStubsPdf({
       employerName,
       employerAddress,
       employerEin,
       ...(employerLogoDataUrl ? { logoDataUrl: employerLogoDataUrl } : {}),
+      ...(priorYtdPdf ? { priorYtd: priorYtdPdf } : {}),
       employeeName,
       employeeId,
       last4Ssn,
@@ -385,12 +486,18 @@ const PayStubMaker = () => {
           Pay stub PDF (3 months)
         </h1>
         <p className="text-sm text-gray-600 dark:text-neutral-300 max-w-2xl">
-          One PDF downloads with{' '}
-          <strong className="text-gray-900 dark:text-neutral-100">three professionally structured pages</strong> (layouts similar to
-          large payroll portals—statement ref, earnings/deductions grids, bold pay summary—even though you&apos;re entering your own figures).
-          W‑2 mode estimates federal/state/FICA from gross × pay periods; toggle manual mode to edit every line item.
+          One PDF with{' '}
+          <strong className="text-gray-900 dark:text-neutral-100">three professionally structured pages</strong>.
+          Figures update live as you type. YTD on each page sums periods in the <strong className="font-normal">same tax year </strong>
+          with end-dates{' '}
+          <strong className="font-normal">on or before that page&apos;s pay period-end </strong>
+          (sorted by calendar date; Month 3 can run before Month 2 if dates say so).
+          Optional baseline adds pay from earlier in that year before the dates you listed.
+          <span className="block mt-1 text-neutral-700 dark:text-neutral-300">
+            W‑2 mode estimates withholdings chronologically including Social Security wage base; toggle manual row edits if needed.
+          </span>
           <span className="block mt-1 text-amber-800 dark:text-amber-200">
-            Estimated taxes only — align with payroll provider withholding tables before relying on withholdings legally.
+            Estimated taxes only — defer to payroll software for withholding tables before relying legally.
           </span>
         </p>
       </div>
@@ -456,6 +563,112 @@ const PayStubMaker = () => {
               </div>
             ) : null}
           </div>
+
+          <fieldset className="border border-gray-200 dark:border-neutral-700 rounded-xl p-4 space-y-3">
+            <legend className="text-sm font-semibold px-2 text-gray-800 dark:text-neutral-100">
+              Prior calendar-year YTD (optional)
+            </legend>
+            <p className="text-xs text-gray-600 dark:text-neutral-400 leading-relaxed">
+              Enter amounts already paid{' '}
+              <strong className="font-normal text-gray-500">in the same tax year </strong>
+              before the earliest period date below. Leave blank when this PDF covers the full year-so-far. Totals columns on each page
+              add every exported period<strong className="font-normal text-gray-500"> that falls in the same calendar year and on/before </strong>
+              that page&apos;s period end (ordering is chronological, not Month 1/2/3 order).
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Baseline tax year</label>
+                <input
+                  className={fieldClass}
+                  inputMode="numeric"
+                  placeholder="e.g. 2026 (required if stubs cross two years)"
+                  value={priorYtdTaxYear}
+                  onChange={(e) => setPriorYtdTaxYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelClass}>Prior gross YTD (before first date above)</label>
+                <input
+                  className={fieldClass}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={priorYtdGross}
+                  onChange={(e) => setPriorYtdGross(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Prior federal withheld</label>
+                <input
+                  className={fieldClass}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={priorYtdFederal}
+                  onChange={(e) => setPriorYtdFederal(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Prior Social Security withheld</label>
+                <input
+                  className={fieldClass}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={priorYtdSocialSecurity}
+                  onChange={(e) => setPriorYtdSocialSecurity(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Prior Medicare base (1.45% tier)</label>
+                <input
+                  className={fieldClass}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={priorYtdMedicareBase}
+                  onChange={(e) => setPriorYtdMedicareBase(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Prior additional Medicare withheld</label>
+                <input
+                  className={fieldClass}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={priorYtdMedicareAdditional}
+                  onChange={(e) => setPriorYtdMedicareAdditional(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Prior state withheld</label>
+                <input
+                  className={fieldClass}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={priorYtdState}
+                  onChange={(e) => setPriorYtdState(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Prior other deductions</label>
+                <input
+                  className={fieldClass}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={priorYtdOther}
+                  onChange={(e) => setPriorYtdOther(e.target.value)}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelClass}>Soc. Security taxable wages YTD before first period (W‑2)</label>
+                <input
+                  className={fieldClass}
+                  inputMode="decimal"
+                  disabled={employmentType !== 'w2'}
+                  placeholder="Feeds OASDI base only — unrelated to gross YTD boxes"
+                  value={priorYtdTaxableSocSecWages}
+                  onChange={(e) => setPriorYtdTaxableSocSecWages(e.target.value)}
+                />
+              </div>
+            </div>
+          </fieldset>
 
           <h2 className="text-lg font-semibold text-gray-800 dark:text-neutral-100 pt-2">Employee</h2>
           <div>
@@ -566,14 +779,45 @@ const PayStubMaker = () => {
                 checked={sameAmountsAllPeriods}
                 onChange={(e) => setSameAmountsAllPeriods(e.target.checked)}
               />
-              Same dollar amounts each month (only dates differ)
+              Same dollar amounts each period (dates can differ)
             </label>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-4 space-y-3 bg-neutral-50/80 dark:bg-neutral-900/50">
+            <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-neutral-100 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="mt-0.5 rounded border-gray-400 dark:border-neutral-500 shrink-0"
+                checked={applyAnnualSalaryToMonthlyGross}
+                disabled={!sameAmountsAllPeriods}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setApplyAnnualSalaryToMonthlyGross(on);
+                  if (!on) setAnnualSalary('');
+                }}
+              />
+              <span>
+                Auto-fill <strong className="font-normal">monthly gross = annual salary ÷ 12</strong> (same-dollar mode only)
+              </span>
+            </label>
+            {applyAnnualSalaryToMonthlyGross && sameAmountsAllPeriods ? (
+              <div>
+                <label className={labelClass}>Annual salary (USD)</label>
+                <input
+                  className={fieldClass}
+                  inputMode="decimal"
+                  placeholder="120000"
+                  value={annualSalary}
+                  onChange={(e) => setAnnualSalary(e.target.value)}
+                />
+              </div>
+            ) : null}
           </div>
 
           {sameAmountsAllPeriods ? (
             <>
               <p className="text-xs text-gray-500 dark:text-neutral-400">
-                These figures repeat on all three stubs. Set each pay period end date in the section below.
+                These figures repeat on every page below. Dates order the math: YTD is cumulative by calendar date, not Month 1 / 2 / 3 slot.
               </p>
               <MoneyFields
                 values={shared}
