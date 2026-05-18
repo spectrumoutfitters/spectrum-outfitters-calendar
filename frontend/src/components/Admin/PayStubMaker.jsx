@@ -388,8 +388,9 @@ const PayStubMaker = () => {
     }
 
     const months = working.map((row) => {
+      const rawEnteredGross = Math.max(0, Number(row.gross) || 0);
       const grossNum = paycheckGrossFromEntry(
-        Math.max(0, Number(row.gross) || 0),
+        rawEnteredGross,
         payFrequency,
         spreadMonthlyAcrossPaychecks,
       );
@@ -426,7 +427,8 @@ const PayStubMaker = () => {
 
       return {
         periodEnd: row.periodEnd,
-        gross: grossNum,
+        /** Raw UI gross; `generatePayStubsPdf`/`buildPreparedPaystubPages` apply `paycheckGrossFromEntry` once. */
+        gross: rawEnteredGross,
         federal: deductions.federal,
         socialSecurity: deductions.socialSecurity,
         medicare: deductions.medicare,
