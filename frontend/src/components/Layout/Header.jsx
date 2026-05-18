@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useJumpPalette } from './JumpPalette';
 import Logo from '../Logo';
 import HeaderClockInOut from '../TimeClock/HeaderClockInOut';
 import EmployeeStatusBar from '../EmployeeStatusBar/EmployeeStatusBar';
@@ -8,8 +9,9 @@ import UpdatesBadge from '../Updates/UpdatesBadge';
 import ThemeToggle from '../ui/ThemeToggle';
 
 const Header = ({ onMenuClick }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const { openPalette } = useJumpPalette();
 
   const handleLogout = async () => {
     await logout();
@@ -39,6 +41,19 @@ const Header = ({ onMenuClick }) => {
           </div>
         </div>
         <div className="flex items-center gap-2 md:gap-4 shrink-0">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => openPalette()}
+              className="hidden sm:inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/15 transition-colors"
+              title="Jump to any screen (⌘K or Ctrl+K)"
+            >
+              Jump
+              <kbd className="hidden md:inline rounded bg-black/25 px-1 font-mono text-[10px] text-white/90">
+                ⌘K
+              </kbd>
+            </button>
+          )}
           <ThemeToggle showLabel />
           <UpdatesBadge />
           <EmployeeStatusBar />

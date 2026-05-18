@@ -24,50 +24,17 @@ import SecuritySessions from '../components/Admin/SecuritySessions';
 import AdminHistory from '../components/Admin/AdminHistory';
 import AdminBroadcastNotification from '../components/Notifications/AdminBroadcastNotification';
 import GrandOpeningDay from '../components/Admin/GrandOpeningDay';
+import {
+  ADMIN_MAIN_TABS_ADMIN,
+  ADMIN_MAIN_TABS_EMPLOYEE,
+  ADMIN_SUB_TABS,
+} from '../config/adminNavRegistry';
 
 const GOLD = '#D4A017';
 
-const MAIN_TABS_ADMIN = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'grand_opening', label: 'Grand Opening Day' },
-  { id: 'people', label: 'People' },
-  { id: 'inventory', label: 'Inventory' },
-  { id: 'finance', label: 'Finance' },
-  { id: 'settings', label: 'Settings' },
-];
-
-const MAIN_TABS_EMPLOYEE = [{ id: 'grand_opening', label: 'Grand Opening Day' }];
-
-const SUB_TABS = {
-  people: [
-    { id: 'status', label: 'Status' },
-    { id: 'schedule', label: 'Schedule' },
-    { id: 'time', label: 'Time' },
-    { id: 'users', label: 'Users' },
-    { id: 'worklist', label: 'Worklist' },
-    { id: 'history', label: 'History' },
-  ],
-  inventory: [
-    { id: 'inventory', label: 'Inventory' },
-    { id: 'orders', label: 'Orders' },
-    { id: 'products', label: 'Products' },
-  ],
-  finance: [
-    { id: 'payroll', label: 'Payroll' },
-    { id: 'paystub_maker', label: 'Pay stub PDF' },
-    { id: 'shop_financing', label: 'Shop Financing' },
-    { id: 'finance', label: 'P&L / Summary' },
-    { id: 'analytics', label: 'Analytics' },
-    { id: 'reports', label: 'Reports' },
-    { id: 'compliance', label: 'Compliance' },
-  ],
-  settings: [
-    { id: 'general', label: 'General' },
-    { id: 'customer_booking', label: 'Customer booking' },
-    { id: 'security', label: 'Security' },
-    { id: 'updates', label: 'Updates' },
-  ],
-};
+const MAIN_TABS_ADMIN = ADMIN_MAIN_TABS_ADMIN;
+const MAIN_TABS_EMPLOYEE = ADMIN_MAIN_TABS_EMPLOYEE;
+const SUB_TABS = ADMIN_SUB_TABS;
 
 function TabBar({ tabs, activeId, onSelect, badge }) {
   return (
@@ -195,6 +162,38 @@ const Admin = () => {
     localStorage.setItem('admin_main_tab', 'grand_opening');
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  /** Jump palette / deep link: /admin?adm=finance&adsub=paystub_maker */
+  useEffect(() => {
+    const adm = searchParams.get('adm');
+    const adsub = searchParams.get('adsub');
+    if (!isAdmin || !adm) return;
+
+    const validMain = ADMIN_MAIN_TABS_ADMIN.some((t) => t.id === adm);
+    if (!validMain) return;
+
+    setMainTab(adm);
+    localStorage.setItem('admin_main_tab', adm);
+
+    const subs = ADMIN_SUB_TABS[adm];
+    if (subs && adsub && subs.some((s) => s.id === adsub)) {
+      setSubTabs((prev) => {
+        const next = { ...prev, [adm]: adsub };
+        localStorage.setItem('admin_sub_tabs', JSON.stringify(next));
+        return next;
+      });
+    }
+
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('adm');
+        next.delete('adsub');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [searchParams, isAdmin, setSearchParams]);
 
   useEffect(() => {
     if (!isAdmin && mainTab !== 'grand_opening') {
