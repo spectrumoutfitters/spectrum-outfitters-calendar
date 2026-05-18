@@ -1,6 +1,13 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { format, startOfMonth, parseISO, isValid, subDays } from 'date-fns';
+import {
+  differenceInCalendarDays,
+  format,
+  startOfMonth,
+  parseISO,
+  isValid,
+  subDays,
+} from 'date-fns';
 import { computeW2Deductions, payPeriodsPerYear } from './payrollTaxUS';
 
 export function parsePayDate(raw) {
@@ -67,6 +74,51 @@ export function paycheckGrossFromEntry(rawEntered, payFrequency, treatEnteredAmo
   return (g * 12) / periods;
 }
 
+function isLeapGregorian(year) {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+function calendarDaysInGregorianYear(year) {
+  return isLeapGregorian(year) ? 366 : 365;
+}
+
+/** Inclusive calendar-day count from Jan 1 through `periodEnd` (same calendar year). */
+function inclusiveWholeDaysJan1Through(periodEnd) {
+  const y = periodEnd.getFullYear();
+  const jan1 = new Date(y, 0, 1);
+  const local = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate());
+  return Math.max(0, differenceInCalendarDays(local, jan1) + 1);
+}
+
+/**
+ * Approximate payroll periods elapsed in the tax year through `periodEnd`,
+ * spread evenly using the Gregorian year length — used when sparse exported
+ * stubs would otherwise under-report YTD (e.g. weekly pay with only month-end samples).
+ *
+ * Values are bounded to [1, payPeriodsPerYear] when ≥1 calendar day elapsed in-year.
+ *
+ * @param {Date|string} periodEnd — check date (period end).
+ * @param {string} [payFrequency]
+ * @returns {number}
+ */
+export function syntheticPayPeriodCountYtd(periodEnd, payFrequency) {
+  const d = parsePayDate(periodEnd);
+  const y = d.getFullYear();
+  const inc = inclusiveWholeDaysJan1Through(d);
+  const diy = Math.max(1, calendarDaysInGregorianYear(y));
+  const frac = Math.min(1, Math.max(0, inc / diy));
+  const f = `${payFrequency || 'Monthly'}`.trim();
+  const perf = payPeriodsPerYear(f);
+  const scaled = frac * perf;
+  const rounded = Math.round(scaled);
+  const lower = inc >= 1 ? 1 : 0;
+  return Math.min(perf, Math.max(lower, rounded));
+}
+
+function roundUsd2(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
+
 function numUsdField(x) {
   const n = Number(x);
   return Number.isFinite(n) ? n : 0;
@@ -98,15 +150,18 @@ function addPriorParts(a, b) {
 }
 
 /**
- * When enabled, infer prior calendar months Jan … (month before earliest exported stub in that tax year).
- * Applies to any pay frequency: phantom months use implied monthly wages from earliest listed paycheck
- * (weekly/biweekly etc. scaled up × periods/12). Contractors get gross phantom only (no withheld lines).
+ * When calendar backfill is on, infers withheld prior months for **W-2**: Jan … (calendar month before the earliest exported stub).
+ * Phantom months use implied monthly wages derived from earliest listed paycheck (weekly/biweekly → × periods/12).
+ *
+ * **1099 + calendar backfill** with `skipContractorMonthPhantomGross`: skip contractor phantom month lumps; cumulative gross YTD uses
+ * `syntheticPayPeriodCountYtd` × per-check gross so sparse sample stubs don't under-count intervening paychecks.
  *
  * Multi-year batches skip extrapolation — user should use manual prior or split exports.
  *
  * @param {Array<{ y: number; d: Date; gross: number }>} normalizedRows
  * @param {boolean} contractor
- * @param {PaystubYtdOptions} opts
+ * @param {PaystubYtdOptions & { skipContractorMonthPhantomGross?: boolean }} opts — when `skipContractorMonthPhantomGross`,
+ * contractor prior-month gross lumps are suppressed (calendar YTD is filled another way).
  * @returns {{ byYear: Record<number, ReturnType<emptyPriorParts>>, runningSsConsumed: boolean, suppressedReason: string }}
  */
 function phantomCalendarMonthsPriorTotals(normalizedRows, contractor, opts) {
@@ -150,8 +205,13 @@ function phantomCalendarMonthsPriorTotals(normalizedRows, contractor, opts) {
   let phantom = emptyPriorParts();
   let priorSs = Math.max(0, Number(opts.priorSsTaxableWages) || 0);
 
+  const skipCg =
+    !!(contractor && opts?.skipContractorMonthPhantomGross);
+
   for (let m = 1; m < earliestMonthHuman; m++) {
-    phantom.g += monthlyPhantomGross;
+    if (!skipCg) {
+      phantom.g += monthlyPhantomGross;
+    }
     if (!contractor) {
       const c = computeW2Deductions({
         gross: monthlyPhantomGross,
@@ -283,12 +343,27 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
       priorOther >
     1e-6;
 
+  const calendarBackfillOn =
+    ytdOpts?.calendarYtdBackfill === true || ytdOpts?.monthlyJanBackfill === true;
+
+  /** Contractor + calendar backfill: list-only YTD skips weeks → use Gregorian pro-rate (see footer note). */
+  const contractorProRatedCandidate =
+    contractor && calendarBackfillOn && !hasPriorAmounts && !hasMultiYear;
+
   const phantomSynthetic = phantomCalendarMonthsPriorTotals(
     rows.map((r) => ({ y: r.y, d: r.d, gross: r.gross })),
     contractor,
-    ytdOpts || {},
+    {
+      ...(ytdOpts || {}),
+      skipContractorMonthPhantomGross: contractorProRatedCandidate,
+    },
   );
   const phantomByYear = phantomSynthetic.byYear || {};
+
+  const sortedChronological = [...rows].sort((a, b) => +a.d - +b.d);
+  const contractorYtdAnchorGross = sortedChronological.length ? sortedChronological[0].gross : 0;
+  const contractorProRatedViable =
+    contractorProRatedCandidate && contractorYtdAnchorGross > 1e-6;
 
   /**
    * @param {number} stubYear
@@ -334,7 +409,12 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     const sumReg = cohort.reduce((s, o) => s + o.regEarnCurr, 0);
     const sumSup = cohort.reduce((s, o) => s + o.supplementalCurr, 0);
 
-    const ytdGross = pb.g + sumGross;
+    const syntheticPeriodCount = contractorProRatedViable
+      ? syntheticPayPeriodCountYtd(row.d, pfResolved)
+      : 0;
+    const ytdGross = contractorProRatedViable
+      ? roundUsd2(syntheticPeriodCount * contractorYtdAnchorGross)
+      : pb.g + sumGross;
     const ytdFed = pb.f + sumFed;
     const ytdSs = pb.ss + sumSs;
     const ytdMedC = pb.mc + sumMedC;
@@ -366,6 +446,9 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
       totalDedYtd,
       netCurr,
       netYtd,
+      contractorProRatedYtd: contractorProRatedViable,
+      ytdSyntheticPeriodCount: syntheticPeriodCount,
+      ytdAnchorGrossPerPeriod: contractorProRatedViable ? contractorYtdAnchorGross : undefined,
     };
   });
 
@@ -491,6 +574,10 @@ export function generatePayStubsPdf(data) {
     const netYtd = P.netYtd;
     const ytdSupplementalAmt = P.ytdSupplemental ?? 0;
     const cumRegEarn = P.ytdRegEarn;
+
+    const contractorProRatedYtd = P.contractorProRatedYtd ?? false;
+    const ytdSyntheticPeriodCount = P.ytdSyntheticPeriodCount ?? 0;
+    const ytdAnchorGrossPerPeriod = P.ytdAnchorGrossPerPeriod;
 
     const statementRef = `PS-${format(payDateObj, 'yyyyMMdd')}-${String(idx + 1).padStart(2, '0')}`;
     const refNo = `${month.referenceNumber ?? data.referenceNumber ?? ''}`.trim();
@@ -747,10 +834,25 @@ export function generatePayStubsPdf(data) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(110, 115, 125);
-    doc.text(`Year-to-date through ${format(payDateObj, 'yyyy')} using calendar paycheck dates printed above. ${statementRef}.`, margin, y, {
-      maxWidth: tblW,
+    const ytdFinePrintLines =
+      contractor &&
+      contractorProRatedYtd &&
+      ytdSyntheticPeriodCount > 0 &&
+      typeof ytdAnchorGrossPerPeriod === 'number'
+        ? [
+            `Estimated YTD through ${format(payDateObj, 'MMM d, yyyy')}: ${String(
+              ytdSyntheticPeriodCount,
+            )} ${payFreqResolved} periods × ${moneyUsd(ytdAnchorGrossPerPeriod)} (PDF lists sample stubs only — weeks between entries are interpolated).`,
+            `${statementRef}.`,
+          ]
+        : [
+            `Year-to-date through ${format(payDateObj, 'yyyy')} using calendar paycheck dates printed above. ${statementRef}.`,
+          ];
+    ytdFinePrintLines.forEach((line) => {
+      doc.text(line, margin, y, { maxWidth: tblW });
+      y += 12;
     });
-    y += 20;
+    y += 8;
 
     const discretionaryFooter = contractor
       ? `${
