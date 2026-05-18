@@ -12,6 +12,12 @@ import {
   getWeekStartHouston,
   addDaysInHouston,
 } from '../utils/appTimezone.js';
+import {
+  normalizePayrollDisplayName,
+  normalizedNamesWithWeeklySalary,
+  normalizePayRecordDate,
+  dedupePayRecordsList,
+} from '../utils/payrollDedupe.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -98,12 +104,21 @@ async function getWeeklyExpenses(weekStart, weekEnd) {
     }
   }
 
-  // Payroll-only people (contractors, etc.)
+  // Payroll-only people (contractors, etc.) — skip rows that duplicate a Calendar user's weekly salary (same display name)
+  const userWeeklyNames = normalizedNamesWithWeeklySalary(employees);
   const payrollPeople = await db.allAsync(
     'SELECT id, full_name, weekly_salary FROM payroll_people WHERE is_active = 1 AND weekly_salary > 0'
   );
+  const seenPpWeekly = new Set();
   for (const p of payrollPeople) {
-    payrollTotal += parseFloat(p.weekly_salary) || 0;
+    const cost = parseFloat(p.weekly_salary) || 0;
+    if (cost <= 0) continue;
+    const norm = normalizePayrollDisplayName(p.full_name);
+    if (userWeeklyNames.has(norm)) continue;
+    const key = `${norm}|${cost}`;
+    if (seenPpWeekly.has(key)) continue;
+    seenPpWeekly.add(key);
+    payrollTotal += cost;
   }
 
   // Manual expenses
@@ -396,7 +411,7 @@ router.get('/reimbursements', async (req, res) => {
     const peopleWithSplit = await db.allAsync(
       'SELECT id, full_name, weekly_salary, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM payroll_people WHERE is_active = 1 AND COALESCE(split_reimbursable_amount, 0) > 0'
     );
-    const sources = [
+    let sources = [
       ...usersWithSplit.map(u => ({
         source_type: 'user',
         source_id: u.id,
@@ -470,14 +485,15 @@ router.get('/reimbursements', async (req, res) => {
         return { pay_date: payDate, amount };
       });
       const splitRuns = splitRunsBySource[`${src.source_type}:${src.source_id}`] || [];
-      const payRecords = [...payrollFileRecords, ...splitRuns]
-        .sort((a, b) => (a.pay_date || '').localeCompare(b.pay_date || ''));
-      const totalPaidFromPayroll = payRecords.reduce((sum, r) => sum + r.amount, 0);
+      const payRecords = dedupePayRecordsList([...payrollFileRecords, ...splitRuns]);
+      const totalPaidFromPayroll = payRecords.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
       let amountOwedEstimate = 0;
       if (src.expected_amount > 0 && payRecords.length > 0) {
         const received = totalReceivedBySource[`${src.source_type}:${src.source_id}`] || 0;
         if (src.expected_period === 'monthly') {
-          const months = new Set(payRecords.map((r) => (r.pay_date || '').slice(0, 7)).filter(Boolean));
+          const months = new Set(
+            payRecords.map((r) => normalizePayRecordDate(r.pay_date).slice(0, 7)).filter(Boolean)
+          );
           amountOwedEstimate = Math.max(0, months.size * src.expected_amount - received);
         } else {
           amountOwedEstimate = Math.max(0, payRecords.length * src.expected_amount - received);
@@ -485,6 +501,108 @@ router.get('/reimbursements', async (req, res) => {
       }
       payRecordsBySource[`${src.source_type}:${src.source_id}`] = { pay_records: payRecords, total_paid_from_payroll: totalPaidFromPayroll, amount_owed_estimate: amountOwedEstimate };
     }
+
+    const mergePayRecordsDedupe = (listA, listB) => dedupePayRecordsList([...(listA || []), ...(listB || [])]);
+    const recomputeOwed = (src, payRecords, totalReceived) => {
+      let amountOwedEstimate = 0;
+      if (src.expected_amount > 0 && payRecords.length > 0) {
+        const received = totalReceived || 0;
+        if (src.expected_period === 'monthly') {
+          const months = new Set(
+            payRecords.map((r) => normalizePayRecordDate(r.pay_date).slice(0, 7)).filter(Boolean)
+          );
+          amountOwedEstimate = Math.max(0, months.size * src.expected_amount - received);
+        } else {
+          amountOwedEstimate = Math.max(0, payRecords.length * src.expected_amount - received);
+        }
+      }
+      return amountOwedEstimate;
+    };
+
+    // Same person as Calendar user + payroll-only row → one card; merge pay rows and recorded reimbursements.
+    const userSourceByNorm = new Map();
+    for (const s of sources) {
+      if (s.source_type === 'user') userSourceByNorm.set(normalizePayrollDisplayName(s.name), s);
+    }
+    /** Payment rows roll up to this source key (e.g. payroll_person entries merged into user). */
+    const rollupPaymentKeysBySource = new Map();
+    for (const s of sources) {
+      const k = `${s.source_type}:${s.source_id}`;
+      rollupPaymentKeysBySource.set(k, new Set([k]));
+    }
+    const ppKeysToDrop = new Set();
+    for (const s of sources) {
+      if (s.source_type !== 'payroll_person') continue;
+      const userSrc = userSourceByNorm.get(normalizePayrollDisplayName(s.name));
+      if (!userSrc) continue;
+      const uKey = `user:${userSrc.source_id}`;
+      const pKey = `payroll_person:${s.source_id}`;
+      ppKeysToDrop.add(pKey);
+      totalReceivedBySource[uKey] = (totalReceivedBySource[uKey] || 0) + (totalReceivedBySource[pKey] || 0);
+      if (!rollupPaymentKeysBySource.has(uKey)) rollupPaymentKeysBySource.set(uKey, new Set([uKey]));
+      rollupPaymentKeysBySource.get(uKey).add(pKey);
+      const dataU = payRecordsBySource[uKey];
+      const dataP = payRecordsBySource[pKey];
+      if (dataU && dataP) {
+        const merged = mergePayRecordsDedupe(dataU.pay_records, dataP.pay_records);
+        const totalPaidFromPayroll = merged.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+        const received = totalReceivedBySource[uKey] || 0;
+        payRecordsBySource[uKey] = {
+          pay_records: merged,
+          total_paid_from_payroll: totalPaidFromPayroll,
+          amount_owed_estimate: recomputeOwed(userSrc, merged, received),
+        };
+      } else if (dataU) {
+        const received = totalReceivedBySource[uKey] || 0;
+        payRecordsBySource[uKey] = {
+          ...dataU,
+          amount_owed_estimate: recomputeOwed(userSrc, dataU.pay_records, received),
+        };
+      }
+    }
+    if (ppKeysToDrop.size > 0) {
+      sources = sources.filter((s) => !ppKeysToDrop.has(`${s.source_type}:${s.source_id}`));
+    }
+
+    // Roll up reimbursements recorded under ANY payroll_people row with the same name (including inactive / removed).
+    const allPayrollPeopleRows = await db.allAsync('SELECT id, full_name FROM payroll_people');
+    const ppIdsByNormName = new Map();
+    for (const row of allPayrollPeopleRows) {
+      const n = normalizePayrollDisplayName(row.full_name);
+      if (!ppIdsByNormName.has(n)) ppIdsByNormName.set(n, []);
+      ppIdsByNormName.get(n).push(row.id);
+    }
+    const paymentSumByKey = {};
+    for (const p of payments) {
+      const k = `${p.source_type}:${p.source_id}`;
+      paymentSumByKey[k] = (paymentSumByKey[k] || 0) + (parseFloat(p.amount) || 0);
+    }
+    for (const s of sources) {
+      const key = `${s.source_type}:${s.source_id}`;
+      const set = rollupPaymentKeysBySource.get(key) || new Set([key]);
+      for (const pid of ppIdsByNormName.get(normalizePayrollDisplayName(s.name)) || []) {
+        set.add(`payroll_person:${pid}`);
+      }
+      rollupPaymentKeysBySource.set(key, set);
+      let sum = 0;
+      for (const rk of set) {
+        sum += paymentSumByKey[rk] || 0;
+      }
+      totalReceivedBySource[key] = sum;
+    }
+
+    const cumulativeExpectedFromOther = (src, payRecords) => {
+      const exp = parseFloat(src.expected_amount) || 0;
+      if (exp <= 0 || !payRecords?.length) return null;
+      if (src.expected_period === 'monthly') {
+        const months = new Set(
+          payRecords.map((r) => normalizePayRecordDate(r.pay_date).slice(0, 7)).filter(Boolean)
+        );
+        return months.size * exp;
+      }
+      return payRecords.length * exp;
+    };
+
     sources.forEach((s) => {
       const key = `${s.source_type}:${s.source_id}`;
       const data = payRecordsBySource[key];
@@ -496,6 +614,20 @@ router.get('/reimbursements', async (req, res) => {
         s.pay_records = [];
         s.total_paid_from_payroll = 0;
         s.amount_owed_estimate = 0;
+      }
+      s.cumulative_expected_from_other = cumulativeExpectedFromOther(s, s.pay_records);
+      const keySet = rollupPaymentKeysBySource.get(key) || new Set([key]);
+      const recorded = payments.filter((p) => keySet.has(`${p.source_type}:${p.source_id}`));
+      recorded.sort((a, b) => String(b.received_date).localeCompare(String(a.received_date)));
+      s.recorded_reimbursements = recorded.map((p) => ({
+        id: p.id,
+        received_date: p.received_date,
+        amount: parseFloat(p.amount) || 0,
+        notes: p.notes,
+      }));
+      const recv = totalReceivedBySource[key] || 0;
+      if (s.pay_records?.length) {
+        s.amount_owed_estimate = recomputeOwed(s, s.pay_records, recv);
       }
     });
 

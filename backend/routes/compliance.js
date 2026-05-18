@@ -10,6 +10,7 @@ import {
   getWeekEndingFridayHouston,
   addDaysInHouston,
 } from '../utils/appTimezone.js';
+import { normalizePayrollDisplayName } from '../utils/payrollDedupe.js';
 
 const router = express.Router();
 
@@ -1079,8 +1080,10 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
     WHERE is_active = 1
   `);
 
-  const payroll = [];
+   const payroll = [];
   let totalPayroll = 0;
+  /** Calendar users who already count toward weekly salary (skip same-name payroll_people duplicate). */
+  const usersWithWeeklySalaryNames = new Set();
 
   for (const employee of employees) {
     let employeeCost = 0;
@@ -1127,6 +1130,9 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
         split_reimbursable_period: employee.split_reimbursable_period || 'weekly'
       });
       totalPayroll += employeeCost;
+      if (employee.weekly_salary && parseFloat(employee.weekly_salary) > 0) {
+        usersWithWeeklySalaryNames.add(normalizePayrollDisplayName(employee.full_name));
+      }
     }
   }
 
@@ -1134,9 +1140,15 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
   const payrollPeople = await db.allAsync(
     'SELECT id, full_name, weekly_salary, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM payroll_people WHERE is_active = 1 AND weekly_salary > 0'
   );
+  const seenPayrollPersonWeekly = new Set();
   for (const p of payrollPeople) {
     const cost = parseFloat(p.weekly_salary) || 0;
     if (cost > 0) {
+      const norm = normalizePayrollDisplayName(p.full_name);
+      if (usersWithWeeklySalaryNames.has(norm)) continue;
+      const ppKey = `${norm}|${cost}`;
+      if (seenPayrollPersonWeekly.has(ppKey)) continue;
+      seenPayrollPersonWeekly.add(ppKey);
       payroll.push({
         employee_id: null,
         payroll_people_id: p.id,
@@ -1163,6 +1175,7 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
       AND COALESCE(hourly_rate, 0) = 0
   `);
   const payrollIds = new Set(payroll.map(e => (e.employee_id && `user:${e.employee_id}`) || (e.payroll_people_id && `pp:${e.payroll_people_id}`)));
+  const splitOnlyUserNames = new Set();
   for (const u of usersSplitOnly) {
     if (payrollIds.has(`user:${u.id}`)) continue;
     payroll.push({
@@ -1178,14 +1191,20 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
       split_reimbursable_notes: u.split_reimbursable_notes || null,
       split_reimbursable_period: u.split_reimbursable_period || 'weekly'
     });
+    splitOnlyUserNames.add(normalizePayrollDisplayName(u.full_name));
   }
 
   // Payroll-only people with split but no weekly salary — show on list with cost 0
   const peopleSplitOnly = await db.allAsync(
     'SELECT id, full_name, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period FROM payroll_people WHERE is_active = 1 AND COALESCE(split_reimbursable_amount, 0) > 0 AND COALESCE(weekly_salary, 0) = 0'
   );
+  const seenPeopleSplitOnlyName = new Set();
   for (const p of peopleSplitOnly) {
     if (payrollIds.has(`pp:${p.id}`)) continue;
+    const norm = normalizePayrollDisplayName(p.full_name);
+    if (splitOnlyUserNames.has(norm)) continue;
+    if (seenPeopleSplitOnlyName.has(norm)) continue;
+    seenPeopleSplitOnlyName.add(norm);
     payroll.push({
       employee_id: null,
       payroll_people_id: p.id,

@@ -626,12 +626,21 @@ const ProfitAndLoss = () => {
                 ). Re-import after new pay runs.
               </p>
               {reimbursements.payroll_history_sync_status && (
-                <p className={`text-xs mt-1 ${reimbursements.payroll_history_sync_status.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                  Last payroll sync: {new Date(reimbursements.payroll_history_sync_status.at).toLocaleString()} ({reimbursements.payroll_history_sync_status.reason})
-                  {reimbursements.payroll_history_sync_status.ok
-                    ? ` — imported ${reimbursements.payroll_history_sync_status.imported || 0}, source rows ${reimbursements.payroll_history_sync_status.sourceCount || 0}, server total ${reimbursements.payroll_history_sync_status.total || 0}, split pay runs added ${reimbursements.payroll_history_sync_status.splitRunsInserted || 0}${reimbursements.payroll_history_sync_status.splitRunsWeekEnding ? ` (week ending ${reimbursements.payroll_history_sync_status.splitRunsWeekEnding})` : ''}.`
-                    : ` — failed: ${reimbursements.payroll_history_sync_status.error || 'unknown error'}`}
-                </p>
+                <div className="text-xs mt-1 space-y-1">
+                  <p className={reimbursements.payroll_history_sync_status.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+                    Last payroll sync: {new Date(reimbursements.payroll_history_sync_status.at).toLocaleString()} ({reimbursements.payroll_history_sync_status.reason})
+                    {reimbursements.payroll_history_sync_status.ok
+                      ? ` — imported ${reimbursements.payroll_history_sync_status.imported || 0}, file rows read ${reimbursements.payroll_history_sync_status.sourceCount || 0}, rows stored on server ${reimbursements.payroll_history_sync_status.total || 0}, split pay runs added ${reimbursements.payroll_history_sync_status.splitRunsInserted || 0}${reimbursements.payroll_history_sync_status.splitRunsWeekEnding ? ` (week ending ${reimbursements.payroll_history_sync_status.splitRunsWeekEnding})` : ''}.`
+                      : ` — failed: ${reimbursements.payroll_history_sync_status.error || 'unknown error'}`}
+                  </p>
+                  {reimbursements.payroll_history_sync_status.ok &&
+                    (reimbursements.payroll_history_sync_status.sourceCount || 0) === 0 &&
+                    (reimbursements.payroll_history_db_count ?? 0) > 0 && (
+                    <p className="text-amber-700 dark:text-amber-300/90">
+                      No payroll-history.json was read on this server (path missing or file encrypted). Pay totals still use {reimbursements.payroll_history_db_count} row(s) already in the Calendar database. Use Import pay history (JSON) from the Payroll PC, or run weekly sync from a machine that can read PayrollData.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
@@ -677,7 +686,7 @@ const ProfitAndLoss = () => {
                 const rhRows = reimbursements.payroll_history_row_count ?? 0;
                 const rhDb = reimbursements.payroll_history_db_count ?? 0;
                 const isMonthly = src.expected_period === 'monthly';
-                const expectedLabel = isMonthly ? `Expected per month: ${formatCurrency(src.expected_amount)}` : `Expected per week: ${formatCurrency(src.expected_amount)}`;
+                const expectedLabel = isMonthly ? `Expected per month: ${formatCurrency(src.expected_amount)}` : `Expected per pay: ${formatCurrency(src.expected_amount)}`;
                 const payRecords = src.pay_records || [];
                 const totalPaid = src.total_paid_from_payroll != null ? src.total_paid_from_payroll : payRecords.reduce((s, r) => s + (r.amount || 0), 0);
                 const payrollPaidHint =
@@ -689,9 +698,12 @@ const ProfitAndLoss = () => {
                       ? 'No pay history on the server yet. Use Import pay history (JSON) with payroll-history.json from the Payroll app PC.'
                       : 'No pays matched this person — align Calendar user ID or full name with the Payroll System export.';
                 const amountOwed = src.amount_owed_estimate != null ? src.amount_owed_estimate : 0;
-                const weekCost = weekPayrollCostForSource(src);
-                const paidForCompare = totalPaid > 0 ? totalPaid : weekCost;
-                const diffPaidMinusReceived = paidForCompare - totalReceived;
+                const payRunCount = payRecords.length;
+                const accruedShare =
+                  src.cumulative_expected_from_other != null
+                    ? src.cumulative_expected_from_other
+                    : (isMonthly ? 0 : payRunCount * (parseFloat(src.expected_amount) || 0));
+                const balance = accruedShare - totalReceived;
                 return (
                   <div key={key} className="p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -706,52 +718,64 @@ const ProfitAndLoss = () => {
                         {amountOwed > 0 && <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">Est. owed: {formatCurrency(amountOwed)}</span>}
                       </div>
                     </div>
-                    <div className="rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-950 p-3 space-y-2">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Paid vs received</div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                    <div className="rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-950 p-3 space-y-3">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Simple reimbursement tracker</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
                         <div>
-                          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">This week (P&amp;L payroll)</div>
-                          <div className="font-semibold text-red-600 dark:text-red-400">{formatCurrency(weekCost)}</div>
-                          <div className="text-[10px] text-neutral-500 dark:text-neutral-500 mt-0.5">What this business counts this week</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">Total paid (Payroll System)</div>
-                          <div className="font-semibold text-neutral-800 dark:text-neutral-100">{totalPaid > 0 ? formatCurrency(totalPaid) : '—'}</div>
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">Total paid to employee</div>
+                          <div className="font-semibold text-neutral-800 dark:text-neutral-100">{formatCurrency(totalPaid)}</div>
                           <div className="text-[10px] text-neutral-500 dark:text-neutral-500 mt-0.5">{payrollPaidHint}</div>
                         </div>
                         <div>
-                          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">Total received (recorded)</div>
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">Signs share accrued</div>
+                          <div className="font-semibold text-amber-600 dark:text-amber-400">{formatCurrency(accruedShare)}</div>
+                          <div className="text-[10px] text-neutral-500 dark:text-neutral-500 mt-0.5">
+                            {isMonthly
+                              ? `Based on monthly expected setting (${formatCurrency(src.expected_amount)} / month).`
+                              : `${payRunCount} pay run(s) × ${formatCurrency(src.expected_amount)} each.`}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">Reimbursed received</div>
                           <div className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalReceived)}</div>
-                          <div className="text-[10px] text-neutral-500 dark:text-neutral-500 mt-0.5">Payments you recorded from the other business</div>
+                          <div className="text-[10px] text-neutral-500 dark:text-neutral-500 mt-0.5">Total payments recorded from Signs &amp; Wraps.</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">Balance</div>
+                          <div className={`font-semibold ${balance > 0 ? 'text-amber-600 dark:text-amber-400' : balance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                            {formatCurrency(balance)}
+                          </div>
+                          <div className="text-[10px] text-neutral-500 dark:text-neutral-500 mt-0.5">
+                            {balance > 0 ? 'Still owed by Signs & Wraps.' : balance < 0 ? 'Overpaid by Signs & Wraps.' : 'On track (even).'}
+                          </div>
                         </div>
                       </div>
-                      <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700 flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs text-neutral-600 dark:text-neutral-300">Difference (paid − received)</span>
-                        <span
-                          className={`text-sm font-bold ${
-                            diffPaidMinusReceived > 0
-                              ? 'text-amber-600 dark:text-amber-400'
-                              : diffPaidMinusReceived < 0
-                                ? 'text-emerald-600 dark:text-emerald-400'
-                                : 'text-neutral-600 dark:text-neutral-400'
-                          }`}
-                        >
-                          {totalPaid > 0
-                            ? `${formatCurrency(totalPaid)} − ${formatCurrency(totalReceived)} = ${formatCurrency(diffPaidMinusReceived)}`
-                            : `${formatCurrency(weekCost)} (this week only) − ${formatCurrency(totalReceived)} = ${formatCurrency(diffPaidMinusReceived)}`}
-                        </span>
-                      </div>
-                      {diffPaidMinusReceived > 0 && (
-                        <p className="text-xs text-amber-700 dark:text-amber-300/90">
-                          You have paid more to {src.name.split(' ')[0] || 'this person'} than you have recorded as received from the other business (by {formatCurrency(diffPaidMinusReceived)}).
-                        </p>
-                      )}
-                      {diffPaidMinusReceived < 0 && (
-                        <p className="text-xs text-emerald-700 dark:text-emerald-300/90">
-                          Recorded reimbursements exceed the comparison total by {formatCurrency(-diffPaidMinusReceived)} — check pay history or recording dates if that is unexpected.
-                        </p>
-                      )}
                     </div>
+                    {src.recorded_reimbursements?.length > 0 && (
+                      <div className="border-t border-gray-200 dark:border-neutral-700 pt-2 mt-2">
+                        <div className="text-xs font-medium text-gray-600 dark:text-neutral-400 mb-1">Reimbursements recorded for this person</div>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-200 dark:border-neutral-600">
+                                <th className="text-left py-1 text-gray-500">Date</th>
+                                <th className="text-right py-1 text-gray-500">Amount</th>
+                                <th className="text-left py-1 text-gray-500">Notes</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {src.recorded_reimbursements.map((p) => (
+                                <tr key={p.id} className="border-b border-gray-100 dark:border-neutral-800">
+                                  <td className="py-1 text-gray-700 dark:text-neutral-300">{formatDate(p.received_date)}</td>
+                                  <td className="py-1 text-right font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(p.amount)}</td>
+                                  <td className="py-1 text-gray-600 dark:text-neutral-400">{p.notes || '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
                     {payRecords.length > 0 && (
                       <div className="border-t border-gray-200 dark:border-neutral-700 pt-2 mt-2">
                         <div className="text-xs font-medium text-gray-600 dark:text-neutral-400 mb-1">Pay history (from Payroll System)</div>
@@ -783,7 +807,8 @@ const ProfitAndLoss = () => {
           )}
           {reimbursements.payments?.length > 0 && (
             <div>
-              <h4 className="text-sm font-semibold text-gray-700 dark:text-neutral-300 mb-2">Payment history</h4>
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-neutral-300 mb-2">Payment history (all people)</h4>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">Each split-salary person also has their own table above.</p>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
