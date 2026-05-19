@@ -36,62 +36,112 @@ const MAIN_TABS_ADMIN = ADMIN_MAIN_TABS_ADMIN;
 const MAIN_TABS_EMPLOYEE = ADMIN_MAIN_TABS_EMPLOYEE;
 const SUB_TABS = ADMIN_SUB_TABS;
 
+const mobileSelectClass =
+  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none ring-primary/30 focus:border-primary focus:ring-2 dark:border-neutral-600 dark:bg-neutral-950 dark:text-neutral-100';
+
 function TabBar({ tabs, activeId, onSelect, badge }) {
+  const mobileSelectId = 'admin-main-tab-select';
   return (
-    <div className="flex flex-wrap border-b border-gray-200 dark:border-neutral-700 -mx-4 px-4 sm:mx-0 sm:px-0 gap-x-1">
-      {tabs.map((tab) => {
-        const isActive = tab.id === activeId;
-        const hasBadge = badge && tab.id === badge.tabId && badge.count > 0;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => onSelect(tab.id)}
-            className={`relative flex-shrink-0 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-              isActive
-                ? 'text-gray-900 dark:text-white'
-                : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'
-            }`}
-          >
-            {tab.label}
-            {hasBadge && (
-              <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-red-500 text-white rounded-full">
-                {badge.count}
-              </span>
-            )}
-            {isActive && (
-              <span
-                className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t"
-                style={{ backgroundColor: GOLD }}
-              />
-            )}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div className="mb-3 lg:hidden -mx-4 px-4 sm:mx-0 sm:px-0">
+        <label htmlFor={mobileSelectId} className="mb-1 block text-xs font-medium text-gray-600 dark:text-neutral-400">
+          Admin area
+        </label>
+        <select
+          id={mobileSelectId}
+          value={activeId}
+          onChange={(e) => onSelect(e.target.value)}
+          className={mobileSelectClass}
+        >
+          {tabs.map((tab) => {
+            const hasBadge = badge && tab.id === badge.tabId && badge.count > 0;
+            return (
+              <option key={tab.id} value={tab.id}>
+                {tab.label}
+                {hasBadge ? ` (${badge.count})` : ''}
+              </option>
+            );
+          })}
+        </select>
+      </div>
+      <div className="hidden lg:flex flex-wrap border-b border-gray-200 dark:border-neutral-700 -mx-4 px-4 sm:mx-0 sm:px-0 gap-x-1">
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeId;
+          const hasBadge = badge && tab.id === badge.tabId && badge.count > 0;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onSelect(tab.id)}
+              className={`relative flex-shrink-0 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+                isActive
+                  ? 'text-gray-900 dark:text-white'
+                  : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'
+              }`}
+            >
+              {tab.label}
+              {hasBadge && (
+                <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-red-500 text-white rounded-full">
+                  {badge.count}
+                </span>
+              )}
+              {isActive && (
+                <span
+                  className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t"
+                  style={{ backgroundColor: GOLD }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
-function SubTabBar({ tabs, activeId, onSelect }) {
+/** @param {{ tabs: Array<{ id: string; label: string }>; activeId: string; onSelect: (id: string) => void; heading: string; sectionKey: string }} props */
+function SubTabBar({ tabs, activeId, onSelect, heading, sectionKey }) {
+  const mobileSelectId = `admin-sub-tab-${sectionKey}`;
   return (
-    <div className="flex flex-wrap gap-2 mb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
-      {tabs.map((tab) => {
-        const isActive = tab.id === activeId;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => onSelect(tab.id)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-              isActive
-                ? 'text-white'
-                : 'bg-gray-100 dark:bg-neutral-950 text-gray-600 dark:text-neutral-100 hover:bg-gray-200 dark:hover:bg-neutral-700'
-            }`}
-            style={isActive ? { backgroundColor: GOLD } : {}}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div className="mb-4 lg:hidden -mx-4 px-4 sm:mx-0 sm:px-0">
+        <label htmlFor={mobileSelectId} className="mb-1 block text-xs font-medium text-gray-600 dark:text-neutral-400">
+          {heading}
+        </label>
+        <select
+          id={mobileSelectId}
+          value={activeId}
+          onChange={(e) => onSelect(e.target.value)}
+          className={mobileSelectClass}
+        >
+          {tabs.map((tab) => (
+            <option key={tab.id} value={tab.id}>
+              {tab.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="hidden lg:flex flex-wrap gap-2 mb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeId;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onSelect(tab.id)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                isActive
+                  ? 'text-white'
+                  : 'bg-gray-100 dark:bg-neutral-950 text-gray-600 dark:text-neutral-100 hover:bg-gray-200 dark:hover:bg-neutral-700'
+              }`}
+              style={isActive ? { backgroundColor: GOLD } : {}}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -480,7 +530,6 @@ const Admin = () => {
     const sub = subTabs.people;
     return (
       <>
-        <SubTabBar tabs={SUB_TABS.people} activeId={sub} onSelect={(id) => selectSubTab('people', id)} />
         {sub === 'status' && <EmployeeStatus />}
         {sub === 'schedule' && <ScheduleCalendar />}
         {sub === 'time' && <TimeApproval />}
@@ -495,7 +544,6 @@ const Admin = () => {
     const sub = subTabs.inventory;
     return (
       <>
-        <SubTabBar tabs={SUB_TABS.inventory} activeId={sub} onSelect={(id) => selectSubTab('inventory', id)} />
         {sub === 'inventory' && <InventoryManagement />}
         {sub === 'orders' && <OrderManagement />}
         {sub === 'products' && <ProductManagement />}
@@ -507,7 +555,6 @@ const Admin = () => {
     const sub = subTabs.finance;
     return (
       <>
-        <SubTabBar tabs={SUB_TABS.finance} activeId={sub} onSelect={(id) => selectSubTab('finance', id)} />
         {sub === 'payroll' && <PayrollManagement />}
         {sub === 'paystub_maker' && <PayStubMaker />}
         {sub === 'shop_financing' && <EmployeeShopFinancing />}
@@ -523,7 +570,6 @@ const Admin = () => {
     const sub = subTabs.settings;
     return (
       <>
-        <SubTabBar tabs={SUB_TABS.settings} activeId={sub} onSelect={(id) => selectSubTab('settings', id)} />
         {sub === 'general' && <Settings />}
         {sub === 'customer_booking' && <BookingSettings />}
         {sub === 'security' && <SecuritySessions />}
@@ -535,10 +581,18 @@ const Admin = () => {
   return (
     <div className="space-y-0">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">
-          {isAdmin ? 'Admin' : 'Grand Opening Day'}
-        </h1>
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-2 sm:mb-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-neutral-100">
+            {isAdmin ? 'Admin' : 'Grand Opening Day'}
+          </h1>
+          {isAdmin ? (
+            <p className="mt-1 text-sm text-gray-600 dark:text-neutral-400 lg:hidden">
+              Tap <span className="font-semibold text-gray-800 dark:text-neutral-200">Search</span> at the
+              top to jump anywhere, or use the menus below.
+            </p>
+          ) : null}
+        </div>
         <div className="flex items-center gap-3">
           <p className="text-gray-500 dark:text-neutral-100 text-sm hidden sm:block">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -547,14 +601,25 @@ const Admin = () => {
         </div>
       </div>
 
-      {/* Main tab bar — full admin tabs for admins only */}
+      {/* Main + sub navigation: sticky on phone/tablet so section pickers stay visible */}
       {isAdmin && (
-        <TabBar
-          tabs={MAIN_TABS}
-          activeId={mainTab}
-          onSelect={selectMainTab}
-          badge={{ tabId: 'people', count: teamBadgeCount }}
-        />
+        <div className="sticky top-[3.25rem] z-30 -mx-4 border-b border-gray-200/90 bg-neutral-100/95 px-4 pb-2 pt-1 backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-950/95 lg:static lg:z-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:pb-0 lg:pt-0 lg:backdrop-blur-none">
+          <TabBar
+            tabs={MAIN_TABS}
+            activeId={mainTab}
+            onSelect={selectMainTab}
+            badge={{ tabId: 'people', count: teamBadgeCount }}
+          />
+          {SUB_TABS[mainTab] && (
+            <SubTabBar
+              sectionKey={mainTab}
+              heading={MAIN_TABS.find((t) => t.id === mainTab)?.label || 'Section'}
+              tabs={SUB_TABS[mainTab]}
+              activeId={subTabs[mainTab]}
+              onSelect={(id) => selectSubTab(mainTab, id)}
+            />
+          )}
+        </div>
       )}
 
       {/* Tab content — non-admins can only render Grand Opening (guards localStorage tampering) */}

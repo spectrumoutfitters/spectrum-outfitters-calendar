@@ -45,11 +45,16 @@ const Header = ({ onMenuClick }) => {
             <button
               type="button"
               onClick={() => openPalette()}
-              className="hidden sm:inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/15 transition-colors"
-              title="Jump to any screen (⌘K or Ctrl+K)"
+              className="inline-flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 rounded-xl border border-white/25 bg-white/10 px-2.5 text-xs font-semibold text-white hover:bg-white/18 active:bg-white/22 transition-colors sm:min-w-0 sm:px-3"
+              title="Search and jump to any admin screen or page"
+              aria-label="Search and jump"
             >
-              Jump
-              <kbd className="hidden md:inline rounded bg-black/25 px-1 font-mono text-[10px] text-white/90">
+              <svg className="h-5 w-5 shrink-0 lg:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="font-medium lg:hidden">Search</span>
+              <span className="hidden lg:inline text-white/95">Jump</span>
+              <kbd className="hidden xl:inline rounded bg-black/25 px-1.5 py-0.5 font-mono text-[10px] text-white/85">
                 ⌘K
               </kbd>
             </button>
