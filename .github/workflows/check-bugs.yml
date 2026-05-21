@@ -1,0 +1,76 @@
+name: Bug Check
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  bug-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm install
+          cd backend && npm install
+          cd ../frontend && npm install
+
+      - name: Create backend .env
+        run: |
+          cat > backend/.env <<EOF
+          PORT=5000
+          DATABASE_PATH=./database/shop_tasks.db
+          JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+          NODE_ENV=development
+          ADMIN_EMAIL=ci@spectrumoutfitters.com
+          BACKUP_PATH=./backups
+          SESSION_TIMEOUT_HOURS=12
+          EOF
+
+      - name: Initialize database
+        run: cd backend && npm run init-db
+
+      - name: Run additional migrations
+        run: |
+          cd backend && node -e "
+          import db from './database/db.js';
+          const taskCols = [
+            'estimated_time_minutes INTEGER','started_at DATETIME','started_by INTEGER',
+            'completed_at DATETIME','completed_by INTEGER','ai_estimated_time INTEGER',
+            'ai_suggested_category TEXT','ai_confidence_score TEXT',
+            'shopmonkey_order_id TEXT','shopmonkey_order_number TEXT'
+          ];
+          for (const c of taskCols) await db.runAsync('ALTER TABLE tasks ADD COLUMN '+c).catch(()=>{});
+          const tables = [
+            \`CREATE TABLE IF NOT EXISTS task_subtasks (id INTEGER PRIMARY KEY AUTOINCREMENT,task_id INTEGER NOT NULL,title TEXT NOT NULL,is_completed BOOLEAN DEFAULT 0,completed_at DATETIME,completed_by INTEGER,order_index INTEGER DEFAULT 0,created_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`,
+            \`CREATE TABLE IF NOT EXISTS task_assignments (id INTEGER PRIMARY KEY AUTOINCREMENT,task_id INTEGER NOT NULL,user_id INTEGER NOT NULL,assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,UNIQUE(task_id,user_id))\`,
+            \`CREATE TABLE IF NOT EXISTS task_breaks (id INTEGER PRIMARY KEY AUTOINCREMENT,task_id INTEGER NOT NULL,started_at DATETIME NOT NULL,ended_at DATETIME,duration_minutes REAL,reason TEXT,created_by INTEGER,created_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`,
+            \`CREATE TABLE IF NOT EXISTS inventory_items (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,barcode TEXT UNIQUE,current_quantity REAL DEFAULT 0,min_quantity REAL DEFAULT 0,category TEXT,unit TEXT DEFAULT 'unit',notes TEXT,image_url TEXT,weight TEXT,viscosity TEXT,created_at DATETIME DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`,
+            \`CREATE TABLE IF NOT EXISTS inventory_quantity_log (id INTEGER PRIMARY KEY AUTOINCREMENT,item_id INTEGER NOT NULL,quantity_change REAL NOT NULL,new_quantity REAL NOT NULL,action_type TEXT NOT NULL,reason TEXT,user_id INTEGER,task_id INTEGER,created_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`,
+            \`CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,content TEXT NOT NULL,is_team_message BOOLEAN DEFAULT 0,is_pinned BOOLEAN DEFAULT 0,board_type TEXT,created_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`,
+            \`CREATE TABLE IF NOT EXISTS schedule_events (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,description TEXT,start_date DATETIME NOT NULL,end_date DATETIME,all_day BOOLEAN DEFAULT 0,user_id INTEGER,created_by INTEGER,google_event_id TEXT,shop_closed BOOLEAN DEFAULT 0,created_at DATETIME DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`,
+            \`CREATE TABLE IF NOT EXISTS compliance_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,description TEXT,category TEXT DEFAULT 'general',frequency TEXT DEFAULT 'monthly',status TEXT DEFAULT 'pending',assigned_to INTEGER,due_date DATE,completed_at DATETIME,completed_by INTEGER,created_at DATETIME DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`,
+            \`CREATE TABLE IF NOT EXISTS admin_work_items (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,description TEXT,status TEXT DEFAULT 'pending',priority TEXT DEFAULT 'medium',assigned_to INTEGER,created_by INTEGER,completed_at DATETIME,due_date DATE,category TEXT DEFAULT 'general',estimated_time_minutes INTEGER,actual_time_minutes INTEGER,created_at DATETIME DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`,
+            \`CREATE TABLE IF NOT EXISTS my_worklist_items (id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,title TEXT NOT NULL,description TEXT,status TEXT DEFAULT 'pending',priority TEXT DEFAULT 'medium',due_date DATE,completed_at DATETIME,sort_order INTEGER DEFAULT 0,created_at DATETIME DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`,
+            \`CREATE TABLE IF NOT EXISTS dispatch_entries (id INTEGER PRIMARY KEY AUTOINCREMENT,task_id INTEGER,bay_number INTEGER,status TEXT DEFAULT 'pending',notes TEXT,created_by INTEGER,created_at DATETIME DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`,
+            \`CREATE TABLE IF NOT EXISTS ai_usage_log (id INTEGER PRIMARY KEY AUTOINCREMENT,feature TEXT NOT NULL,task_id INTEGER,user_id INTEGER,tokens_used INTEGER,cost_estimate DECIMAL(10,6),success BOOLEAN DEFAULT 1,error_message TEXT,created_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`,
+            \`CREATE TABLE IF NOT EXISTS business_expenses (id INTEGER PRIMARY KEY AUTOINCREMENT,amount REAL NOT NULL,category TEXT NOT NULL,description TEXT,date TEXT NOT NULL,created_by INTEGER,created_at DATETIME DEFAULT CURRENT_TIMESTAMP)\`
+          ];
+          for (const t of tables) await db.runAsync(t).catch(()=>{});
+          const teCols = ['clock_in_lat REAL','clock_in_lng REAL','clock_in_accuracy REAL','clock_out_lat REAL','clock_out_lng REAL','clock_out_accuracy REAL','clock_in_is_onsite INTEGER DEFAULT 0','clock_out_is_onsite INTEGER DEFAULT 0'];
+          for (const c of teCols) await db.runAsync('ALTER TABLE time_entries ADD COLUMN '+c).catch(()=>{});
+          process.exit(0);
+          "
+
+      - name: Run bug check agent
+        run: node scripts/check-bugs.js
