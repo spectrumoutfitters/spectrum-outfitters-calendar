@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { BASE_PATH } from './utils/basePath';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -7,31 +7,41 @@ import { SocketProvider } from './contexts/SocketContext';
 import { OpenScanProvider } from './contexts/OpenScanContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Tasks from './pages/Tasks';
-import TimeEntries from './pages/TimeEntries';
-import Admin from './pages/Admin';
-import Profile from './pages/Profile';
-import Schedule from './pages/Schedule';
-import Products from './pages/Products';
-import Inventory from './pages/Inventory';
-import InventoryManagement from './components/Admin/InventoryManagement';
-import MyWorkList from './pages/MyWorkList';
-import CRM from './pages/CRM';
-import CustomerDetail from './pages/CustomerDetail';
-import VehicleDetail from './pages/VehicleDetail';
-import InvoiceDetail from './pages/InvoiceDetail';
-import NewInvoice from './pages/NewInvoice';
-import PayInvoice from './pages/PayInvoice';
-import QuickJobsAdmin from './pages/QuickJobsAdmin';
-import CustomerStatus from './pages/CustomerStatus';
-import CustomerBooking from './pages/CustomerBooking';
-import ShopMonkeyQuote from './pages/ShopMonkeyQuote';
-import DispatchBoard from './pages/DispatchBoard';
+const Tasks = React.lazy(() => import('./pages/Tasks'));
+const TimeEntries = React.lazy(() => import('./pages/TimeEntries'));
+const Admin = React.lazy(() => import('./pages/Admin'));
+const Profile = React.lazy(() => import('./pages/Profile'));
+const Schedule = React.lazy(() => import('./pages/Schedule'));
+const Products = React.lazy(() => import('./pages/Products'));
+const Inventory = React.lazy(() => import('./pages/Inventory'));
+const InventoryManagement = React.lazy(() => import('./components/Admin/InventoryManagement'));
+const MyWorkList = React.lazy(() => import('./pages/MyWorkList'));
+const CRM = React.lazy(() => import('./pages/CRM'));
+const CustomerDetail = React.lazy(() => import('./pages/CustomerDetail'));
+const VehicleDetail = React.lazy(() => import('./pages/VehicleDetail'));
+const InvoiceDetail = React.lazy(() => import('./pages/InvoiceDetail'));
+const NewInvoice = React.lazy(() => import('./pages/NewInvoice'));
+const PayInvoice = React.lazy(() => import('./pages/PayInvoice'));
+const QuickJobsAdmin = React.lazy(() => import('./pages/QuickJobsAdmin'));
+const CustomerStatus = React.lazy(() => import('./pages/CustomerStatus'));
+const CustomerBooking = React.lazy(() => import('./pages/CustomerBooking'));
+const ShopMonkeyQuote = React.lazy(() => import('./pages/ShopMonkeyQuote'));
+const DispatchBoard = React.lazy(() => import('./pages/DispatchBoard'));
 import Layout from './components/Layout/Layout';
 import FloatingActions from './components/Layout/FloatingActions';
 import Logo from './components/Logo';
 // import AffiliatesAdmin from './pages/AffiliatesAdmin'; // DISABLED — not in active use
 // import AffiliateQuote from './pages/AffiliateQuote'; // DISABLED — not in active use
+
+
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950">
+    <div className="text-center">
+      <Logo size="lg" className="mb-4" />
+      <div className="text-lg text-gray-600 dark:text-neutral-400 mt-4">Loading...</div>
+    </div>
+  </div>
+);
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -78,6 +88,7 @@ const InventoryPage = () => {
 
 function AppRoutes() {
   return (
+    <Suspense fallback={<PageLoader />}>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/book" element={<CustomerBooking />} />
@@ -246,6 +257,7 @@ function AppRoutes() {
       {/* <Route path="/admin/affiliates" element={<AdminRoute><Layout><AffiliatesAdmin /></Layout></AdminRoute>} /> */}
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
+    </Suspense>
   );
 }
 

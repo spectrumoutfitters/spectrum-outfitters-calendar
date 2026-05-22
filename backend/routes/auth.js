@@ -97,9 +97,8 @@ router.post('/login', loginLimiter, async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    // Set httpOnly cookie (but allow access from iframes for payroll system)
     res.cookie('token', token, {
-      httpOnly: false,
+      httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000
