@@ -1,11 +1,11 @@
 import webpush from 'web-push';
 import db from '../database/db.js';
 
-webpush.setVapidDetails(
-  'mailto:neel@gotospectrum.com',
-  'BD4IZGXRgxbB_D8f6O4VHGbypy7yjp77X_TIoHErXitAhLrqRa6QBuKfnNz7lSX5EkGxyOXm7aKi2Ub5Sul75PM',
-  '5IF2yBn5OqA8IpAhFfIRoCH_s2rP58y6UkR3d3EVF7c'
-);
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:neel@gotospectrum.com';
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BD4IZGXRgxbB_D8f6O4VHGbypy7yjp77X_TIoHErXitAhLrqRa6QBuKfnNz7lSX5EkGxyOXm7aKi2Ub5Sul75PM';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '5IF2yBn5OqA8IpAhFfIRoCH_s2rP58y6UkR3d3EVF7c';
+
+webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 export async function sendPushToUser(userId, payload) {
   let subs;

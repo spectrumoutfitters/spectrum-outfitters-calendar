@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import api from '../utils/api';
 
 const AuthContext = createContext();
@@ -27,23 +27,18 @@ export const AuthProvider = ({ children }) => {
         setUser(response.data.user);
       }
     } catch (error) {
-      // Only clear token on 401 (unauthorized) errors, not network errors or other issues
       if (error.response?.status === 401) {
-        // Token is invalid or expired
         localStorage.removeItem('token');
         setUser(null);
       } else if (!error.isNetworkError && error.response?.status !== 500) {
-        // Only clear token for auth-related errors, not server errors
-        // Network errors and 500 errors shouldn't clear the token
         console.warn('Auth check failed, but keeping token:', error.message);
       }
-      // Don't clear token on network errors (backend not running) or server errors
     } finally {
       setLoading(false);
     }
   };
 
-  const login = async (username, password, browserGeo = null) => {
+  const login = useCallback(async (username, password, browserGeo = null) => {
     try {
       const body = { username, password };
       if (browserGeo) body.browserGeo = browserGeo;
@@ -57,9 +52,9 @@ export const AuthProvider = ({ children }) => {
         error: error.response?.data?.error || 'Login failed'
       };
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await api.post('/auth/logout');
     } catch (error) {
@@ -68,18 +63,18 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('token');
       setUser(null);
     }
-  };
+  }, []);
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
       const response = await api.get('/auth/me');
       setUser(response.data.user);
     } catch (error) {
       console.error('Error refreshing user:', error);
     }
-  };
+  }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     loading,
     login,
@@ -88,8 +83,7 @@ export const AuthProvider = ({ children }) => {
     hasPayrollAccess: user?.payroll_access === true || user?.is_master_admin === true,
     isMasterAdmin: user?.is_master_admin === true,
     refreshUser
-  };
+  }), [user, loading, login, logout, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
-

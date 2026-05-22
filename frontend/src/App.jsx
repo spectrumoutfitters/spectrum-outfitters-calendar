@@ -78,6 +78,7 @@ const InventoryPage = () => {
 
 function AppRoutes() {
   return (
+    <Suspense fallback={<PageLoader />}>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/book" element={<CustomerBooking />} />
@@ -246,6 +247,7 @@ function AppRoutes() {
       {/* <Route path="/admin/affiliates" element={<AdminRoute><Layout><AffiliatesAdmin /></Layout></AdminRoute>} /> */}
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
+    </Suspense>
   );
 }
 

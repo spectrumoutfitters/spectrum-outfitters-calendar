@@ -293,6 +293,29 @@ export async function runStartupMigrations() {
   await runPayrollHistoryStartupBackfill();
   await addEmployeeShopFinancingTables();
   await addCustomerBookingsTable();
+  await ensurePerformanceIndexes();
+}
+
+/** Add indexes on frequently queried columns for performance. */
+export async function ensurePerformanceIndexes() {
+  const indexes = [
+    'CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)',
+    'CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to)',
+    'CREATE INDEX IF NOT EXISTS idx_tasks_created_by ON tasks(created_by)',
+    'CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_time_entries_user_id ON time_entries(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_time_entries_clock_in ON time_entries(clock_in)',
+    'CREATE INDEX IF NOT EXISTS idx_time_entries_week_ending ON time_entries(week_ending_date)',
+    'CREATE INDEX IF NOT EXISTS idx_task_comments_task_id ON task_comments(task_id)',
+    'CREATE INDEX IF NOT EXISTS idx_task_subtasks_task_id ON task_subtasks(task_id)',
+    'CREATE INDEX IF NOT EXISTS idx_task_breaks_task_id ON task_breaks(task_id)',
+    'CREATE INDEX IF NOT EXISTS idx_task_history_task_id ON task_history(task_id)',
+    'CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)',
+  ];
+  for (const sql of indexes) {
+    try { await db.runAsync(sql); } catch (_) {}
+  }
 }
 
 /** Persist Payroll System pay stubs for reimbursements / reporting (server has no local JSON on Linux). */

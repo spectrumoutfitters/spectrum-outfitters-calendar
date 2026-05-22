@@ -6,7 +6,7 @@ import { sendPushToUser, sendPushToAdmins, sendPushToAll } from '../utils/pushNo
 const router = express.Router();
 router.use(authenticateToken);
 
-const VAPID_PUBLIC_KEY = 'BD4IZGXRgxbB_D8f6O4VHGbypy7yjp77X_TIoHErXitAhLrqRa6QBuKfnNz7lSX5EkGxyOXm7aKi2Ub5Sul75PM';
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BD4IZGXRgxbB_D8f6O4VHGbypy7yjp77X_TIoHErXitAhLrqRa6QBuKfnNz7lSX5EkGxyOXm7aKi2Ub5Sul75PM';
 
 // GET /api/push/vapid-public-key
 router.get('/vapid-public-key', (req, res) => {

@@ -168,118 +168,55 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // Get comments, subtasks, and assignments for each task
-    for (let task of tasks) {
-      const comments = await db.allAsync(`
-        SELECT tc.*, u.full_name as user_name, u.username
-        FROM task_comments tc
-        LEFT JOIN users u ON tc.user_id = u.id
-        WHERE tc.task_id = ?
-        ORDER BY tc.created_at ASC
-      `, [task.id]);
-      task.comments = comments;
+    // Batch-load related data for all tasks (replaces N+1 per-task queries)
+    const taskIds = tasks.map(t => t.id);
+    if (taskIds.length === 0) {
+      return res.json({ tasks: [] });
+    }
+    const ph = taskIds.map(() => '?').join(',');
 
-      const subtasks = await db.allAsync(`
-        SELECT ts.*, u.full_name as completed_by_name
-        FROM task_subtasks ts
-        LEFT JOIN users u ON ts.completed_by = u.id
-        WHERE ts.task_id = ?
-        ORDER BY ts.order_index ASC, ts.created_at ASC
-      `, [task.id]);
-      task.subtasks = subtasks || [];
-      
-      // Get all assigned users (new many-to-many relationship)
-      let assignments = [];
-      try {
-        assignments = await db.allAsync(`
-          SELECT ta.user_id, u.full_name as assigned_to_name, ta.assigned_at
-          FROM task_assignments ta
-          LEFT JOIN users u ON ta.user_id = u.id
-          WHERE ta.task_id = ?
-          ORDER BY ta.assigned_at ASC
-        `, [task.id]) || [];
-      } catch (_) {
-        assignments = [];
-      }
-      task.assigned_users = assignments.map(a => ({
-        user_id: a.user_id,
-        full_name: a.assigned_to_name,
-        assigned_at: a.assigned_at
-      }));
-      
-      // Get task breaks (with error handling in case table doesn't exist)
-      let breaks = [];
-      try {
-        breaks = await db.allAsync(`
-          SELECT tb.*, u.full_name as user_name
-          FROM task_breaks tb
-          LEFT JOIN users u ON tb.user_id = u.id
-          WHERE tb.task_id = ?
-          ORDER BY tb.break_start DESC
-        `, [task.id]) || [];
-      } catch (breakError) {
-        // Table might not exist yet, just set empty breaks
-        console.warn('Error fetching task breaks (table may not exist):', breakError.message);
-        breaks = [];
-      }
-      
-      // Get lunch breaks from time_entries that overlap with task time period
-      // Only if task has started_at (completed_at is optional for in-progress tasks)
-      if (task.started_at && task.started_by) {
-        try {
-          // Use completed_at if available, otherwise use a far future date to catch all breaks
-          const taskEndTime = task.completed_at || '9999-12-31 23:59:59';
-          
-          const lunchBreaks = await db.allAsync(`
-            SELECT 
-              te.clock_out as break_start,
-              te2.clock_in as break_end,
-              te.break_minutes,
-              'Lunch break' as reason,
-              te.notes
-            FROM time_entries te
-            LEFT JOIN time_entries te2 ON 
-              te2.user_id = te.user_id 
-              AND te2.clock_in > te.clock_out
-              AND (te2.notes IS NULL OR te2.notes NOT LIKE '%Lunch break%')
-            WHERE te.user_id = ?
-              AND te.notes LIKE '%Lunch break%'
-              AND te.clock_out IS NOT NULL
-              AND te.clock_out >= ?
-              AND (te2.clock_in IS NULL OR te2.clock_in <= ?)
-            ORDER BY te.clock_out ASC
-          `, [task.started_by, task.started_at, taskEndTime]);
-          
-          // Convert lunch breaks to same format as task breaks
-          if (lunchBreaks && lunchBreaks.length > 0) {
-            lunchBreaks.forEach(lb => {
-              // Include both completed breaks (with break_end) and active breaks (without break_end)
-              if (lb.break_start) {
-                breaks.push({
-                  break_start: lb.break_start,
-                  break_end: lb.break_end || null, // null for active breaks
-                  reason: lb.reason || 'Lunch break',
-                  notes: lb.notes,
-                  user_name: task.started_by_name || 'Unknown'
-                });
-              }
-            });
-          }
-        } catch (lunchError) {
-          // If there's an error fetching lunch breaks, just continue without them
-          console.warn('Error fetching lunch breaks for task:', lunchError.message);
-        }
-      }
-      
+    const [allComments, allSubtasks, allAssignments, allBreaks, allUsage] = await Promise.all([
+      db.allAsync(`SELECT tc.*, u.full_name as user_name, u.username FROM task_comments tc LEFT JOIN users u ON tc.user_id = u.id WHERE tc.task_id IN (${ph}) ORDER BY tc.created_at ASC`, taskIds).catch(() => []),
+      db.allAsync(`SELECT ts.*, u.full_name as completed_by_name FROM task_subtasks ts LEFT JOIN users u ON ts.completed_by = u.id WHERE ts.task_id IN (${ph}) ORDER BY ts.order_index ASC, ts.created_at ASC`, taskIds).catch(() => []),
+      db.allAsync(`SELECT ta.task_id, ta.user_id, u.full_name as assigned_to_name, ta.assigned_at FROM task_assignments ta LEFT JOIN users u ON ta.user_id = u.id WHERE ta.task_id IN (${ph}) ORDER BY ta.assigned_at ASC`, taskIds).catch(() => []),
+      db.allAsync(`SELECT tb.*, u.full_name as user_name FROM task_breaks tb LEFT JOIN users u ON tb.user_id = u.id WHERE tb.task_id IN (${ph}) ORDER BY tb.break_start DESC`, taskIds).catch(() => []),
+      db.allAsync(`SELECT u.id, u.task_id, u.item_id, u.quantity_used, u.created_at, i.name AS item_name, i.unit AS item_unit, i.quantity AS item_quantity, i.needs_return, i.returned_at, i.category_id, c.name AS category_name FROM task_inventory_usage u JOIN inventory_items i ON i.id = u.item_id LEFT JOIN inventory_categories c ON c.id = i.category_id WHERE u.task_id IN (${ph}) ORDER BY u.created_at ASC`, taskIds).catch(() => []),
+    ]);
+
+    // Batch-load user names for started_by/completed_by
+    const userIdSet = new Set();
+    tasks.forEach(t => { if (t.started_by) userIdSet.add(t.started_by); if (t.completed_by) userIdSet.add(t.completed_by); });
+    const userNameMap = {};
+    if (userIdSet.size > 0) {
+      const uIds = [...userIdSet];
+      const uPh = uIds.map(() => '?').join(',');
+      const users = await db.allAsync(`SELECT id, full_name FROM users WHERE id IN (${uPh})`, uIds).catch(() => []);
+      (users || []).forEach(u => { userNameMap[u.id] = u.full_name; });
+    }
+
+    // Group by task_id
+    const commentsByTask = {};
+    const subtasksByTask = {};
+    const assignmentsByTask = {};
+    const breaksByTask = {};
+    const usageByTask = {};
+    (allComments || []).forEach(c => { (commentsByTask[c.task_id] ||= []).push(c); });
+    (allSubtasks || []).forEach(s => { (subtasksByTask[s.task_id] ||= []).push(s); });
+    (allAssignments || []).forEach(a => { (assignmentsByTask[a.task_id] ||= []).push(a); });
+    (allBreaks || []).forEach(b => { (breaksByTask[b.task_id] ||= []).push(b); });
+    (allUsage || []).forEach(u => { (usageByTask[u.task_id] ||= []).push(u); });
+
+    // Enrich each task
+    for (const task of tasks) {
+      task.comments = commentsByTask[task.id] || [];
+      task.subtasks = subtasksByTask[task.id] || [];
+      const assignments = assignmentsByTask[task.id] || [];
+      task.assigned_users = assignments.map(a => ({ user_id: a.user_id, full_name: a.assigned_to_name, assigned_at: a.assigned_at }));
+      const breaks = [...(breaksByTask[task.id] || [])];
       task.breaks = breaks;
-      
-      // Check if there's an active break (break_end is NULL)
       task.active_break = breaks.find(b => !b.break_end) || null;
-      
-      // Find the most recent restart time (most recent break_end)
       const completedBreaks = breaks.filter(b => b.break_end);
       if (completedBreaks.length > 0) {
-        // Sort by break_end descending to get the most recent
         completedBreaks.sort((a, b) => new Date(b.break_end) - new Date(a.break_end));
         task.last_restarted_at = completedBreaks[0].break_end;
         task.last_restarted_by = completedBreaks[0].user_name;
@@ -287,40 +224,13 @@ router.get('/', async (req, res) => {
         task.last_restarted_at = null;
         task.last_restarted_by = null;
       }
-      
-      // Keep backward compatibility: set assigned_to_name from first assignment or legacy field
       if (assignments.length > 0) {
         task.assigned_to_name = assignments.map(a => a.assigned_to_name).join(', ');
-        task.assigned_to = assignments[0].user_id; // Keep first one for backward compatibility
+        task.assigned_to = assignments[0].user_id;
       }
-      
-      // Add started_by_name and completed_by_name to task
-      if (task.started_by) {
-        const startedByUser = await db.getAsync('SELECT full_name FROM users WHERE id = ?', [task.started_by]);
-        task.started_by_name = startedByUser?.full_name || null;
-      }
-      if (task.completed_by) {
-        const completedByUser = await db.getAsync('SELECT full_name FROM users WHERE id = ?', [task.completed_by]);
-        task.completed_by_name = completedByUser?.full_name || null;
-      }
-
-      // Task inventory usage (parts & materials linked to this task)
-      try {
-        const usage = await db.allAsync(`
-          SELECT u.id, u.task_id, u.item_id, u.quantity_used, u.created_at,
-                 i.name AS item_name, i.unit AS item_unit, i.quantity AS item_quantity,
-                 i.needs_return, i.returned_at,
-                 i.category_id, c.name AS category_name
-          FROM task_inventory_usage u
-          JOIN inventory_items i ON i.id = u.item_id
-          LEFT JOIN inventory_categories c ON c.id = i.category_id
-          WHERE u.task_id = ?
-          ORDER BY u.created_at ASC
-        `, [task.id]);
-        task.inventory_usage = usage || [];
-      } catch (invErr) {
-        task.inventory_usage = [];
-      }
+      task.started_by_name = task.started_by ? (userNameMap[task.started_by] || null) : null;
+      task.completed_by_name = task.completed_by ? (userNameMap[task.completed_by] || null) : null;
+      task.inventory_usage = usageByTask[task.id] || [];
     }
 
     res.json({ tasks });

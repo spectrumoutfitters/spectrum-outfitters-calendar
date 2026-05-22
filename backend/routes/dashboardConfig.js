@@ -62,7 +62,7 @@ router.get('/', async (req, res) => {
 });
 
 /** POST — save config (master Push from Spectrum Outfitters Assistant) */
-router.post('/', express.json({ limit: '10mb' }), async (req, res) => {
+router.post('/', authenticateToken, requireAdmin, express.json({ limit: '10mb' }), async (req, res) => {
   try {
     const body = req.body;
     if (!body || typeof body !== 'object') {

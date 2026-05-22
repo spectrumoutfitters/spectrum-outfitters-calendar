@@ -79,8 +79,8 @@ const createTables = async () => {
 
     console.log('All tables created successfully');
 
-    // Create default admin user
-    const adminPassword = 'SpectrumAdmin2024!';
+    // Create default admin user (password should be changed on first login)
+    const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'SpectrumAdmin2024!';
     const passwordHash = await bcrypt.hash(adminPassword, 10);
     
     try {
@@ -88,7 +88,7 @@ const createTables = async () => {
         INSERT INTO users (username, password_hash, email, full_name, role, hourly_rate)
         VALUES (?, ?, ?, ?, ?, ?)
       `, ['admin', passwordHash, process.env.ADMIN_EMAIL || 'neel@spectrumoutfitters.com', 'System Administrator', 'admin', 0]);
-      console.log('Default admin user created (username: admin, password: SpectrumAdmin2024!)');
+      console.log('Default admin user created (username: admin). Change the password on first login.');
     } catch (err) {
       if (err.message.includes('UNIQUE constraint')) {
         console.log('Admin user already exists');

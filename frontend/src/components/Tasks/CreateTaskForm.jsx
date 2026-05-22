@@ -6,18 +6,6 @@ import axios from 'axios';
 import ShopMonkeyItemSelector from './ShopMonkeyItemSelector';
 
 const CreateTaskForm = ({ onClose }) => {
-  // FORCE ALERT TO VERIFY CODE IS LOADED - TEMPORARY TEST
-  React.useEffect(() => {
-    if (!window.__createTaskFormLoaded) {
-      window.__createTaskFormLoaded = true;
-      console.log('🚀🚀🚀 CreateTaskForm component loaded - VERSION 2.0');
-      console.log('🚀🚀🚀 If you see this, the NEW code is running!');
-      // TEMPORARY: Force alert to verify code is loaded
-      setTimeout(() => {
-        alert('✅ NEW CODE LOADED - VERSION 2.0\n\nIf you see this alert, the new code is running!\n\nCheck console for 🚀 logs when you click Import.');
-      }, 1000);
-    }
-  }, []);
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     title: '',

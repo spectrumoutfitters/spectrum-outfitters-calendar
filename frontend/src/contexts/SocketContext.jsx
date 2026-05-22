@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import api from '../utils/api';
@@ -195,16 +195,18 @@ export const SocketProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, [user]);
 
-  const value = {
+  const setViewingConversation = useCallback((convId) => {
+    viewingConversationRef.current = convId;
+  }, []);
+
+  const value = useMemo(() => ({
     socket,
     isConnected,
     unreadCount,
     setUnreadCount,
     playNotificationSound,
-    setViewingConversation: (convId) => {
-      viewingConversationRef.current = convId;
-    }
-  };
+    setViewingConversation
+  }), [socket, isConnected, unreadCount, setViewingConversation]);
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
 };
