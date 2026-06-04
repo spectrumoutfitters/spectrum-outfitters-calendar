@@ -53,6 +53,12 @@ export function payPeriodsPerYear(payFrequency) {
   }
 }
 
+export function grossPerPaycheckFromAnnualSalary(annualSalary, payFrequency = 'Monthly') {
+  const annual = Math.max(0, Number(annualSalary) || 0);
+  if (!annual) return 0;
+  return annual / payPeriodsPerYear(payFrequency);
+}
+
 export function marginalFederalIncomeAnnual(taxableIncomeAnnual, filingStatus = 'single') {
   const brackets =
     filingStatus === 'mfj' ? ANNUAL_TAXABLE_BRACKETS_MFJ : ANNUAL_TAXABLE_BRACKETS_SINGLE;
