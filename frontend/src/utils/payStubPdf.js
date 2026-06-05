@@ -376,7 +376,7 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     contractor,
     {
       ...(ytdOpts || {}),
-      skipContractorMonthPhantomGross: contractorWeeklyDiscreteYtd,
+      skipContractorMonthPhantomGross: contractorWeeklyDiscreteYtd || hasPriorAmounts,
     },
   );
   const phantomByYear = phantomSynthetic.byYear || {};
