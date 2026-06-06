@@ -676,7 +676,13 @@ const PayStubMaker = () => {
             Earlier months rolled into year-to-date
           </label>
           {payFrequency !== 'Monthly' ? (
-            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+            <label
+              className={`inline-flex items-center gap-2 select-none ${
+                applyAnnualSalaryToMonthlyGross
+                  ? 'cursor-not-allowed opacity-60'
+                  : 'cursor-pointer'
+              }`}
+            >
               <input
                 type="checkbox"
                 className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600"
@@ -804,6 +810,9 @@ const PayStubMaker = () => {
               <>
                 <label className={labelClass}>Annual salary</label>
                 <input className={fieldClass} inputMode="decimal" placeholder="120000" value={annualSalary} onChange={(e) => setAnnualSalary(e.target.value)} />
+                <p className="text-xs text-gray-500 dark:text-neutral-400">
+                  Gross pay is filled per paycheck, so monthly splitting stays off.
+                </p>
               </>
             ) : null}
           </div>
