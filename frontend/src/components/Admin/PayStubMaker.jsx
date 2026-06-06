@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { format, endOfMonth, subMonths } from 'date-fns';
 import { generatePayStubsPdf, parsePayDate, paycheckGrossFromEntry, weeklyChecksSharePayWeekDay } from '../../utils/payStubPdf';
-import { computeContractorDeductions, computeW2Deductions } from '../../utils/payrollTaxUS';
+import { computeContractorDeductions, computeW2Deductions, payPeriodsPerYear } from '../../utils/payrollTaxUS';
 
 const PAY_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Other'];
 const WORKER_TYPES = [
@@ -160,6 +160,13 @@ function anyPriorYtdFieldFilled(fields) {
 }
 
 const MAX_PAYSTUB_LOGO_BYTES = 2_500_000;
+export const DEFAULT_SPREAD_MONTHLY_ACROSS_PAYCHECKS = false;
+
+export function grossPerPaycheckFromAnnualSalary(rawAnnualSalary, payFrequency) {
+  const annual = Number(`${rawAnnualSalary ?? ''}`.replace(/,/g, ''));
+  if (!Number.isFinite(annual) || annual <= 0) return '';
+  return (annual / payPeriodsPerYear(payFrequency)).toFixed(2);
+}
 
 const PayStubMaker = () => {
   const defaults = useMemo(() => defaultThreePeriodEnds(), []);
@@ -190,7 +197,9 @@ const PayStubMaker = () => {
   const [annualSalary, setAnnualSalary] = useState('');
   const [applyAnnualSalaryToMonthlyGross, setApplyAnnualSalaryToMonthlyGross] = useState(false);
   const [calendarYtdBackfill, setCalendarYtdBackfill] = useState(true);
-  const [spreadMonthlyAcrossPaychecks, setSpreadMonthlyAcrossPaychecks] = useState(true);
+  const [spreadMonthlyAcrossPaychecks, setSpreadMonthlyAcrossPaychecks] = useState(
+    DEFAULT_SPREAD_MONTHLY_ACROSS_PAYCHECKS,
+  );
 
   const onEmployerLogoFile = useCallback((e) => {
     const input = e.target;
@@ -222,11 +231,11 @@ const PayStubMaker = () => {
 
   useEffect(() => {
     if (!applyAnnualSalaryToMonthlyGross || !sameAmountsAllPeriods) return;
-    const a = Number(`${annualSalary}`.replace(/,/g, ''));
-    if (!Number.isFinite(a) || a <= 0) return;
-    const monthly = a / 12;
-    setShared((prev) => ({ ...prev, gross: monthly.toFixed(2) }));
-  }, [applyAnnualSalaryToMonthlyGross, annualSalary, sameAmountsAllPeriods]);
+    const grossPerCheck = grossPerPaycheckFromAnnualSalary(annualSalary, payFrequency);
+    if (!grossPerCheck) return;
+    setShared((prev) => ({ ...prev, gross: grossPerCheck }));
+    setSpreadMonthlyAcrossPaychecks(false);
+  }, [applyAnnualSalaryToMonthlyGross, annualSalary, payFrequency, sameAmountsAllPeriods]);
 
   const [shared, setShared] = useState({
     gross: '',
@@ -667,8 +676,20 @@ const PayStubMaker = () => {
             Earlier months rolled into year-to-date
           </label>
           {payFrequency !== 'Monthly' ? (
-            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600" checked={spreadMonthlyAcrossPaychecks} onChange={(e) => setSpreadMonthlyAcrossPaychecks(e.target.checked)} />
+            <label
+              className={`inline-flex items-center gap-2 select-none ${
+                applyAnnualSalaryToMonthlyGross
+                  ? 'cursor-not-allowed opacity-60'
+                  : 'cursor-pointer'
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600"
+                checked={spreadMonthlyAcrossPaychecks}
+                disabled={applyAnnualSalaryToMonthlyGross}
+                onChange={(e) => setSpreadMonthlyAcrossPaychecks(e.target.checked)}
+              />
               Gross figures are monthly (split across checks)
             </label>
           ) : null}
@@ -768,7 +789,7 @@ const PayStubMaker = () => {
         </details>
 
         <details className="mt-2 rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900/50">
-          <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-neutral-300">Shortcut · annual salary → monthly gross</summary>
+          <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-neutral-300">Shortcut · annual salary → per-check gross</summary>
           <div className="mt-3 space-y-3">
             <label className="flex items-start gap-2 cursor-pointer select-none text-sm dark:text-neutral-200">
               <input
@@ -779,15 +800,19 @@ const PayStubMaker = () => {
                 onChange={(e) => {
                   const on = e.target.checked;
                   setApplyAnnualSalaryToMonthlyGross(on);
+                  if (on) setSpreadMonthlyAcrossPaychecks(false);
                   if (!on) setAnnualSalary('');
                 }}
               />
-              Only when pay entries use the same dollars
+              Fill gross pay from annual salary when checks use the same dollars
             </label>
             {applyAnnualSalaryToMonthlyGross && sameAmountsAllPeriods ? (
               <>
                 <label className={labelClass}>Annual salary</label>
                 <input className={fieldClass} inputMode="decimal" placeholder="120000" value={annualSalary} onChange={(e) => setAnnualSalary(e.target.value)} />
+                <p className="text-xs text-gray-500 dark:text-neutral-400">
+                  Gross pay is filled per paycheck, so monthly splitting stays off.
+                </p>
               </>
             ) : null}
           </div>
