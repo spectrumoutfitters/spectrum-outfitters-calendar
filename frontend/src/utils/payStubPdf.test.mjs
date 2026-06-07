@@ -1,9 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createServer } from 'vite';
 
-import { buildPreparedPaystubPages } from './payStubPdf.js';
+async function loadPayStubModule() {
+  const server = await createServer({
+    server: { middlewareMode: true },
+    appType: 'custom',
+    logLevel: 'error',
+  });
+  try {
+    return await server.ssrLoadModule('/src/utils/payStubPdf.js');
+  } finally {
+    await server.close();
+  }
+}
 
-test('manual prior YTD prevents automatic calendar backfill double-counting', () => {
+test('manual prior YTD prevents automatic calendar backfill double-counting', async () => {
+  const { buildPreparedPaystubPages } = await loadPayStubModule();
   const [stub] = buildPreparedPaystubPages(
     [
       {
@@ -26,7 +39,8 @@ test('manual prior YTD prevents automatic calendar backfill double-counting', ()
   assert.equal(stub.netYtd, 4000);
 });
 
-test('automatic calendar backfill still applies when manual prior YTD is blank', () => {
+test('automatic calendar backfill still applies when manual prior YTD is blank', async () => {
+  const { buildPreparedPaystubPages } = await loadPayStubModule();
   const [stub] = buildPreparedPaystubPages(
     [
       {
