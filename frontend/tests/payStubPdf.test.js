@@ -52,7 +52,7 @@ describe('buildPreparedPaystubPages', () => {
     assert.equal(pages[0].netYtd, 13000);
   });
 
-  it('falls back to exported check totals when weekly 1099 dates are not aligned', () => {
+  it('falls back to monthly phantom gross when weekly 1099 dates are not aligned', () => {
     const pages = buildPreparedPaystubPages(
       [
         { periodEnd: '2025-03-31', gross: 1000 },
@@ -66,8 +66,10 @@ describe('buildPreparedPaystubPages', () => {
       },
     );
 
-    assert.equal(pages[0].ytdGross, 1000);
-    assert.equal(pages[1].ytdGross, 2000);
+    const janAndFebPhantomGross = 2 * ((1000 * 52) / 12);
+
+    assert.equal(pages[0].ytdGross, janAndFebPhantomGross + 1000);
+    assert.equal(pages[1].ytdGross, janAndFebPhantomGross + 2000);
   });
 });
 
