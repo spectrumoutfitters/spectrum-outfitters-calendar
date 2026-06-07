@@ -28,6 +28,7 @@ import {
   ADMIN_MAIN_TABS_ADMIN,
   ADMIN_MAIN_TABS_EMPLOYEE,
   ADMIN_SUB_TABS,
+  resolveAdminDeepLink,
 } from '../config/adminNavRegistry';
 
 const GOLD = '#D4A017';
@@ -213,22 +214,18 @@ const Admin = () => {
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  /** Jump palette / deep link: /admin?adm=finance&adsub=paystub_maker */
+  /** Jump palette / deep links: /admin?adm=finance&adsub=paystub_maker and legacy /admin?tab=payroll */
   useEffect(() => {
-    const adm = searchParams.get('adm');
-    const adsub = searchParams.get('adsub');
-    if (!isAdmin || !adm) return;
+    if (!isAdmin) return;
+    const target = resolveAdminDeepLink(searchParams);
+    if (!target) return;
 
-    const validMain = ADMIN_MAIN_TABS_ADMIN.some((t) => t.id === adm);
-    if (!validMain) return;
+    setMainTab(target.main);
+    localStorage.setItem('admin_main_tab', target.main);
 
-    setMainTab(adm);
-    localStorage.setItem('admin_main_tab', adm);
-
-    const subs = ADMIN_SUB_TABS[adm];
-    if (subs && adsub && subs.some((s) => s.id === adsub)) {
+    if (target.sub) {
       setSubTabs((prev) => {
-        const next = { ...prev, [adm]: adsub };
+        const next = { ...prev, [target.main]: target.sub };
         localStorage.setItem('admin_sub_tabs', JSON.stringify(next));
         return next;
       });
@@ -237,8 +234,7 @@ const Admin = () => {
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        next.delete('adm');
-        next.delete('adsub');
+        target.paramsToDelete.forEach((param) => next.delete(param));
         return next;
       },
       { replace: true },
