@@ -135,8 +135,11 @@ function AppRoutes() {
           </PrivateRoute>
         }
       />
-      {/* /admin/shop-financing disabled — redirect to admin */}
-      <Route path="/admin/shop-financing" element={<Navigate to="/admin" />} />
+      {/* Legacy shop-financing route now lives under Admin → Finance. */}
+      <Route
+        path="/admin/shop-financing"
+        element={<Navigate to="/admin?adm=finance&adsub=shop_financing" replace />}
+      />
       <Route
         path="/crm"
         element={

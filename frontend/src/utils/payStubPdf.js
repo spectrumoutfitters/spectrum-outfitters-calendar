@@ -371,14 +371,16 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
       ? alignedWeekly.payWeekDay
       : null;
 
-  const phantomSynthetic = phantomCalendarMonthsPriorTotals(
-    rows.map((r) => ({ y: r.y, d: r.d, gross: r.gross })),
-    contractor,
-    {
-      ...(ytdOpts || {}),
-      skipContractorMonthPhantomGross: contractorWeeklyDiscreteYtd,
-    },
-  );
+  const phantomSynthetic = hasPriorAmounts
+    ? { byYear: {}, runningSsConsumed: false, suppressedReason: '' }
+    : phantomCalendarMonthsPriorTotals(
+        rows.map((r) => ({ y: r.y, d: r.d, gross: r.gross })),
+        contractor,
+        {
+          ...(ytdOpts || {}),
+          skipContractorMonthPhantomGross: contractorWeeklyDiscreteYtd,
+        },
+      );
   const phantomByYear = phantomSynthetic.byYear || {};
 
   /**
