@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { addDays, format, startOfMonth, parseISO, isValid, subDays } from 'date-fns';
-import { computeW2Deductions, payPeriodsPerYear } from './payrollTaxUS';
+import { computeW2Deductions, payPeriodsPerYear } from './payrollTaxUS.js';
 
 export function parsePayDate(raw) {
   if (!raw) return new Date();
