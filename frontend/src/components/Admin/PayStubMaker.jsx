@@ -8,6 +8,7 @@ const WORKER_TYPES = [
   { value: 'w2', label: 'W‑2 employee (withholdings)' },
   { value: '1099', label: '1099‑NEC contractor' },
 ];
+export const DEFAULT_SPREAD_MONTHLY_ACROSS_PAYCHECKS = false;
 
 const US_STATES = [
   ['TX', 'Texas (no wage income tax)'],
@@ -190,7 +191,9 @@ const PayStubMaker = () => {
   const [annualSalary, setAnnualSalary] = useState('');
   const [applyAnnualSalaryToMonthlyGross, setApplyAnnualSalaryToMonthlyGross] = useState(false);
   const [calendarYtdBackfill, setCalendarYtdBackfill] = useState(true);
-  const [spreadMonthlyAcrossPaychecks, setSpreadMonthlyAcrossPaychecks] = useState(true);
+  const [spreadMonthlyAcrossPaychecks, setSpreadMonthlyAcrossPaychecks] = useState(
+    DEFAULT_SPREAD_MONTHLY_ACROSS_PAYCHECKS,
+  );
 
   const onEmployerLogoFile = useCallback((e) => {
     const input = e.target;
@@ -669,7 +672,7 @@ const PayStubMaker = () => {
           {payFrequency !== 'Monthly' ? (
             <label className="inline-flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600" checked={spreadMonthlyAcrossPaychecks} onChange={(e) => setSpreadMonthlyAcrossPaychecks(e.target.checked)} />
-              Gross figures are monthly (split across checks)
+              Treat gross figures as monthly (split across checks)
             </label>
           ) : null}
           <label className="inline-flex items-center gap-2 cursor-pointer select-none">
