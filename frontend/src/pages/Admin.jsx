@@ -28,6 +28,9 @@ import {
   ADMIN_MAIN_TABS_ADMIN,
   ADMIN_MAIN_TABS_EMPLOYEE,
   ADMIN_SUB_TABS,
+  DEFAULT_ADMIN_SUB_TABS,
+  isAdminMainTab,
+  resolveAdminNavTarget,
 } from '../config/adminNavRegistry';
 
 const GOLD = '#D4A017';
@@ -150,21 +153,35 @@ const Admin = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAdmin } = useAuth();
 
-  // Restore last tab from localStorage — migrate old tab names to new ones
-  const TAB_MIGRATION = { team: 'people', shop: 'inventory', insights: 'finance' };
+  // Restore last tab from localStorage and validate legacy flat tab ids.
   const rawSavedMain = localStorage.getItem('admin_main_tab') || 'overview';
-  const savedMain = TAB_MIGRATION[rawSavedMain] || rawSavedMain;
+  const savedTarget = resolveAdminNavTarget(rawSavedMain) || { main: 'overview' };
+  const savedTargetSub = isAdminMainTab(rawSavedMain) ? undefined : savedTarget.sub;
   const savedSubs = (() => {
     try { return JSON.parse(localStorage.getItem('admin_sub_tabs') || '{}'); } catch { return {}; }
   })();
 
-  const initialMain = !isAdmin ? 'grand_opening' : savedMain;
+  const initialMain = !isAdmin ? 'grand_opening' : savedTarget.main;
   const [mainTab, setMainTab] = useState(initialMain);
   const [subTabs, setSubTabs] = useState({
-    people: savedSubs.people || savedSubs.team || 'status',
-    inventory: savedSubs.inventory || savedSubs.shop || 'inventory',
-    finance: savedSubs.finance || 'payroll',
-    settings: savedSubs.settings || 'general',
+    people:
+      (savedTarget.main === 'people' && savedTargetSub) ||
+      (ADMIN_SUB_TABS.people.some((tab) => tab.id === savedSubs.people) && savedSubs.people) ||
+      (ADMIN_SUB_TABS.people.some((tab) => tab.id === savedSubs.team) && savedSubs.team) ||
+      DEFAULT_ADMIN_SUB_TABS.people,
+    inventory:
+      (savedTarget.main === 'inventory' && savedTargetSub) ||
+      (ADMIN_SUB_TABS.inventory.some((tab) => tab.id === savedSubs.inventory) && savedSubs.inventory) ||
+      (ADMIN_SUB_TABS.inventory.some((tab) => tab.id === savedSubs.shop) && savedSubs.shop) ||
+      DEFAULT_ADMIN_SUB_TABS.inventory,
+    finance:
+      (savedTarget.main === 'finance' && savedTargetSub) ||
+      (ADMIN_SUB_TABS.finance.some((tab) => tab.id === savedSubs.finance) && savedSubs.finance) ||
+      DEFAULT_ADMIN_SUB_TABS.finance,
+    settings:
+      (savedTarget.main === 'settings' && savedTargetSub) ||
+      (ADMIN_SUB_TABS.settings.some((tab) => tab.id === savedSubs.settings) && savedSubs.settings) ||
+      DEFAULT_ADMIN_SUB_TABS.settings,
   });
 
   const [dashboardData, setDashboardData] = useState({
@@ -213,22 +230,20 @@ const Admin = () => {
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  /** Jump palette / deep link: /admin?adm=finance&adsub=paystub_maker */
+  /** Jump palette / deep link: /admin?adm=finance&adsub=paystub_maker; legacy: /admin?tab=payroll */
   useEffect(() => {
     const adm = searchParams.get('adm');
     const adsub = searchParams.get('adsub');
-    if (!isAdmin || !adm) return;
+    const legacyTab = searchParams.get('tab');
+    const target = resolveAdminNavTarget(adm || legacyTab, adsub);
+    if (!isAdmin || !target) return;
 
-    const validMain = ADMIN_MAIN_TABS_ADMIN.some((t) => t.id === adm);
-    if (!validMain) return;
+    setMainTab(target.main);
+    localStorage.setItem('admin_main_tab', target.main);
 
-    setMainTab(adm);
-    localStorage.setItem('admin_main_tab', adm);
-
-    const subs = ADMIN_SUB_TABS[adm];
-    if (subs && adsub && subs.some((s) => s.id === adsub)) {
+    if (target.sub) {
       setSubTabs((prev) => {
-        const next = { ...prev, [adm]: adsub };
+        const next = { ...prev, [target.main]: target.sub };
         localStorage.setItem('admin_sub_tabs', JSON.stringify(next));
         return next;
       });
@@ -239,6 +254,7 @@ const Admin = () => {
         const next = new URLSearchParams(prev);
         next.delete('adm');
         next.delete('adsub');
+        next.delete('tab');
         return next;
       },
       { replace: true },
