@@ -1,13 +1,30 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { createServer } from 'vite';
 
-import {
-  buildPreparedPaystubPages,
-  calendarBackfillSocSecWagesByYear,
-  computeW2DeductionsInRowOrder,
-} from './payStubPdf.js';
+let vite;
+let payStubPdf;
+
+test.before(async () => {
+  vite = await createServer({
+    root: fileURLToPath(new URL('../../', import.meta.url)),
+    server: { middlewareMode: true },
+    appType: 'custom',
+    logLevel: 'error',
+  });
+  payStubPdf = await vite.ssrLoadModule('/src/utils/payStubPdf.js');
+});
+
+test.after(async () => {
+  await vite?.close();
+});
 
 test('automatic W-2 deductions seed Social Security with calendar backfill wages', () => {
+  const {
+    calendarBackfillSocSecWagesByYear,
+    computeW2DeductionsInRowOrder,
+  } = payStubPdf;
   const rows = [
     { periodEnd: '2025-07-04', gross: 6700 },
     { periodEnd: '2025-07-11', gross: 6700 },
@@ -39,6 +56,7 @@ test('automatic W-2 deductions seed Social Security with calendar backfill wages
 });
 
 test('calendar YTD backfill applies independently to each year in a multi-year PDF', () => {
+  const { buildPreparedPaystubPages } = payStubPdf;
   const prepared = buildPreparedPaystubPages(
     [
       { periodEnd: '2025-11-30', gross: 5000 },
@@ -66,6 +84,7 @@ test('calendar YTD backfill applies independently to each year in a multi-year P
 });
 
 test('variable weekly 1099 gross YTD includes actual exported checks', () => {
+  const { buildPreparedPaystubPages } = payStubPdf;
   const prepared = buildPreparedPaystubPages(
     [
       { periodEnd: '2025-01-03', gross: 1000 },
