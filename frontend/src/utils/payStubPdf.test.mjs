@@ -74,9 +74,9 @@ test('calendar YTD backfill applies independently to each year in a multi-year P
     },
   );
 
-  const nov2025 = prepared.find((p) => p.periodEnd === '2025-11-30');
-  const dec2025 = prepared.find((p) => p.periodEnd === '2025-12-31');
-  const jan2026 = prepared.find((p) => p.periodEnd === '2026-01-31');
+  const nov2025 = prepared.find((p) => p.m.periodEnd === '2025-11-30');
+  const dec2025 = prepared.find((p) => p.m.periodEnd === '2025-12-31');
+  const jan2026 = prepared.find((p) => p.m.periodEnd === '2026-01-31');
 
   assert.equal(nov2025.ytdGross, 55000);
   assert.equal(dec2025.ytdGross, 60000);
