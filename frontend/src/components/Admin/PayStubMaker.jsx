@@ -1,7 +1,14 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { format, endOfMonth, subMonths } from 'date-fns';
-import { generatePayStubsPdf, parsePayDate, paycheckGrossFromEntry, weeklyChecksSharePayWeekDay } from '../../utils/payStubPdf';
-import { computeContractorDeductions, computeW2Deductions } from '../../utils/payrollTaxUS';
+import {
+  calendarBackfillSocSecWagesByYear,
+  computeW2DeductionsInRowOrder,
+  generatePayStubsPdf,
+  parsePayDate,
+  paycheckGrossFromEntry,
+  weeklyChecksSharePayWeekDay,
+} from '../../utils/payStubPdf';
+import { computeContractorDeductions } from '../../utils/payrollTaxUS';
 
 const PAY_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Other'];
 const WORKER_TYPES = [
@@ -93,48 +100,6 @@ function moneyFixed2(n) {
   const x = Number(n);
   if (!Number.isFinite(x)) return '';
   return x.toFixed(2);
-}
-
-function sequentialW2DeductionsInRowOrder(
-  rows,
-  payFrequency,
-  filingStatus,
-  workStateCode,
-  priorSocSeed = 0,
-  spreadMonthlyAcrossPaychecks = false,
-) {
-  const tagged = rows.map((row, idx) => ({ row, idx }));
-  tagged.sort((a, b) => +parsePayDate(a.row.periodEnd) - +parsePayDate(b.row.periodEnd));
-  let priorSocSec = Number(priorSocSeed) || 0;
-  const calcByIdx = {};
-  tagged.forEach(({ row, idx }) => {
-    const gross = paycheckGrossFromEntry(
-      Math.max(0, Number(row.gross) || 0),
-      payFrequency,
-      spreadMonthlyAcrossPaychecks,
-    );
-    const calc = computeW2Deductions({
-      gross,
-      payFrequency,
-      filingStatus,
-      workStateCode,
-      priorYtdSocSecWages: priorSocSec,
-    });
-    priorSocSec += calc.oasdiWagesNow ?? 0;
-    calcByIdx[idx] = calc;
-  });
-  return rows.map((_, idx) => {
-    const calc = calcByIdx[idx];
-    return {
-      federal: calc.federal,
-      socialSecurity: calc.socialSecurity,
-      medicare: calc.medicare,
-      medicareBase: calc.medicareBase,
-      medicareAdditional: calc.medicareAdditional,
-      state: calc.state,
-      oasdiWagesNow: calc.oasdiWagesNow ?? 0,
-    };
-  });
 }
 
 function formatDeductionFields(d) {
@@ -313,14 +278,26 @@ const PayStubMaker = () => {
       return;
     }
 
-    const dedSeq = sequentialW2DeductionsInRowOrder(
-      baselineRowsForCalc,
+    const priorSocSeed =
+      employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0;
+    const priorSocSeedByYear = calendarBackfillSocSecWagesByYear(baselineRowsForCalc, {
+      calendarYtdBackfill,
+      monthlyJanBackfill: calendarYtdBackfill,
+      payFrequency,
+      filingStatus,
+      workerState: workStateCode,
+      priorSsTaxableWages: priorSocSeed,
+      priorSsTaxYear: parseOptionalTaxYear(priorYtdTaxYear),
+      spreadMonthlyAcrossPaychecks,
+    });
+    const dedSeq = computeW2DeductionsInRowOrder(baselineRowsForCalc, {
       payFrequency,
       filingStatus,
       workStateCode,
-      employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
+      priorSocSecWages: priorSocSeed,
+      priorSocSecWagesByYear: priorSocSeedByYear,
       spreadMonthlyAcrossPaychecks,
-    );
+    });
     const chronFirstIdx =
       baselineRowsForCalc.length === 0
         ? 0
@@ -351,6 +328,8 @@ const PayStubMaker = () => {
     manualWithholdings,
     sameAmountsAllPeriods,
     perPeriod.length,
+    calendarYtdBackfill,
+    priorYtdTaxYear,
     priorYtdTaxableSocSecWages,
     spreadMonthlyAcrossPaychecks,
   ]);
@@ -431,14 +410,24 @@ const PayStubMaker = () => {
     /** Per-row withholding: auto W-2 recomputed in chronological period-end order */
     let working = rowsRaw.map((r) => ({ ...r }));
     if (!isContractor && !manualWithholdings) {
-      const seq = sequentialW2DeductionsInRowOrder(
-        working,
+      const priorSocSeedByYear = calendarBackfillSocSecWagesByYear(working, {
+        calendarYtdBackfill,
+        monthlyJanBackfill: calendarYtdBackfill,
+        payFrequency,
+        filingStatus,
+        workerState: workStateCode,
+        priorSsTaxableWages: priorSocSeed,
+        priorSsTaxYear: parseOptionalTaxYear(priorYtdTaxYear),
+        spreadMonthlyAcrossPaychecks,
+      });
+      const seq = computeW2DeductionsInRowOrder(working, {
         payFrequency,
         filingStatus,
         workStateCode,
-        priorSocSeed,
+        priorSocSecWages: priorSocSeed,
+        priorSocSecWagesByYear: priorSocSeedByYear,
         spreadMonthlyAcrossPaychecks,
-      );
+      });
       working = working.map((row, i) => ({
         ...row,
         federal: seq[i].federal,
