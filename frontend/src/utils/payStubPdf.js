@@ -135,7 +135,7 @@ function calculateNetYTD(gross, fed, ss, medC, medA, state, other) {
 
 /**
  * @typedef {{ gross?: number, federal?: number, socialSecurity?: number, medicareBase?: number, medicareAdditional?: number, state?: number, other?: number, taxYear?: number }} PriorYtdInput
- * @typedef {{ calendarYtdBackfill?: boolean, monthlyJanBackfill?: boolean, spreadMonthlyAcrossPaychecks?: boolean, payFrequency?: string, filingStatus?: string, workerState?: string, priorSsTaxableWages?: number }} PaystubYtdOptions
+ * @typedef {{ calendarYtdBackfill?: boolean, monthlyJanBackfill?: boolean, spreadMonthlyAcrossPaychecks?: boolean, payFrequency?: string, filingStatus?: string, workerState?: string, priorSsTaxableWages?: number, priorSsTaxYear?: number }} PaystubYtdOptions
  */
 
 function emptyPriorParts() {
@@ -152,6 +152,140 @@ function addPriorParts(a, b) {
     st: a.st + b.st,
     o: a.o + b.o,
   };
+}
+
+function coerceTaxYear(raw) {
+  if (raw == null || `${raw}`.trim() === '') return null;
+  const y = Number(raw);
+  return Number.isFinite(y) && y >= 1970 && y <= 2150 ? y : null;
+}
+
+function priorSsBaseForYear(year, yearCount, opts) {
+  const base = Math.max(0, Number(opts?.priorSsTaxableWages) || 0);
+  if (base <= 0) return 0;
+  const explicitYear = coerceTaxYear(opts?.priorSsTaxYear);
+  if (explicitYear !== null) return year === explicitYear ? base : 0;
+  return yearCount === 1 ? base : 0;
+}
+
+function normalizedRowsForCalendarBackfill(months, opts = {}) {
+  const pfResolved = String(opts?.payFrequency ?? 'Monthly').trim() || 'Monthly';
+  const spreadMonthly = !!opts?.spreadMonthlyAcrossPaychecks;
+
+  return (Array.isArray(months) ? months : []).map((m) => {
+    const d = parsePayDate(m.periodEnd);
+    return {
+      d,
+      y: d.getFullYear(),
+      gross: paycheckGrossFromEntry(numUsdField(m.gross), pfResolved, spreadMonthly),
+    };
+  });
+}
+
+/**
+ * Returns per-tax-year Social Security taxable wages already consumed before the
+ * first exported W-2 check in that year, including inferred calendar backfill.
+ *
+ * @param {Array<{ periodEnd: Date|string; gross?: number|string }>} months
+ * @param {PaystubYtdOptions} [opts]
+ * @returns {Record<number, number>}
+ */
+export function calendarBackfillSocSecWagesByYear(months, opts = {}) {
+  const byYear = {};
+  const rows = normalizedRowsForCalendarBackfill(months, opts);
+  const years = [...new Set(rows.map((r) => r.y))];
+  const backfillEnabled =
+    opts?.calendarYtdBackfill === true || opts?.monthlyJanBackfill === true;
+  const payFreqResolved = `${opts?.payFrequency || 'Monthly'}`.trim();
+  const periods = payPeriodsPerYear(payFreqResolved);
+
+  for (const year of years) {
+    const sorted = rows.filter((r) => r.y === year).sort((a, b) => +a.d - +b.d);
+    const earliest = sorted[0];
+    if (!earliest) continue;
+
+    let priorSs = priorSsBaseForYear(year, years.length, opts);
+    if (backfillEnabled) {
+      const earliestMonthHuman = earliest.d.getMonth() + 1;
+      const monthlyPhantomGross = Math.max(0, Number(earliest.gross) || 0) * (periods / 12);
+
+      for (let m = 1; m < earliestMonthHuman && monthlyPhantomGross > 0; m++) {
+        const c = computeW2Deductions({
+          gross: monthlyPhantomGross,
+          payFrequency: 'Monthly',
+          filingStatus: opts.filingStatus === 'mfj' ? 'mfj' : 'single',
+          workStateCode: opts.workerState || 'TX',
+          priorYtdSocSecWages: priorSs,
+        });
+        priorSs += c.oasdiWagesNow ?? 0;
+      }
+    }
+
+    if (priorSs > 1e-6) byYear[year] = priorSs;
+  }
+
+  return byYear;
+}
+
+/**
+ * Recomputes automatic W-2 deductions in chronological order while resetting
+ * the Social Security wage base by tax year.
+ *
+ * @param {Array<{ periodEnd: Date|string; gross?: number|string }>} rows
+ * @param {{ payFrequency?: string, filingStatus?: string, workStateCode?: string, priorSocSecWages?: number, priorSocSecWagesByYear?: Record<number, number>, spreadMonthlyAcrossPaychecks?: boolean }} [opts]
+ */
+export function computeW2DeductionsInRowOrder(rows, opts = {}) {
+  const inputRows = Array.isArray(rows) ? rows : [];
+  const tagged = inputRows.map((row, idx) => ({ row, idx }));
+  tagged.sort((a, b) => +parsePayDate(a.row.periodEnd) - +parsePayDate(b.row.periodEnd));
+
+  const years = new Set(tagged.map(({ row }) => parsePayDate(row.periodEnd).getFullYear()));
+  const singleYear = years.size === 1;
+  const priorByYear =
+    opts.priorSocSecWagesByYear && typeof opts.priorSocSecWagesByYear === 'object'
+      ? opts.priorSocSecWagesByYear
+      : {};
+  const runningByYear = {};
+  const calcByIdx = {};
+
+  tagged.forEach(({ row, idx }) => {
+    const year = parsePayDate(row.periodEnd).getFullYear();
+    if (!Object.prototype.hasOwnProperty.call(runningByYear, year)) {
+      const hasYearSeed = Object.prototype.hasOwnProperty.call(priorByYear, year);
+      runningByYear[year] = Math.max(
+        0,
+        Number(hasYearSeed ? priorByYear[year] : singleYear ? opts.priorSocSecWages : 0) || 0,
+      );
+    }
+
+    const gross = paycheckGrossFromEntry(
+      Math.max(0, Number(row.gross) || 0),
+      opts.payFrequency,
+      !!opts.spreadMonthlyAcrossPaychecks,
+    );
+    const calc = computeW2Deductions({
+      gross,
+      payFrequency: opts.payFrequency,
+      filingStatus: opts.filingStatus,
+      workStateCode: opts.workStateCode,
+      priorYtdSocSecWages: runningByYear[year],
+    });
+    runningByYear[year] += calc.oasdiWagesNow ?? 0;
+    calcByIdx[idx] = calc;
+  });
+
+  return inputRows.map((_, idx) => {
+    const calc = calcByIdx[idx] || computeW2Deductions({ gross: 0 });
+    return {
+      federal: calc.federal,
+      socialSecurity: calc.socialSecurity,
+      medicare: calc.medicare,
+      medicareBase: calc.medicareBase,
+      medicareAdditional: calc.medicareAdditional,
+      state: calc.state,
+      oasdiWagesNow: calc.oasdiWagesNow ?? 0,
+    };
+  });
 }
 
 /**
@@ -181,63 +315,63 @@ function phantomCalendarMonthsPriorTotals(normalizedRows, contractor, opts) {
   }
 
   const years = [...new Set(normalizedRows.map((r) => r.y))];
-  if (years.length > 1) {
-    suppressedReason =
-      'Automatic calendar-YTD phantom needs one tax year per PDF; use manual prior YTD or export one year at a time.';
-    return { byYear, runningSsConsumed: false, suppressedReason };
-  }
+  let runningSsConsumed = false;
 
-  const year = years[0];
-  const inYear = normalizedRows.filter((r) => r.y === year);
-  const sorted = [...inYear].sort((a, b) => +a.d - +b.d);
-  const earliest = sorted[0];
-  const earliestMonthIdx = earliest.d.getMonth(); // 0 January
-  /** January = 1 ... December =12 */
-  const earliestMonthHuman = earliestMonthIdx + 1;
-
-  const grossPerCheckEarliest = Math.max(0, Number(earliest.gross) || 0);
-
-  /** Implied ordinary monthly wages from per-check gross (Monthly → factor 12/12). */
   const payFreqResolved = `${opts.payFrequency || 'Monthly'}`.trim();
   const periods = payPeriodsPerYear(payFreqResolved);
-  const monthlyPhantomGross = grossPerCheckEarliest * (periods / 12);
 
-  if (earliestMonthHuman <= 1 || monthlyPhantomGross <= 0) {
-    return { byYear, runningSsConsumed: false, suppressedReason };
+  for (const year of years) {
+    const inYear = normalizedRows.filter((r) => r.y === year);
+    const sorted = [...inYear].sort((a, b) => +a.d - +b.d);
+    const earliest = sorted[0];
+    if (!earliest) continue;
+
+    const earliestMonthIdx = earliest.d.getMonth(); // 0 January
+    /** January = 1 ... December =12 */
+    const earliestMonthHuman = earliestMonthIdx + 1;
+    const grossPerCheckEarliest = Math.max(0, Number(earliest.gross) || 0);
+    /** Implied ordinary monthly wages from per-check gross (Monthly → factor 12/12). */
+    const monthlyPhantomGross = grossPerCheckEarliest * (periods / 12);
+
+    if (earliestMonthHuman <= 1 || monthlyPhantomGross <= 0) {
+      continue;
+    }
+
+    /** Jan .. earliestMonthHuman-1 */
+    let phantom = emptyPriorParts();
+    let priorSs = priorSsBaseForYear(year, years.length, opts);
+
+    const skipCg =
+      !!(contractor && opts?.skipContractorMonthPhantomGross);
+
+    for (let m = 1; m < earliestMonthHuman; m++) {
+      if (!skipCg) {
+        phantom.g += monthlyPhantomGross;
+      }
+      if (!contractor) {
+        const c = computeW2Deductions({
+          gross: monthlyPhantomGross,
+          payFrequency: 'Monthly',
+          filingStatus: opts.filingStatus === 'mfj' ? 'mfj' : 'single',
+          workStateCode: opts.workerState || 'TX',
+          priorYtdSocSecWages: priorSs,
+        });
+        priorSs += c.oasdiWagesNow ?? 0;
+        phantom.f += Number(c.federal) || 0;
+        phantom.ss += Number(c.socialSecurity) || 0;
+        phantom.mc += Number(c.medicareBase) || 0;
+        phantom.ma += Number(c.medicareAdditional) || 0;
+        phantom.st += Number(c.state) || 0;
+      }
+    }
+
+    byYear[year] = phantom;
+    if (!contractor) runningSsConsumed = true;
   }
 
-  /** Jan .. earliestMonthHuman-1 */
-  let phantom = emptyPriorParts();
-  let priorSs = Math.max(0, Number(opts.priorSsTaxableWages) || 0);
-
-  const skipCg =
-    !!(contractor && opts?.skipContractorMonthPhantomGross);
-
-  for (let m = 1; m < earliestMonthHuman; m++) {
-    if (!skipCg) {
-      phantom.g += monthlyPhantomGross;
-    }
-    if (!contractor) {
-      const c = computeW2Deductions({
-        gross: monthlyPhantomGross,
-        payFrequency: 'Monthly',
-        filingStatus: opts.filingStatus === 'mfj' ? 'mfj' : 'single',
-        workStateCode: opts.workerState || 'TX',
-        priorYtdSocSecWages: priorSs,
-      });
-      priorSs += c.oasdiWagesNow ?? 0;
-      phantom.f += Number(c.federal) || 0;
-      phantom.ss += Number(c.socialSecurity) || 0;
-      phantom.mc += Number(c.medicareBase) || 0;
-      phantom.ma += Number(c.medicareAdditional) || 0;
-      phantom.st += Number(c.state) || 0;
-    }
-  }
-
-  byYear[year] = phantom;
   return {
     byYear,
-    runningSsConsumed: earliestMonthHuman > 1 && !contractor && monthlyPhantomGross > 0,
+    runningSsConsumed,
     suppressedReason,
   };
 }
@@ -354,6 +488,9 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
   const sortedChronological = [...rows].sort((a, b) => +a.d - +b.d);
   const alignedWeekly = weeklyChecksSharePayWeekDay(sortedChronological.map((r) => r.d));
   const contractorYtdAnchorGross = sortedChronological.length ? sortedChronological[0].gross : 0;
+  const contractorWeeklyGrossUniform =
+    sortedChronological.length > 0 &&
+    sortedChronological.every((r) => Math.abs(r.gross - contractorYtdAnchorGross) < 0.005);
 
   const contractorWeeklyDiscreteYtd =
     contractor &&
@@ -364,6 +501,7 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     sortedChronological.length > 0 &&
     alignedWeekly.ok &&
     alignedWeekly.payWeekDay !== undefined &&
+    contractorWeeklyGrossUniform &&
     contractorYtdAnchorGross > 1e-6;
 
   const weeklyPayWeekDayResolved =
@@ -536,6 +674,7 @@ export function generatePayStubsPdf(data) {
     filingStatus: data.filingStatus === 'mfj' ? 'mfj' : 'single',
     workerState: data.workerState || 'TX',
     priorSsTaxableWages: Math.max(0, Number(data.priorSsTaxableWages) || 0),
+    priorSsTaxYear: data.priorYtd?.taxYear,
   });
 
   const qbTableHead = () => ({
