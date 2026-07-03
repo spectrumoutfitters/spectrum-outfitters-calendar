@@ -67,6 +67,12 @@ export function paycheckGrossFromEntry(rawEntered, payFrequency, treatEnteredAmo
   return (g * 12) / periods;
 }
 
+export function grossPerPaycheckFromAnnualSalary(rawAnnual, payFrequency = 'Monthly') {
+  const annual = Math.max(0, Number(rawAnnual) || 0);
+  if (!annual) return 0;
+  return annual / payPeriodsPerYear(`${payFrequency || 'Monthly'}`.trim());
+}
+
 function truncateToLocalCalendarDate(d) {
   const x =
     d instanceof Date && isValid(d) ? d : typeof d === 'string' ? parseISO(d) : new Date();
@@ -122,6 +128,57 @@ export function weeklyChecksSharePayWeekDay(periodEndsChronoOrAnyOrder) {
 
 function roundUsd2(n) {
   return Math.round(Number(n) * 100) / 100;
+}
+
+function dateDiffDays(a, b) {
+  const da = truncateToLocalCalendarDate(a);
+  const db = truncateToLocalCalendarDate(b);
+  return Math.round((da.getTime() - db.getTime()) / 86_400_000);
+}
+
+function grossRowsShareOneRate(rows) {
+  if (rows.length <= 1) return true;
+  const first = Math.max(0, Number(rows[0]?.gross) || 0);
+  return rows.every((row) => Math.abs(Math.max(0, Number(row?.gross) || 0) - first) <= 0.005);
+}
+
+function countCadencedPayChecksThroughInclusive(periodEnd, payFrequency, anchorDate) {
+  const f = `${payFrequency || ''}`.trim();
+  if (f === 'Weekly') {
+    return countWeeklyPayChecksThroughInclusive(periodEnd, parsePayDate(anchorDate).getDay());
+  }
+  if (f !== 'Bi-weekly') return null;
+
+  const end = truncateToLocalCalendarDate(parsePayDate(periodEnd));
+  const anchor = truncateToLocalCalendarDate(parsePayDate(anchorDate));
+  const y = end.getFullYear();
+  let first = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+  let guard = 0;
+  while (first.getFullYear() >= y && first.getTime() >= new Date(y, 0, 1).getTime() && guard < 60) {
+    first = addDays(first, -14);
+    guard += 1;
+  }
+  while (first.getFullYear() < y || first.getTime() < new Date(y, 0, 1).getTime()) {
+    first = addDays(first, 14);
+    guard += 1;
+    if (guard > 120) return null;
+  }
+
+  let n = 0;
+  for (let cur = first; cur.getTime() <= end.getTime(); cur = addDays(cur, 14)) {
+    if (cur.getFullYear() !== y) break;
+    n += 1;
+  }
+  return n;
+}
+
+function rowsShareCadencedPayDates(sortedRows, payFrequency) {
+  const f = `${payFrequency || ''}`.trim();
+  if (f === 'Weekly') return weeklyChecksSharePayWeekDay(sortedRows.map((r) => r.d)).ok;
+  if (f !== 'Bi-weekly') return false;
+  if (sortedRows.length <= 1) return true;
+  const anchor = sortedRows[0].d;
+  return sortedRows.every((row) => dateDiffDays(row.d, anchor) % 14 === 0);
 }
 
 function numUsdField(x) {
@@ -212,6 +269,38 @@ function phantomCalendarMonthsPriorTotals(normalizedRows, contractor, opts) {
 
   const skipCg =
     !!(contractor && opts?.skipContractorMonthPhantomGross);
+
+  if (
+    !contractor &&
+    (payFreqResolved === 'Weekly' || payFreqResolved === 'Bi-weekly') &&
+    rowsShareCadencedPayDates(sorted, payFreqResolved) &&
+    grossRowsShareOneRate(sorted)
+  ) {
+    const priorCount =
+      countCadencedPayChecksThroughInclusive(addDays(earliest.d, -1), payFreqResolved, earliest.d) || 0;
+    for (let i = 0; i < priorCount; i += 1) {
+      phantom.g += grossPerCheckEarliest;
+      const c = computeW2Deductions({
+        gross: grossPerCheckEarliest,
+        payFrequency: payFreqResolved,
+        filingStatus: opts.filingStatus === 'mfj' ? 'mfj' : 'single',
+        workStateCode: opts.workerState || 'TX',
+        priorYtdSocSecWages: priorSs,
+      });
+      priorSs += c.oasdiWagesNow ?? 0;
+      phantom.f += Number(c.federal) || 0;
+      phantom.ss += Number(c.socialSecurity) || 0;
+      phantom.mc += Number(c.medicareBase) || 0;
+      phantom.ma += Number(c.medicareAdditional) || 0;
+      phantom.st += Number(c.state) || 0;
+    }
+    byYear[year] = phantom;
+    return {
+      byYear,
+      runningSsConsumed: priorCount > 0 && grossPerCheckEarliest > 0,
+      suppressedReason,
+    };
+  }
 
   for (let m = 1; m < earliestMonthHuman; m++) {
     if (!skipCg) {
@@ -354,6 +443,7 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
   const sortedChronological = [...rows].sort((a, b) => +a.d - +b.d);
   const alignedWeekly = weeklyChecksSharePayWeekDay(sortedChronological.map((r) => r.d));
   const contractorYtdAnchorGross = sortedChronological.length ? sortedChronological[0].gross : 0;
+  const contractorRowsShareOneRate = grossRowsShareOneRate(sortedChronological);
 
   const contractorWeeklyDiscreteYtd =
     contractor &&
@@ -364,7 +454,8 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     sortedChronological.length > 0 &&
     alignedWeekly.ok &&
     alignedWeekly.payWeekDay !== undefined &&
-    contractorYtdAnchorGross > 1e-6;
+    contractorYtdAnchorGross > 1e-6 &&
+    contractorRowsShareOneRate;
 
   const weeklyPayWeekDayResolved =
     contractorWeeklyDiscreteYtd && typeof alignedWeekly.payWeekDay === 'number'
@@ -379,7 +470,7 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
       skipContractorMonthPhantomGross: contractorWeeklyDiscreteYtd,
     },
   );
-  const phantomByYear = phantomSynthetic.byYear || {};
+  const phantomByYear = hasPriorAmounts ? {} : phantomSynthetic.byYear || {};
 
   /**
    * @param {number} stubYear
