@@ -45,3 +45,27 @@ export const ADMIN_SUB_TABS = {
     { id: 'updates', label: 'Updates' },
   ],
 };
+
+/**
+ * Older Dashboard/worklist links still use /admin?tab=<flat-id>. Resolve those
+ * flat ids into the nested admin navigation introduced by the jump palette.
+ *
+ * @param {string | null | undefined} tabId
+ * @returns {{ main: string, sub?: string } | null}
+ */
+export function resolveLegacyAdminTab(tabId) {
+  const id = `${tabId || ''}`.trim();
+  if (!id) return null;
+
+  if (id === 'overview' || id === 'grand_opening') return { main: id };
+
+  for (const [main, subs] of Object.entries(ADMIN_SUB_TABS)) {
+    if (subs.some((sub) => sub.id === id)) {
+      return { main, sub: id };
+    }
+  }
+
+  if (id === 'settings') return { main: 'settings', sub: 'general' };
+
+  return null;
+}

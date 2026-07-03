@@ -1,6 +1,12 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { format, endOfMonth, subMonths } from 'date-fns';
-import { generatePayStubsPdf, parsePayDate, paycheckGrossFromEntry, weeklyChecksSharePayWeekDay } from '../../utils/payStubPdf';
+import {
+  generatePayStubsPdf,
+  grossPerPaycheckFromAnnualSalary,
+  parsePayDate,
+  paycheckGrossFromEntry,
+  weeklyChecksSharePayWeekDay,
+} from '../../utils/payStubPdf';
 import { computeContractorDeductions, computeW2Deductions } from '../../utils/payrollTaxUS';
 
 const PAY_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Other'];
@@ -190,7 +196,7 @@ const PayStubMaker = () => {
   const [annualSalary, setAnnualSalary] = useState('');
   const [applyAnnualSalaryToMonthlyGross, setApplyAnnualSalaryToMonthlyGross] = useState(false);
   const [calendarYtdBackfill, setCalendarYtdBackfill] = useState(true);
-  const [spreadMonthlyAcrossPaychecks, setSpreadMonthlyAcrossPaychecks] = useState(true);
+  const [spreadMonthlyAcrossPaychecks, setSpreadMonthlyAcrossPaychecks] = useState(false);
 
   const onEmployerLogoFile = useCallback((e) => {
     const input = e.target;
@@ -224,9 +230,10 @@ const PayStubMaker = () => {
     if (!applyAnnualSalaryToMonthlyGross || !sameAmountsAllPeriods) return;
     const a = Number(`${annualSalary}`.replace(/,/g, ''));
     if (!Number.isFinite(a) || a <= 0) return;
-    const monthly = a / 12;
-    setShared((prev) => ({ ...prev, gross: monthly.toFixed(2) }));
-  }, [applyAnnualSalaryToMonthlyGross, annualSalary, sameAmountsAllPeriods]);
+    const perCheck = grossPerPaycheckFromAnnualSalary(a, payFrequency);
+    setSpreadMonthlyAcrossPaychecks(false);
+    setShared((prev) => ({ ...prev, gross: perCheck.toFixed(2) }));
+  }, [applyAnnualSalaryToMonthlyGross, annualSalary, sameAmountsAllPeriods, payFrequency]);
 
   const [shared, setShared] = useState({
     gross: '',
@@ -668,7 +675,13 @@ const PayStubMaker = () => {
           </label>
           {payFrequency !== 'Monthly' ? (
             <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600" checked={spreadMonthlyAcrossPaychecks} onChange={(e) => setSpreadMonthlyAcrossPaychecks(e.target.checked)} />
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600"
+                checked={spreadMonthlyAcrossPaychecks}
+                disabled={applyAnnualSalaryToMonthlyGross}
+                onChange={(e) => setSpreadMonthlyAcrossPaychecks(e.target.checked)}
+              />
               Gross figures are monthly (split across checks)
             </label>
           ) : null}
@@ -768,7 +781,7 @@ const PayStubMaker = () => {
         </details>
 
         <details className="mt-2 rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900/50">
-          <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-neutral-300">Shortcut · annual salary → monthly gross</summary>
+          <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-neutral-300">Shortcut · annual salary → gross per check</summary>
           <div className="mt-3 space-y-3">
             <label className="flex items-start gap-2 cursor-pointer select-none text-sm dark:text-neutral-200">
               <input
@@ -779,6 +792,7 @@ const PayStubMaker = () => {
                 onChange={(e) => {
                   const on = e.target.checked;
                   setApplyAnnualSalaryToMonthlyGross(on);
+                  if (on) setSpreadMonthlyAcrossPaychecks(false);
                   if (!on) setAnnualSalary('');
                 }}
               />
