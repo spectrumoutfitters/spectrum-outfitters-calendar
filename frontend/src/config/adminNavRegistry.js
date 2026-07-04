@@ -45,3 +45,40 @@ export const ADMIN_SUB_TABS = {
     { id: 'updates', label: 'Updates' },
   ],
 };
+
+const LEGACY_ADMIN_TAB_MAP = {
+  dashboard: { main: 'overview' },
+  overview: { main: 'overview' },
+  grand_opening: { main: 'grand_opening' },
+
+  worklist: { main: 'people', sub: 'worklist' },
+  status: { main: 'people', sub: 'status' },
+  time: { main: 'people', sub: 'time' },
+  users: { main: 'people', sub: 'users' },
+  schedule: { main: 'people', sub: 'schedule' },
+  history: { main: 'people', sub: 'history' },
+
+  inventory: { main: 'inventory', sub: 'inventory' },
+  orders: { main: 'inventory', sub: 'orders' },
+  products: { main: 'inventory', sub: 'products' },
+
+  payroll: { main: 'finance', sub: 'payroll' },
+  paystub_maker: { main: 'finance', sub: 'paystub_maker' },
+  shop_financing: { main: 'finance', sub: 'shop_financing' },
+  finance: { main: 'finance', sub: 'finance' },
+  analytics: { main: 'finance', sub: 'analytics' },
+  reports: { main: 'finance', sub: 'reports' },
+  compliance: { main: 'finance', sub: 'compliance' },
+
+  settings: { main: 'settings', sub: 'general' },
+  general: { main: 'settings', sub: 'general' },
+  customer_booking: { main: 'settings', sub: 'customer_booking' },
+  security: { main: 'settings', sub: 'security' },
+  updates: { main: 'settings', sub: 'updates' },
+};
+
+export function resolveLegacyAdminTab(tabId) {
+  const key = `${tabId || ''}`.trim();
+  const resolved = LEGACY_ADMIN_TAB_MAP[key];
+  return resolved ? { ...resolved } : null;
+}

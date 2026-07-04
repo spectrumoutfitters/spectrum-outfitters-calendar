@@ -28,6 +28,7 @@ import {
   ADMIN_MAIN_TABS_ADMIN,
   ADMIN_MAIN_TABS_EMPLOYEE,
   ADMIN_SUB_TABS,
+  resolveLegacyAdminTab,
 } from '../config/adminNavRegistry';
 
 const GOLD = '#D4A017';
@@ -217,18 +218,32 @@ const Admin = () => {
   useEffect(() => {
     const adm = searchParams.get('adm');
     const adsub = searchParams.get('adsub');
-    if (!isAdmin || !adm) return;
+    const legacyTab = searchParams.get('tab');
+    if (!isAdmin) return;
 
-    const validMain = ADMIN_MAIN_TABS_ADMIN.some((t) => t.id === adm);
-    if (!validMain) return;
+    let target = null;
+    if (adm) {
+      const validMain = ADMIN_MAIN_TABS_ADMIN.some((t) => t.id === adm);
+      if (validMain) {
+        const subs = ADMIN_SUB_TABS[adm];
+        target = {
+          main: adm,
+          sub: subs && adsub && subs.some((s) => s.id === adsub) ? adsub : undefined,
+        };
+      }
+    }
+    if (!target && legacyTab) {
+      target = resolveLegacyAdminTab(legacyTab);
+    }
 
-    setMainTab(adm);
-    localStorage.setItem('admin_main_tab', adm);
+    if (!target) return;
 
-    const subs = ADMIN_SUB_TABS[adm];
-    if (subs && adsub && subs.some((s) => s.id === adsub)) {
+    setMainTab(target.main);
+    localStorage.setItem('admin_main_tab', target.main);
+
+    if (target.sub) {
       setSubTabs((prev) => {
-        const next = { ...prev, [adm]: adsub };
+        const next = { ...prev, [target.main]: target.sub };
         localStorage.setItem('admin_sub_tabs', JSON.stringify(next));
         return next;
       });
@@ -239,6 +254,7 @@ const Admin = () => {
         const next = new URLSearchParams(prev);
         next.delete('adm');
         next.delete('adsub');
+        next.delete('tab');
         return next;
       },
       { replace: true },
