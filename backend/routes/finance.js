@@ -15,6 +15,8 @@ import {
 import {
   normalizePayrollDisplayName,
   normalizedNamesWithWeeklySalary,
+  payrollNameSetHasLikely,
+  payrollNamesLikelySame,
   normalizePayRecordDate,
   dedupePayRecordsList,
 } from '../utils/payrollDedupe.js';
@@ -114,7 +116,7 @@ async function getWeeklyExpenses(weekStart, weekEnd) {
     const cost = parseFloat(p.weekly_salary) || 0;
     if (cost <= 0) continue;
     const norm = normalizePayrollDisplayName(p.full_name);
-    if (userWeeklyNames.has(norm)) continue;
+    if (payrollNameSetHasLikely(userWeeklyNames, p.full_name)) continue;
     const key = `${norm}|${cost}`;
     if (seenPpWeekly.has(key)) continue;
     seenPpWeekly.add(key);
@@ -533,7 +535,9 @@ router.get('/reimbursements', async (req, res) => {
     const ppKeysToDrop = new Set();
     for (const s of sources) {
       if (s.source_type !== 'payroll_person') continue;
-      const userSrc = userSourceByNorm.get(normalizePayrollDisplayName(s.name));
+      const userSrc =
+        userSourceByNorm.get(normalizePayrollDisplayName(s.name)) ||
+        [...userSourceByNorm.values()].find((u) => payrollNamesLikelySame(u.name, s.name));
       if (!userSrc) continue;
       const uKey = `user:${userSrc.source_id}`;
       const pKey = `payroll_person:${s.source_id}`;
@@ -582,6 +586,11 @@ router.get('/reimbursements', async (req, res) => {
       const set = rollupPaymentKeysBySource.get(key) || new Set([key]);
       for (const pid of ppIdsByNormName.get(normalizePayrollDisplayName(s.name)) || []) {
         set.add(`payroll_person:${pid}`);
+      }
+      for (const row of allPayrollPeopleRows) {
+        if (payrollNamesLikelySame(row.full_name, s.name)) {
+          set.add(`payroll_person:${row.id}`);
+        }
       }
       rollupPaymentKeysBySource.set(key, set);
       let sum = 0;

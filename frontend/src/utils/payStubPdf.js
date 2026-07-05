@@ -167,24 +167,35 @@ function addPriorParts(a, b) {
  * @param {boolean} contractor
  * @param {PaystubYtdOptions & { skipContractorMonthPhantomGross?: boolean }} opts — when `skipContractorMonthPhantomGross`,
  * contractor prior-month gross lumps are suppressed (calendar YTD is filled another way).
- * @returns {{ byYear: Record<number, ReturnType<emptyPriorParts>>, runningSsConsumed: boolean, suppressedReason: string }}
+ * @returns {{ byYear: Record<number, ReturnType<emptyPriorParts>>, runningSsConsumed: boolean, suppressedReason: string, oasdiWagesBeforeFirstStub: number }}
  */
 function phantomCalendarMonthsPriorTotals(normalizedRows, contractor, opts) {
   /** @type {Record<number, ReturnType<emptyPriorParts>>} */
   const byYear = {};
   let suppressedReason = '';
+  const startingPriorSs = Math.max(0, Number(opts?.priorSsTaxableWages) || 0);
 
   const backfillEnabled =
     opts?.calendarYtdBackfill === true || opts?.monthlyJanBackfill === true;
   if (!backfillEnabled || normalizedRows.length === 0) {
-    return { byYear, runningSsConsumed: false, suppressedReason };
+    return {
+      byYear,
+      runningSsConsumed: false,
+      suppressedReason,
+      oasdiWagesBeforeFirstStub: startingPriorSs,
+    };
   }
 
   const years = [...new Set(normalizedRows.map((r) => r.y))];
   if (years.length > 1) {
     suppressedReason =
       'Automatic calendar-YTD phantom needs one tax year per PDF; use manual prior YTD or export one year at a time.';
-    return { byYear, runningSsConsumed: false, suppressedReason };
+    return {
+      byYear,
+      runningSsConsumed: false,
+      suppressedReason,
+      oasdiWagesBeforeFirstStub: startingPriorSs,
+    };
   }
 
   const year = years[0];
@@ -203,12 +214,17 @@ function phantomCalendarMonthsPriorTotals(normalizedRows, contractor, opts) {
   const monthlyPhantomGross = grossPerCheckEarliest * (periods / 12);
 
   if (earliestMonthHuman <= 1 || monthlyPhantomGross <= 0) {
-    return { byYear, runningSsConsumed: false, suppressedReason };
+    return {
+      byYear,
+      runningSsConsumed: false,
+      suppressedReason,
+      oasdiWagesBeforeFirstStub: startingPriorSs,
+    };
   }
 
   /** Jan .. earliestMonthHuman-1 */
   let phantom = emptyPriorParts();
-  let priorSs = Math.max(0, Number(opts.priorSsTaxableWages) || 0);
+  let priorSs = startingPriorSs;
 
   const skipCg =
     !!(contractor && opts?.skipContractorMonthPhantomGross);
@@ -239,7 +255,23 @@ function phantomCalendarMonthsPriorTotals(normalizedRows, contractor, opts) {
     byYear,
     runningSsConsumed: earliestMonthHuman > 1 && !contractor && monthlyPhantomGross > 0,
     suppressedReason,
+    oasdiWagesBeforeFirstStub: priorSs,
   };
+}
+
+export function estimatePriorSocSecWagesBeforeFirstStub(months, contractor, ytdOpts = {}) {
+  const pfResolved = String(ytdOpts?.payFrequency ?? 'Monthly').trim() || 'Monthly';
+  const spreadMonthly = !!ytdOpts?.spreadMonthlyAcrossPaychecks;
+  const normalizedRows = (months || []).map((m) => {
+    const d = parsePayDate(m.periodEnd ?? m.d);
+    return {
+      y: d.getFullYear(),
+      d,
+      gross: paycheckGrossFromEntry(numUsdField(m.gross), pfResolved, spreadMonthly),
+    };
+  });
+  const result = phantomCalendarMonthsPriorTotals(normalizedRows, contractor, ytdOpts);
+  return Math.max(0, Number(result.oasdiWagesBeforeFirstStub) || 0);
 }
 
 /**
@@ -354,6 +386,9 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
   const sortedChronological = [...rows].sort((a, b) => +a.d - +b.d);
   const alignedWeekly = weeklyChecksSharePayWeekDay(sortedChronological.map((r) => r.d));
   const contractorYtdAnchorGross = sortedChronological.length ? sortedChronological[0].gross : 0;
+  const contractorWeeklyGrossesUniform = sortedChronological.every(
+    (r) => Math.abs(r.gross - contractorYtdAnchorGross) <= 0.01,
+  );
 
   const contractorWeeklyDiscreteYtd =
     contractor &&
@@ -370,6 +405,15 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     contractorWeeklyDiscreteYtd && typeof alignedWeekly.payWeekDay === 'number'
       ? alignedWeekly.payWeekDay
       : null;
+  const contractorWeeklyGrossBeforeFirstExport =
+    contractorWeeklyDiscreteYtd && weeklyPayWeekDayResolved != null
+      ? roundUsd2(
+          countWeeklyPayChecksThroughInclusive(
+            addDays(sortedChronological[0].d, -1),
+            weeklyPayWeekDayResolved,
+          ) * contractorYtdAnchorGross,
+        )
+      : 0;
 
   const phantomSynthetic = phantomCalendarMonthsPriorTotals(
     rows.map((r) => ({ y: r.y, d: r.d, gross: r.gross })),
@@ -427,10 +471,12 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
 
     const ytdGross =
       contractorWeeklyDiscreteYtd && weeklyPayWeekDayResolved != null
-        ? roundUsd2(
-            countWeeklyPayChecksThroughInclusive(row.d, weeklyPayWeekDayResolved) *
-              contractorYtdAnchorGross,
-          )
+        ? contractorWeeklyGrossesUniform
+          ? roundUsd2(
+              countWeeklyPayChecksThroughInclusive(row.d, weeklyPayWeekDayResolved) *
+                contractorYtdAnchorGross,
+            )
+          : roundUsd2(contractorWeeklyGrossBeforeFirstExport + sumGross)
         : pb.g + sumGross;
     const ytdFed = pb.f + sumFed;
     const ytdSs = pb.ss + sumSs;

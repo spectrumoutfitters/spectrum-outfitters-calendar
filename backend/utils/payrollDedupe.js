@@ -1,3 +1,5 @@
+import { namesLikelyMatch } from './payrollHistoryMatch.js';
+
 /**
  * Avoid double-counting when the same person exists as a Calendar user (weekly salary)
  * and again as payroll_people, or as duplicate payroll_people rows.
@@ -8,6 +10,24 @@ export function normalizePayrollDisplayName(name) {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, ' ');
+}
+
+export function payrollNamesLikelySame(left, right) {
+  const a = normalizePayrollDisplayName(left);
+  const b = normalizePayrollDisplayName(right);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return namesLikelyMatch(left, right) || namesLikelyMatch(a, b);
+}
+
+export function payrollNameSetHasLikely(nameSet, candidateName) {
+  const norm = normalizePayrollDisplayName(candidateName);
+  if (!norm) return false;
+  if (nameSet?.has(norm)) return true;
+  for (const existing of nameSet || []) {
+    if (payrollNamesLikelySame(existing, candidateName)) return true;
+  }
+  return false;
 }
 
 /**

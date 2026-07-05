@@ -10,7 +10,10 @@ import {
   getWeekEndingFridayHouston,
   addDaysInHouston,
 } from '../utils/appTimezone.js';
-import { normalizePayrollDisplayName } from '../utils/payrollDedupe.js';
+import {
+  normalizePayrollDisplayName,
+  payrollNameSetHasLikely,
+} from '../utils/payrollDedupe.js';
 
 const router = express.Router();
 
@@ -1145,7 +1148,7 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
     const cost = parseFloat(p.weekly_salary) || 0;
     if (cost > 0) {
       const norm = normalizePayrollDisplayName(p.full_name);
-      if (usersWithWeeklySalaryNames.has(norm)) continue;
+      if (payrollNameSetHasLikely(usersWithWeeklySalaryNames, p.full_name)) continue;
       const ppKey = `${norm}|${cost}`;
       if (seenPayrollPersonWeekly.has(ppKey)) continue;
       seenPayrollPersonWeekly.add(ppKey);
@@ -1202,8 +1205,8 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
   for (const p of peopleSplitOnly) {
     if (payrollIds.has(`pp:${p.id}`)) continue;
     const norm = normalizePayrollDisplayName(p.full_name);
-    if (splitOnlyUserNames.has(norm)) continue;
-    if (seenPeopleSplitOnlyName.has(norm)) continue;
+    if (payrollNameSetHasLikely(splitOnlyUserNames, p.full_name)) continue;
+    if (payrollNameSetHasLikely(seenPeopleSplitOnlyName, p.full_name)) continue;
     seenPeopleSplitOnlyName.add(norm);
     payroll.push({
       employee_id: null,
