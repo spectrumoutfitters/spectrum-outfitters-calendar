@@ -1,6 +1,12 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { format, endOfMonth, subMonths } from 'date-fns';
-import { generatePayStubsPdf, parsePayDate, paycheckGrossFromEntry, weeklyChecksSharePayWeekDay } from '../../utils/payStubPdf';
+import {
+  estimatePriorSocSecWagesBeforeFirstStub,
+  generatePayStubsPdf,
+  parsePayDate,
+  paycheckGrossFromEntry,
+  weeklyChecksSharePayWeekDay,
+} from '../../utils/payStubPdf';
 import { computeContractorDeductions, computeW2Deductions } from '../../utils/payrollTaxUS';
 
 const PAY_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Other'];
@@ -313,12 +319,27 @@ const PayStubMaker = () => {
       return;
     }
 
+    const manualPriorSocSecWages =
+      Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0;
+    const priorSocSeed = estimatePriorSocSecWagesBeforeFirstStub(
+      baselineRowsForCalc,
+      false,
+      {
+        calendarYtdBackfill,
+        monthlyJanBackfill: calendarYtdBackfill,
+        payFrequency,
+        filingStatus,
+        workerState: workStateCode,
+        priorSsTaxableWages: manualPriorSocSecWages,
+        spreadMonthlyAcrossPaychecks,
+      },
+    );
     const dedSeq = sequentialW2DeductionsInRowOrder(
       baselineRowsForCalc,
       payFrequency,
       filingStatus,
       workStateCode,
-      employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
+      priorSocSeed,
       spreadMonthlyAcrossPaychecks,
     );
     const chronFirstIdx =
@@ -349,6 +370,7 @@ const PayStubMaker = () => {
     workStateCode,
     employmentType,
     manualWithholdings,
+    calendarYtdBackfill,
     sameAmountsAllPeriods,
     perPeriod.length,
     priorYtdTaxableSocSecWages,
@@ -425,8 +447,19 @@ const PayStubMaker = () => {
     }
 
     const isContractor = employmentType === '1099';
-    const priorSocSeed =
-      isContractor ? 0 : Number(`${priorYtdTaxableSocSecWages ?? ''}`.replace(/,/g, '')) || 0;
+    const manualPriorSocSecWages =
+      Number(`${priorYtdTaxableSocSecWages ?? ''}`.replace(/,/g, '')) || 0;
+    const priorSocSeed = isContractor
+      ? 0
+      : estimatePriorSocSecWagesBeforeFirstStub(rowsRaw, false, {
+          calendarYtdBackfill,
+          monthlyJanBackfill: calendarYtdBackfill,
+          payFrequency,
+          filingStatus,
+          workerState: workStateCode,
+          priorSsTaxableWages: manualPriorSocSecWages,
+          spreadMonthlyAcrossPaychecks,
+        });
 
     /** Per-row withholding: auto W-2 recomputed in chronological period-end order */
     let working = rowsRaw.map((r) => ({ ...r }));
