@@ -15,19 +15,24 @@ export const authenticateToken = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     await ensureUserColumns();
     const user = await db.getAsync(
-      'SELECT id, username, role, payroll_access, is_master_admin FROM users WHERE id = ?',
+      'SELECT id, username, role, payroll_access, is_master_admin, is_active FROM users WHERE id = ?',
       [decoded.id]
     );
-    if (user) {
-      req.user = {
-        ...decoded,
-        role: user.role,
-        payroll_access: user.payroll_access === 1,
-        is_master_admin: user.is_master_admin === 1
-      };
-    } else {
-      req.user = decoded;
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
+    const isActive = user.is_active === 1 || user.is_active === true;
+    if (!isActive) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    req.user = {
+      ...decoded,
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      payroll_access: user.payroll_access === 1,
+      is_master_admin: user.is_master_admin === 1
+    };
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Invalid or expired token' });

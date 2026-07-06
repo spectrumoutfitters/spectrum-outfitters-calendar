@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getStripeClient } from "@/lib/stripe";
+import { verifyRaffleAdminKey } from "@/lib/verifyRaffleAdmin";
 
 export const runtime = "nodejs";
 
@@ -39,13 +40,19 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   if (!typedPassword) {
     return NextResponse.json({ ok: false, error: "password_required" }, { status: 401 });
   }
-  if (headerKey && typedPassword !== headerKey) {
+  if (!headerKey) {
+    return NextResponse.json({ ok: false, error: "missing_admin_key" }, { status: 401 });
+  }
+  if (typedPassword !== headerKey) {
     return NextResponse.json({ ok: false, error: "password_mismatch" }, { status: 401 });
   }
 
   const base = getAppsScriptUrl();
   if (!base) {
     return NextResponse.json({ ok: false, error: "server_misconfigured" }, { status: 503 });
+  }
+  if (!(await verifyRaffleAdminKey(slug, headerKey))) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   let stripe;
@@ -116,9 +123,9 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
       actor: "admin_panel",
     });
     const sheetText = await sheetRes.text();
-    let sheetData: unknown;
+    let sheetData: { ok?: boolean; error?: string };
     try {
-      sheetData = JSON.parse(sheetText);
+      sheetData = JSON.parse(sheetText) as typeof sheetData;
     } catch {
       return NextResponse.json(
         {
@@ -129,7 +136,7 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
         { status: 502 },
       );
     }
-    if (!sheetRes.ok) {
+    if (!sheetRes.ok || !sheetData.ok) {
       return NextResponse.json(
         { ok: false, error: "refund_done_but_sheet_failed", upstream: sheetData, refundId: refund?.id || "" },
         { status: 502 },

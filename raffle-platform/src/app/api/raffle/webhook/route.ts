@@ -4,6 +4,7 @@ import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getStripeClient } from "@/lib/stripe";
 import { signPaidPurchasePayload } from "@/lib/paidPurchaseSign";
+import { decodeTicketSplitMetadata } from "@/lib/stripeTicketSplitMetadata";
 
 export const runtime = "nodejs";
 
@@ -45,15 +46,11 @@ export async function POST(request: Request) {
   const slug = String(md.raffle_slug || "").trim();
   const entryToken = String(md.entry_token || "").trim();
   const totalTickets = Math.max(0, Math.floor(Number(md.total_tickets) || 0));
-  let ticketSplit: Record<string, number> = {};
+  let ticketSplit: Record<string, number>;
   try {
-    const parsed = JSON.parse(String(md.ticket_split || "{}")) as Record<string, unknown>;
-    for (const [k, v] of Object.entries(parsed)) {
-      const n = Math.max(0, Math.floor(Number(v) || 0));
-      if (n > 0) ticketSplit[k] = n;
-    }
+    ticketSplit = decodeTicketSplitMetadata(md);
   } catch {
-    ticketSplit = {};
+    return NextResponse.json({ ok: false, error: "invalid_ticket_split_metadata" }, { status: 502 });
   }
 
   if (!slug || !entryToken || totalTickets <= 0) {
@@ -94,13 +91,13 @@ export async function POST(request: Request) {
       signature: signed.signature,
     });
     const text = await res.text();
-    let data: unknown;
+    let data: { ok?: boolean; error?: string; code?: string };
     try {
-      data = JSON.parse(text);
+      data = JSON.parse(text) as typeof data;
     } catch {
       return NextResponse.json({ ok: false, error: "upstream_not_json", raw: text.slice(0, 500) }, { status: 502 });
     }
-    if (!res.ok) {
+    if (!res.ok || !data.ok) {
       return NextResponse.json({ ok: false, error: "apps_script_error", upstream: data }, { status: 502 });
     }
     return NextResponse.json({ ok: true, applied: data });

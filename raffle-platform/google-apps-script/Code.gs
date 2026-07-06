@@ -1770,6 +1770,21 @@ function handleUpdateEntryByToken_(data) {
     }
   }
 
+  if (ticketMode === 'split') {
+    try {
+      var preflightSplitPlan = buildTicketSplitPlan_(p, raffles, totalEntries);
+      if (!preflightSplitPlan || !preflightSplitPlan.rows.length) {
+        return jsonResponse({ ok: false, error: 'Could not build ticket split.', code: 'split' }, 400);
+      }
+    } catch (splitErr) {
+      return jsonResponse({
+        ok: false,
+        error: String(splitErr && splitErr.message ? splitErr.message : splitErr),
+        code: 'split',
+      }, 400);
+    }
+  }
+
   var editableRowNums = [];
   for (var pr = 0; pr < rows.length; pr++) {
     var rrr = rows[pr];
