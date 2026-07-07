@@ -1,6 +1,12 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { format, endOfMonth, subMonths } from 'date-fns';
-import { generatePayStubsPdf, parsePayDate, paycheckGrossFromEntry, weeklyChecksSharePayWeekDay } from '../../utils/payStubPdf';
+import {
+  calendarBackfillPriorSsTaxableWages,
+  generatePayStubsPdf,
+  parsePayDate,
+  paycheckGrossFromEntry,
+  shouldBlockWeeklyCalendarYtdExport,
+} from '../../utils/payStubPdf';
 import { computeContractorDeductions, computeW2Deductions } from '../../utils/payrollTaxUS';
 
 const PAY_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Other'];
@@ -313,12 +319,23 @@ const PayStubMaker = () => {
       return;
     }
 
+    const priorSocSeed = calendarBackfillPriorSsTaxableWages(baselineRowsForCalc, {
+      calendarYtdBackfill,
+      monthlyJanBackfill: calendarYtdBackfill,
+      spreadMonthlyAcrossPaychecks,
+      payFrequency,
+      filingStatus,
+      workerState: workStateCode,
+      priorSsTaxableWages:
+        employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
+    });
+
     const dedSeq = sequentialW2DeductionsInRowOrder(
       baselineRowsForCalc,
       payFrequency,
       filingStatus,
       workStateCode,
-      employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
+      priorSocSeed,
       spreadMonthlyAcrossPaychecks,
     );
     const chronFirstIdx =
@@ -351,13 +368,13 @@ const PayStubMaker = () => {
     manualWithholdings,
     sameAmountsAllPeriods,
     perPeriod.length,
+    calendarYtdBackfill,
     priorYtdTaxableSocSecWages,
     spreadMonthlyAcrossPaychecks,
   ]);
 
-  /** 1099 + Weekly + calendar YTD uses discrete weekdays from Jan 1 — every check date must agree. */
-  const weekly1099CalendarMisaligned = useMemo(() => {
-    if (employmentType !== '1099' || payFrequency !== 'Weekly' || !calendarYtdBackfill) return false;
+  /** Weekly + calendar YTD uses discrete weekdays from Jan 1 — every check date must agree. */
+  const weeklyCalendarMisaligned = useMemo(() => {
     const gateNums = {
       gross: priorYtdGross,
       federal: priorYtdFederal,
@@ -367,12 +384,16 @@ const PayStubMaker = () => {
       state: priorYtdState,
       other: priorYtdOther,
     };
-    if (anyPriorYtdFieldFilled(gateNums) || parseOptionalTaxYear(priorYtdTaxYear) != null)
-      return false;
     const ends = [...baselineRowsForCalc.map((r) => r.periodEnd)].sort(
       (a, b) => +parsePayDate(a) - +parsePayDate(b),
     );
-    return !weeklyChecksSharePayWeekDay(ends).ok;
+    return shouldBlockWeeklyCalendarYtdExport({
+      employmentType,
+      payFrequency,
+      calendarYtdBackfill,
+      priorYtdFields: gateNums,
+      periodEnds: ends,
+    });
   }, [
     employmentType,
     payFrequency,
@@ -384,7 +405,6 @@ const PayStubMaker = () => {
     priorYtdMedicareAdditional,
     priorYtdState,
     priorYtdOther,
-    priorYtdTaxYear,
     baselineRowsForCalc,
     periodDriverKey,
   ]);
@@ -404,19 +424,20 @@ const PayStubMaker = () => {
       state: priorYtdState,
       other: priorYtdOther,
     };
-    const hasPdfPriorManual =
-      anyPriorYtdFieldFilled(priorGateNums) || parseOptionalTaxYear(priorYtdTaxYear) != null;
+    const hasPdfPriorManual = anyPriorYtdFieldFilled(priorGateNums);
     const sortedForWeeklyGate = [...rowsRaw].sort(
       (a, b) => +parsePayDate(a.periodEnd) - +parsePayDate(b.periodEnd),
     );
-    const weeklyGate = weeklyChecksSharePayWeekDay(sortedForWeeklyGate.map((r) => r.periodEnd));
 
     if (
-      employmentType === '1099' &&
-      calendarYtdBackfill &&
-      payFrequency === 'Weekly' &&
       !hasPdfPriorManual &&
-      !weeklyGate.ok
+      shouldBlockWeeklyCalendarYtdExport({
+        employmentType,
+        payFrequency,
+        calendarYtdBackfill,
+        priorYtdFields: priorGateNums,
+        periodEnds: sortedForWeeklyGate.map((r) => r.periodEnd),
+      })
     ) {
       alert(
         'Weekly year-to-date needs every listed check date on the same weekday (January 1 through each check counts one pay date every seven days). Align your dates, fill optional prior YTD instead, or turn off “Earlier months rolled into year-to-date”.',
@@ -425,8 +446,17 @@ const PayStubMaker = () => {
     }
 
     const isContractor = employmentType === '1099';
-    const priorSocSeed =
-      isContractor ? 0 : Number(`${priorYtdTaxableSocSecWages ?? ''}`.replace(/,/g, '')) || 0;
+    const priorSocSeed = isContractor
+      ? 0
+      : calendarBackfillPriorSsTaxableWages(rowsRaw, {
+          calendarYtdBackfill,
+          monthlyJanBackfill: calendarYtdBackfill,
+          spreadMonthlyAcrossPaychecks,
+          payFrequency,
+          filingStatus,
+          workerState: workStateCode,
+          priorSsTaxableWages: Number(`${priorYtdTaxableSocSecWages ?? ''}`.replace(/,/g, '')) || 0,
+        });
 
     /** Per-row withholding: auto W-2 recomputed in chronological period-end order */
     let working = rowsRaw.map((r) => ({ ...r }));
@@ -683,7 +713,7 @@ const PayStubMaker = () => {
             Override tax withholdings
           </label>
         </div>
-        {employmentType === '1099' && payFrequency === 'Weekly' && calendarYtdBackfill && weekly1099CalendarMisaligned ? (
+        {payFrequency === 'Weekly' && calendarYtdBackfill && weeklyCalendarMisaligned ? (
           <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-100">
             Gross year‑to‑date counts paychecks weekly on one weekday starting from January 1. Listed check dates do not share the same weekday—align those dates or turn off earlier‑months YTD, or use optional prior‑year‑to‑date fields. Export is blocked until this is fixed or prior YTD is used.
           </p>

@@ -120,6 +120,67 @@ export function weeklyChecksSharePayWeekDay(periodEndsChronoOrAnyOrder) {
   return { ok, payWeekDay: ok ? d0 : undefined };
 }
 
+export function shouldBlockWeeklyCalendarYtdExport({
+  employmentType,
+  payFrequency,
+  calendarYtdBackfill,
+  priorYtdFields,
+  periodEnds,
+}) {
+  const workerType = String(employmentType || '').toUpperCase();
+  const isSupportedWeeklyWorker = workerType.includes('1099') || workerType === 'W2' || workerType === 'W-2';
+  if (!isSupportedWeeklyWorker || payFrequency !== 'Weekly' || calendarYtdBackfill !== true) {
+    return false;
+  }
+  const hasDollarPrior = Object.values(priorYtdFields || {}).some(
+    (v) => `${v ?? ''}`.trim() !== '',
+  );
+  if (hasDollarPrior) return false;
+  return !weeklyChecksSharePayWeekDay(periodEnds || []).ok;
+}
+
+export function calendarBackfillPriorSsTaxableWages(months, opts = {}) {
+  const basePrior = Math.max(0, Number(opts.priorSsTaxableWages) || 0);
+  const backfillEnabled =
+    opts?.calendarYtdBackfill === true || opts?.monthlyJanBackfill === true;
+  if (!backfillEnabled || !Array.isArray(months) || months.length === 0) return basePrior;
+
+  const payFreqResolved = `${opts.payFrequency || 'Monthly'}`.trim();
+  const spreadMonthly = !!opts.spreadMonthlyAcrossPaychecks;
+  const normalizedRows = months.map((m) => {
+    const d = parsePayDate(m.periodEnd ?? m.d);
+    return {
+      y: d.getFullYear(),
+      d,
+      gross: paycheckGrossFromEntry(numUsdField(m.gross), payFreqResolved, spreadMonthly),
+    };
+  });
+
+  const years = [...new Set(normalizedRows.map((r) => r.y))];
+  if (years.length !== 1) return basePrior;
+
+  const sorted = [...normalizedRows].sort((a, b) => +a.d - +b.d);
+  const earliest = sorted[0];
+  const earliestMonthHuman = earliest.d.getMonth() + 1;
+  const grossPerCheckEarliest = Math.max(0, Number(earliest.gross) || 0);
+  const monthlyPhantomGross = grossPerCheckEarliest * (payPeriodsPerYear(payFreqResolved) / 12);
+
+  if (earliestMonthHuman <= 1 || monthlyPhantomGross <= 0) return basePrior;
+
+  let priorSs = basePrior;
+  for (let m = 1; m < earliestMonthHuman; m++) {
+    const c = computeW2Deductions({
+      gross: monthlyPhantomGross,
+      payFrequency: 'Monthly',
+      filingStatus: opts.filingStatus === 'mfj' ? 'mfj' : 'single',
+      workStateCode: opts.workerState || 'TX',
+      priorYtdSocSecWages: priorSs,
+    });
+    priorSs += c.oasdiWagesNow ?? 0;
+  }
+  return priorSs;
+}
+
 function roundUsd2(n) {
   return Math.round(Number(n) * 100) / 100;
 }
