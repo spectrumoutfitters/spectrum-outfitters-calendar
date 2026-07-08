@@ -405,8 +405,18 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
   /**
    * @param {number} stubYear
    */
+  function hasManualPriorForYear(stubYear) {
+    return hasPriorAmounts && priorYearResolved !== null && stubYear === priorYearResolved;
+  }
+
+  /**
+   * @param {number} stubYear
+   */
   function combinedPriorBundle(stubYear) {
     const userPb = userManualPriorBundle(stubYear);
+    if (hasManualPriorForYear(stubYear)) {
+      return userPb;
+    }
     const phant = phantomByYear[stubYear] || emptyPriorParts();
     return addPriorParts(userPb, phant);
   }
@@ -428,8 +438,13 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     const ytdGross =
       contractorWeeklyDiscreteYtd && weeklyPayWeekDayResolved != null
         ? roundUsd2(
-            countWeeklyPayChecksThroughInclusive(row.d, weeklyPayWeekDayResolved) *
-              contractorYtdAnchorGross,
+            Math.max(
+              0,
+              countWeeklyPayChecksThroughInclusive(row.d, weeklyPayWeekDayResolved) -
+                cohort.length,
+            ) *
+              contractorYtdAnchorGross +
+              sumGross,
           )
         : pb.g + sumGross;
     const ytdFed = pb.f + sumFed;
