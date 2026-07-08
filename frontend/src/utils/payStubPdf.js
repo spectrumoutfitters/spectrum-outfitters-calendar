@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { addDays, format, startOfMonth, parseISO, isValid, subDays } from 'date-fns';
-import { computeW2Deductions, payPeriodsPerYear } from './payrollTaxUS';
+import { computeW2Deductions, payPeriodsPerYear } from './payrollTaxUS.js';
 
 export function parsePayDate(raw) {
   if (!raw) return new Date();
@@ -405,8 +405,18 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
   /**
    * @param {number} stubYear
    */
+  function hasManualPriorForYear(stubYear) {
+    return hasPriorAmounts && priorYearResolved !== null && stubYear === priorYearResolved;
+  }
+
+  /**
+   * @param {number} stubYear
+   */
   function combinedPriorBundle(stubYear) {
     const userPb = userManualPriorBundle(stubYear);
+    if (hasManualPriorForYear(stubYear)) {
+      return userPb;
+    }
     const phant = phantomByYear[stubYear] || emptyPriorParts();
     return addPriorParts(userPb, phant);
   }
@@ -428,8 +438,13 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     const ytdGross =
       contractorWeeklyDiscreteYtd && weeklyPayWeekDayResolved != null
         ? roundUsd2(
-            countWeeklyPayChecksThroughInclusive(row.d, weeklyPayWeekDayResolved) *
-              contractorYtdAnchorGross,
+            Math.max(
+              0,
+              countWeeklyPayChecksThroughInclusive(row.d, weeklyPayWeekDayResolved) -
+                cohort.length,
+            ) *
+              contractorYtdAnchorGross +
+              sumGross,
           )
         : pb.g + sumGross;
     const ytdFed = pb.f + sumFed;
