@@ -86,11 +86,11 @@ describe('pay-stub PDF calculations', () => {
     assert.equal(prepared[1].ytdGross, 6333.333333333333);
   });
 
-  it('lets explicit prior YTD override automatic weekly 1099 backfill', () => {
+  it('suppresses automatic weekly 1099 backfill for multi-tax-year batches', () => {
     const prepared = buildPreparedPaystubPages(
-      [contractorWeek('2026-02-06'), contractorWeek('2026-02-13')],
+      [contractorWeek('2025-12-26'), contractorWeek('2026-01-02')],
       true,
-      { gross: 2500, taxYear: 2026 },
+      {},
       {
         calendarYtdBackfill: true,
         payFrequency: 'Weekly',
@@ -99,7 +99,7 @@ describe('pay-stub PDF calculations', () => {
 
     assert.deepEqual(
       prepared.map((page) => page.ytdGross),
-      [3500, 4500],
+      [1000, 1000],
     );
   });
 });
