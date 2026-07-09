@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { addDays, format, startOfMonth, parseISO, isValid, subDays } from 'date-fns';
-import { computeW2Deductions, payPeriodsPerYear } from './payrollTaxUS';
+import { computeW2Deductions, payPeriodsPerYear } from './payrollTaxUS.js';
 
 export function parsePayDate(raw) {
   if (!raw) return new Date();
@@ -353,7 +353,7 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
 
   const sortedChronological = [...rows].sort((a, b) => +a.d - +b.d);
   const alignedWeekly = weeklyChecksSharePayWeekDay(sortedChronological.map((r) => r.d));
-  const contractorYtdAnchorGross = sortedChronological.length ? sortedChronological[0].gross : 0;
+  const contractorWeeklyPhantomGross = sortedChronological.length ? sortedChronological[0].gross : 0;
 
   const contractorWeeklyDiscreteYtd =
     contractor &&
@@ -364,7 +364,7 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     sortedChronological.length > 0 &&
     alignedWeekly.ok &&
     alignedWeekly.payWeekDay !== undefined &&
-    contractorYtdAnchorGross > 1e-6;
+    contractorWeeklyPhantomGross > 1e-6;
 
   const weeklyPayWeekDayResolved =
     contractorWeeklyDiscreteYtd && typeof alignedWeekly.payWeekDay === 'number'
@@ -428,8 +428,13 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     const ytdGross =
       contractorWeeklyDiscreteYtd && weeklyPayWeekDayResolved != null
         ? roundUsd2(
-            countWeeklyPayChecksThroughInclusive(row.d, weeklyPayWeekDayResolved) *
-              contractorYtdAnchorGross,
+            sumGross +
+              Math.max(
+                0,
+                countWeeklyPayChecksThroughInclusive(row.d, weeklyPayWeekDayResolved) -
+                  cohort.length,
+              ) *
+                contractorWeeklyPhantomGross,
           )
         : pb.g + sumGross;
     const ytdFed = pb.f + sumFed;

@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { format, endOfMonth, subMonths } from 'date-fns';
 import { generatePayStubsPdf, parsePayDate, paycheckGrossFromEntry, weeklyChecksSharePayWeekDay } from '../../utils/payStubPdf';
+import { copyFirstPeriodWagesToShared, copySharedWagesToPeriods } from '../../utils/payStubFormState';
 import { computeContractorDeductions, computeW2Deductions } from '../../utils/payrollTaxUS';
 
 const PAY_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Other'];
@@ -253,6 +254,15 @@ const PayStubMaker = () => {
       return next;
     });
   }, []);
+
+  const handleSameAmountsAllPeriodsChange = useCallback((checked) => {
+    if (checked) {
+      setShared((prev) => copyFirstPeriodWagesToShared(prev, perPeriod));
+    } else {
+      setPerPeriod((prev) => copySharedWagesToPeriods(prev, shared));
+    }
+    setSameAmountsAllPeriods(checked);
+  }, [perPeriod, shared]);
 
   const periodDriverKey = useMemo(
     () =>
@@ -798,7 +808,7 @@ const PayStubMaker = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-gray-900 dark:text-neutral-100">Checks</h2>
           <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700 dark:text-neutral-300">
-            <input type="checkbox" className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600" checked={sameAmountsAllPeriods} onChange={(e) => setSameAmountsAllPeriods(e.target.checked)} />
+            <input type="checkbox" className="h-4 w-4 rounded border-gray-400 dark:border-neutral-600" checked={sameAmountsAllPeriods} onChange={(e) => handleSameAmountsAllPeriodsChange(e.target.checked)} />
             Same wages on each check
           </label>
         </div>
