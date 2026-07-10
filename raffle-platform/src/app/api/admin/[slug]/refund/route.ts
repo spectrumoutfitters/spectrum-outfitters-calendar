@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getStripeClient } from "@/lib/stripe";
+import { verifyRaffleAdminKey } from "@/lib/verifyRaffleAdmin";
 
 export const runtime = "nodejs";
 
@@ -42,10 +43,14 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   if (headerKey && typedPassword !== headerKey) {
     return NextResponse.json({ ok: false, error: "password_mismatch" }, { status: 401 });
   }
+  const adminKey = headerKey || typedPassword;
 
   const base = getAppsScriptUrl();
   if (!base) {
     return NextResponse.json({ ok: false, error: "server_misconfigured" }, { status: 503 });
+  }
+  if (!(await verifyRaffleAdminKey(slug, adminKey))) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   let stripe;
@@ -68,6 +73,10 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
       { ok: false, error: "not_paid", paymentStatus: session.payment_status },
       { status: 409 },
     );
+  }
+  const sessionSlug = String(session.metadata?.raffle_slug || "").trim();
+  if (sessionSlug !== slug) {
+    return NextResponse.json({ ok: false, error: "session_slug_mismatch" }, { status: 409 });
   }
 
   const piId = typeof session.payment_intent === "string"
@@ -110,7 +119,7 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
     const sheetRes = await fetchAppsScriptPost(base, {
       action: "refundPaidPurchase",
       slug,
-      adminKey: headerKey || typedPassword,
+      adminKey,
       stripeSessionId,
       refundId: refund?.id || "",
       actor: "admin_panel",
