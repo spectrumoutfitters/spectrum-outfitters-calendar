@@ -1780,6 +1780,24 @@ function handleUpdateEntryByToken_(data) {
   if (!editableRowNums.length) {
     return jsonResponse({ ok: false, error: 'no_editable_rows', code: 'editable' }, 400);
   }
+  if (ticketMode === 'split') {
+    try {
+      var preflightPlan = buildTicketSplitPlan_(p, raffles, totalEntries);
+      if (!preflightPlan || !preflightPlan.rows.length) {
+        return jsonResponse({ ok: false, error: 'Could not build ticket split.', code: 'split' }, 400);
+      }
+      var preflightWritten = 0;
+      for (var ps = 0; ps < preflightPlan.rows.length; ps++) {
+        if (preflightPlan.rows[ps].weight > 0) preflightWritten++;
+      }
+      if (!preflightWritten) {
+        return jsonResponse({ ok: false, error: 'No ticket weight in split — check pools.', code: 'split' }, 400);
+      }
+    } catch (errPreflightSplit) {
+      var preflightMsg = String(errPreflightSplit && errPreflightSplit.message ? errPreflightSplit.message : errPreflightSplit);
+      return jsonResponse({ ok: false, error: preflightMsg, code: 'split' }, 400);
+    }
+  }
   editableRowNums.sort(function (a, b) {
     return b - a;
   });
@@ -1953,6 +1971,9 @@ function handleApplyPaidTickets_(data) {
 
   var payloadString = data.payloadString || JSON.stringify(rawPayload);
   var sig = String(data.signature || '');
+  if (JSON.stringify(rawPayload) !== payloadString) {
+    return jsonResponse({ ok: false, error: 'payload_mismatch' }, 401);
+  }
   if (!verifyPaidPurchaseSignature_(payloadString, sig)) {
     return jsonResponse({ ok: false, error: 'bad_signature' }, 401);
   }
