@@ -1,6 +1,12 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { format, endOfMonth, subMonths } from 'date-fns';
-import { generatePayStubsPdf, parsePayDate, paycheckGrossFromEntry, weeklyChecksSharePayWeekDay } from '../../utils/payStubPdf';
+import {
+  computeCalendarBackfillPriorSsTaxableWages,
+  generatePayStubsPdf,
+  parsePayDate,
+  paycheckGrossFromEntry,
+  weeklyChecksSharePayWeekDay,
+} from '../../utils/payStubPdf';
 import { computeContractorDeductions, computeW2Deductions } from '../../utils/payrollTaxUS';
 
 const PAY_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Other'];
@@ -318,7 +324,17 @@ const PayStubMaker = () => {
       payFrequency,
       filingStatus,
       workStateCode,
-      employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
+      employmentType === '1099'
+        ? 0
+        : computeCalendarBackfillPriorSsTaxableWages(baselineRowsForCalc, {
+            calendarYtdBackfill,
+            monthlyJanBackfill: calendarYtdBackfill,
+            payFrequency,
+            filingStatus,
+            workerState: workStateCode,
+            priorSsTaxableWages: Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
+            spreadMonthlyAcrossPaychecks,
+          }),
       spreadMonthlyAcrossPaychecks,
     );
     const chronFirstIdx =
@@ -352,6 +368,7 @@ const PayStubMaker = () => {
     sameAmountsAllPeriods,
     perPeriod.length,
     priorYtdTaxableSocSecWages,
+    calendarYtdBackfill,
     spreadMonthlyAcrossPaychecks,
   ]);
 
@@ -367,8 +384,7 @@ const PayStubMaker = () => {
       state: priorYtdState,
       other: priorYtdOther,
     };
-    if (anyPriorYtdFieldFilled(gateNums) || parseOptionalTaxYear(priorYtdTaxYear) != null)
-      return false;
+    if (anyPriorYtdFieldFilled(gateNums)) return false;
     const ends = [...baselineRowsForCalc.map((r) => r.periodEnd)].sort(
       (a, b) => +parsePayDate(a) - +parsePayDate(b),
     );
@@ -404,8 +420,7 @@ const PayStubMaker = () => {
       state: priorYtdState,
       other: priorYtdOther,
     };
-    const hasPdfPriorManual =
-      anyPriorYtdFieldFilled(priorGateNums) || parseOptionalTaxYear(priorYtdTaxYear) != null;
+    const hasPdfPriorManual = anyPriorYtdFieldFilled(priorGateNums);
     const sortedForWeeklyGate = [...rowsRaw].sort(
       (a, b) => +parsePayDate(a.periodEnd) - +parsePayDate(b.periodEnd),
     );
@@ -426,7 +441,18 @@ const PayStubMaker = () => {
 
     const isContractor = employmentType === '1099';
     const priorSocSeed =
-      isContractor ? 0 : Number(`${priorYtdTaxableSocSecWages ?? ''}`.replace(/,/g, '')) || 0;
+      isContractor
+        ? 0
+        : computeCalendarBackfillPriorSsTaxableWages(rowsRaw, {
+            calendarYtdBackfill,
+            monthlyJanBackfill: calendarYtdBackfill,
+            payFrequency,
+            filingStatus,
+            workerState: workStateCode,
+            priorSsTaxableWages:
+              Number(`${priorYtdTaxableSocSecWages ?? ''}`.replace(/,/g, '')) || 0,
+            spreadMonthlyAcrossPaychecks,
+          });
 
     /** Per-row withholding: auto W-2 recomputed in chronological period-end order */
     let working = rowsRaw.map((r) => ({ ...r }));
