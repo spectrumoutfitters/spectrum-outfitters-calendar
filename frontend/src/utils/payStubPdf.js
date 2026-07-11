@@ -120,6 +120,99 @@ export function weeklyChecksSharePayWeekDay(periodEndsChronoOrAnyOrder) {
   return { ok, payWeekDay: ok ? d0 : undefined };
 }
 
+/**
+ * Calendar-backfill W-2 stubs infer Jan..month-before-first-stub wages. Use
+ * the same inferred wages to seed current-check OASDI, or high earners can
+ * show Social Security withholding after the phantom YTD has already hit cap.
+ *
+ * @param {Array<{ periodEnd?: Date|string, gross?: number|string }>} rows
+ * @param {PaystubYtdOptions} [opts]
+ * @returns {number}
+ */
+export function computeCalendarBackfillPriorSsTaxableWages(rows, opts = {}) {
+  const basePrior = Math.max(0, Number(opts.priorSsTaxableWages) || 0);
+  const backfillEnabled =
+    opts?.calendarYtdBackfill === true || opts?.monthlyJanBackfill === true;
+  if (!backfillEnabled || !Array.isArray(rows) || rows.length === 0) return basePrior;
+
+  const payFreqResolved = `${opts.payFrequency || 'Monthly'}`.trim();
+  const spreadMonthly = !!opts.spreadMonthlyAcrossPaychecks;
+  const normalized = rows
+    .map((row) => {
+      const d = parsePayDate(row?.periodEnd);
+      return {
+        d,
+        y: d.getFullYear(),
+        gross: paycheckGrossFromEntry(numUsdField(row?.gross), payFreqResolved, spreadMonthly),
+      };
+    })
+    .filter((row) => isValid(row.d));
+
+  const years = [...new Set(normalized.map((row) => row.y))];
+  if (years.length !== 1) return basePrior;
+
+  const earliest = [...normalized].sort((a, b) => +a.d - +b.d)[0];
+  const earliestMonthHuman = earliest.d.getMonth() + 1;
+  const periods = payPeriodsPerYear(payFreqResolved);
+  const monthlyPhantomGross = Math.max(0, Number(earliest.gross) || 0) * (periods / 12);
+  if (earliestMonthHuman <= 1 || monthlyPhantomGross <= 0) return basePrior;
+
+  let priorSs = basePrior;
+  for (let m = 1; m < earliestMonthHuman; m++) {
+    const c = computeW2Deductions({
+      gross: monthlyPhantomGross,
+      payFrequency: 'Monthly',
+      filingStatus: opts.filingStatus === 'mfj' ? 'mfj' : 'single',
+      workStateCode: opts.workerState || 'TX',
+      priorYtdSocSecWages: priorSs,
+    });
+    priorSs += c.oasdiWagesNow ?? 0;
+  }
+  return priorSs;
+}
+
+/**
+ * Sum weekly contractor YTD using the actual exported check amounts, filling
+ * unlisted weekly dates with the latest listed amount (earliest amount before
+ * the first listed date). This preserves variable listed checks while still
+ * covering sparse weekly samples.
+ *
+ * @param {Array<{ d: Date, y: number, gross: number }>} sortedRows
+ * @param {Date|string} periodEnd
+ * @param {number} payWeekDayJs
+ * @returns {number}
+ */
+function contractorWeeklyDiscreteGrossThrough(sortedRows, periodEnd, payWeekDayJs) {
+  const w = Number(payWeekDayJs);
+  if (!Number.isInteger(w) || w < 0 || w > 6 || sortedRows.length === 0) return 0;
+
+  const end = truncateToLocalCalendarDate(parsePayDate(periodEnd));
+  const y = end.getFullYear();
+  const yearRows = sortedRows.filter((row) => row.y === y && +row.d <= +end);
+  if (yearRows.length === 0) return 0;
+
+  let anchor = new Date(y, 0, 1);
+  let guard = 0;
+  while (anchor.getDay() !== w && guard < 14) {
+    anchor = addDays(anchor, 1);
+    guard += 1;
+  }
+  if (guard >= 14) return 0;
+
+  let rowIdx = 0;
+  let currentGross = Math.max(0, Number(yearRows[0].gross) || 0);
+  let total = 0;
+  for (let cur = anchor; cur.getTime() <= end.getTime(); cur = addDays(cur, 7)) {
+    if (cur.getFullYear() !== y) break;
+    while (rowIdx < yearRows.length && yearRows[rowIdx].d.getTime() <= cur.getTime()) {
+      currentGross = Math.max(0, Number(yearRows[rowIdx].gross) || 0);
+      rowIdx += 1;
+    }
+    total += currentGross;
+  }
+  return roundUsd2(total);
+}
+
 function roundUsd2(n) {
   return Math.round(Number(n) * 100) / 100;
 }
@@ -355,13 +448,16 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
   const alignedWeekly = weeklyChecksSharePayWeekDay(sortedChronological.map((r) => r.d));
   const contractorYtdAnchorGross = sortedChronological.length ? sortedChronological[0].gross : 0;
 
-  const contractorWeeklyDiscreteYtd =
+  const contractorWeeklyCalendarCandidate =
     contractor &&
     calendarBackfillOn &&
     !hasPriorAmounts &&
     !hasMultiYear &&
     pfResolved === 'Weekly' &&
-    sortedChronological.length > 0 &&
+    sortedChronological.length > 0;
+
+  const contractorWeeklyDiscreteYtd =
+    contractorWeeklyCalendarCandidate &&
     alignedWeekly.ok &&
     alignedWeekly.payWeekDay !== undefined &&
     contractorYtdAnchorGross > 1e-6;
@@ -376,7 +472,7 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     contractor,
     {
       ...(ytdOpts || {}),
-      skipContractorMonthPhantomGross: contractorWeeklyDiscreteYtd,
+      skipContractorMonthPhantomGross: contractorWeeklyCalendarCandidate,
     },
   );
   const phantomByYear = phantomSynthetic.byYear || {};
@@ -427,9 +523,10 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
 
     const ytdGross =
       contractorWeeklyDiscreteYtd && weeklyPayWeekDayResolved != null
-        ? roundUsd2(
-            countWeeklyPayChecksThroughInclusive(row.d, weeklyPayWeekDayResolved) *
-              contractorYtdAnchorGross,
+        ? contractorWeeklyDiscreteGrossThrough(
+            sortedChronological,
+            row.d,
+            weeklyPayWeekDayResolved,
           )
         : pb.g + sumGross;
     const ytdFed = pb.f + sumFed;
