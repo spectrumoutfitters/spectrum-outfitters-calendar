@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getStripeClient } from "@/lib/stripe";
+import { verifyRaffleAdminKey } from "@/lib/verifyRaffleAdmin";
 
 export const runtime = "nodejs";
 
@@ -39,6 +40,9 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   if (!typedPassword) {
     return NextResponse.json({ ok: false, error: "password_required" }, { status: 401 });
   }
+  if (!headerKey) {
+    return NextResponse.json({ ok: false, error: "missing_admin_key" }, { status: 401 });
+  }
   if (headerKey && typedPassword !== headerKey) {
     return NextResponse.json({ ok: false, error: "password_mismatch" }, { status: 401 });
   }
@@ -46,6 +50,9 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   const base = getAppsScriptUrl();
   if (!base) {
     return NextResponse.json({ ok: false, error: "server_misconfigured" }, { status: 503 });
+  }
+  if (!(await verifyRaffleAdminKey(slug, headerKey))) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   let stripe;
@@ -68,6 +75,9 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
       { ok: false, error: "not_paid", paymentStatus: session.payment_status },
       { status: 409 },
     );
+  }
+  if (String(session.metadata?.raffle_slug || "").trim() !== slug) {
+    return NextResponse.json({ ok: false, error: "session_slug_mismatch" }, { status: 403 });
   }
 
   const piId = typeof session.payment_intent === "string"
@@ -129,7 +139,8 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
         { status: 502 },
       );
     }
-    if (!sheetRes.ok) {
+    const sheetOk = sheetData && typeof sheetData === "object" && (sheetData as { ok?: unknown }).ok === true;
+    if (!sheetRes.ok || !sheetOk) {
       return NextResponse.json(
         { ok: false, error: "refund_done_but_sheet_failed", upstream: sheetData, refundId: refund?.id || "" },
         { status: 502 },
