@@ -1780,6 +1780,17 @@ function handleUpdateEntryByToken_(data) {
   if (!editableRowNums.length) {
     return jsonResponse({ ok: false, error: 'no_editable_rows', code: 'editable' }, 400);
   }
+  if (ticketMode === 'split') {
+    try {
+      var validationPlan = buildTicketSplitPlan_(p, raffles, totalEntries);
+      if (!validationPlan || !validationPlan.rows.length) {
+        return jsonResponse({ ok: false, error: 'Could not build ticket split.', code: 'split' }, 400);
+      }
+    } catch (errSplitValidation) {
+      var validationMsg = String(errSplitValidation && errSplitValidation.message ? errSplitValidation.message : errSplitValidation);
+      return jsonResponse({ ok: false, error: validationMsg, code: 'split' }, 400);
+    }
+  }
   editableRowNums.sort(function (a, b) {
     return b - a;
   });
@@ -1948,16 +1959,19 @@ function appendPaidEntryRow_(slug, name, phoneNorm, email, raffleId, rowTickets,
 }
 
 function handleApplyPaidTickets_(data) {
-  var rawPayload = data && typeof data.payload === 'object' ? data.payload : null;
-  if (!rawPayload) return jsonResponse({ ok: false, error: 'missing_payload' }, 400);
-
-  var payloadString = data.payloadString || JSON.stringify(rawPayload);
+  var payloadString = String(data && data.payloadString ? data.payloadString : '');
+  if (!payloadString) return jsonResponse({ ok: false, error: 'missing_payload_string' }, 400);
   var sig = String(data.signature || '');
   if (!verifyPaidPurchaseSignature_(payloadString, sig)) {
     return jsonResponse({ ok: false, error: 'bad_signature' }, 401);
   }
 
-  var p = rawPayload;
+  var p;
+  try {
+    p = JSON.parse(payloadString);
+  } catch (errPayloadJson) {
+    return jsonResponse({ ok: false, error: 'invalid_payload_string', code: 'payload' }, 400);
+  }
   var slug = String(p.slug || '').trim();
   var token = String(p.token || '').trim();
   var stripeSessionId = String(p.stripeSessionId || '').trim();

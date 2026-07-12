@@ -3,6 +3,7 @@ import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getClientIpFromRequest } from "@/lib/clientIp";
 import { getRaffleSiteOrigin, getStripeClient } from "@/lib/stripe";
+import { encodeTicketSplitMetadata } from "@/lib/stripeTicketSplitMetadata";
 import type { MyEntrySnapshot, EventConfig } from "@/lib/types";
 
 /**
@@ -118,6 +119,13 @@ export async function POST(request: Request) {
   const productName = `Raffle tickets — ${event.name || "Giveaway"}`;
   const description = `${totalTickets} extra ticket${totalTickets === 1 ? "" : "s"} for ${snapshot.name || snapshot.emailMasked}`;
 
+  let splitMetadata: Record<string, string>;
+  try {
+    splitMetadata = encodeTicketSplitMetadata(cleanSplit);
+  } catch {
+    return NextResponse.json({ ok: false, error: "ticket_split_metadata_too_large" }, { status: 400 });
+  }
+
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -142,7 +150,7 @@ export async function POST(request: Request) {
       metadata: {
         raffle_slug: slug,
         entry_token: token,
-        ticket_split: JSON.stringify(cleanSplit).slice(0, 480),
+        ...splitMetadata,
         total_tickets: String(totalTickets),
       },
     });
