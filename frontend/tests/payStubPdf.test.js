@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 
 const modulePath = '../src/utils/payStubPdf.js';
 
+function assertAlmostEqual(actual, expected) {
+  assert.ok(
+    Math.abs(actual - expected) < 1e-9,
+    `expected ${actual} to be within rounding tolerance of ${expected}`,
+  );
+}
+
 describe('pay stub PDF calculation utilities', () => {
   it('counts weekly checks through the inclusive period end date', async () => {
     const { countWeeklyPayChecksThroughInclusive } = await import(modulePath);
@@ -48,7 +55,7 @@ describe('pay stub PDF calculation utilities', () => {
     assert.equal(pages[0].ytdGross, 276923.08);
   });
 
-  it('falls back to listed contractor stubs when weekly dates are misaligned', async () => {
+  it('does not use discrete weekly YTD counting when weekly dates are misaligned', async () => {
     const { buildPreparedPaystubPages } = await import(modulePath);
 
     const pages = buildPreparedPaystubPages(
@@ -64,7 +71,9 @@ describe('pay stub PDF calculation utilities', () => {
       },
     );
 
-    assert.equal(pages[0].ytdGross, 1000);
-    assert.equal(pages[1].ytdGross, 2000);
+    const phantomPriorMonths = 2 * (1000 * (52 / 12));
+    assertAlmostEqual(pages[0].ytdGross, phantomPriorMonths + 1000);
+    assertAlmostEqual(pages[1].ytdGross, phantomPriorMonths + 2000);
+    assert.notEqual(pages[0].ytdGross, 10_000);
   });
 });
