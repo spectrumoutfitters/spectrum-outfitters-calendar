@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { addDays, format, startOfMonth, parseISO, isValid, subDays } from 'date-fns';
-import { computeW2Deductions, payPeriodsPerYear } from './payrollTaxUS';
+import { computeW2Deductions, payPeriodsPerYear } from './payrollTaxUS.js';
 
 export function parsePayDate(raw) {
   if (!raw) return new Date();
@@ -131,6 +131,12 @@ function numUsdField(x) {
 
 function calculateNetYTD(gross, fed, ss, medC, medA, state, other) {
   return Math.max(0, gross - fed - ss - medC - medA - state - other);
+}
+
+function grossAmountsAreUniform(rows) {
+  if (rows.length <= 1) return true;
+  const first = roundUsd2(rows[0].gross);
+  return rows.every((row) => Math.abs(roundUsd2(row.gross) - first) < 0.01);
 }
 
 /**
@@ -354,6 +360,7 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
   const sortedChronological = [...rows].sort((a, b) => +a.d - +b.d);
   const alignedWeekly = weeklyChecksSharePayWeekDay(sortedChronological.map((r) => r.d));
   const contractorYtdAnchorGross = sortedChronological.length ? sortedChronological[0].gross : 0;
+  const contractorWeeklyUniformGross = grossAmountsAreUniform(sortedChronological);
 
   const contractorWeeklyDiscreteYtd =
     contractor &&
@@ -364,6 +371,7 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     sortedChronological.length > 0 &&
     alignedWeekly.ok &&
     alignedWeekly.payWeekDay !== undefined &&
+    contractorWeeklyUniformGross &&
     contractorYtdAnchorGross > 1e-6;
 
   const weeklyPayWeekDayResolved =
@@ -376,7 +384,8 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     contractor,
     {
       ...(ytdOpts || {}),
-      skipContractorMonthPhantomGross: contractorWeeklyDiscreteYtd,
+      skipContractorMonthPhantomGross:
+        contractorWeeklyDiscreteYtd || (contractor && pfResolved === 'Weekly' && !hasPriorAmounts),
     },
   );
   const phantomByYear = phantomSynthetic.byYear || {};
