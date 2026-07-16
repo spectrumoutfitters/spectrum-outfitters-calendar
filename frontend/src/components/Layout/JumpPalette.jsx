@@ -10,6 +10,7 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { ADMIN_MAIN_TABS_ADMIN, ADMIN_SUB_TABS } from '../../config/adminNavRegistry';
+import { getTabWrapTarget, scheduleFocusRestore } from './jumpPaletteFocus';
 
 const JumpPaletteContext = createContext(null);
 
@@ -296,14 +297,7 @@ export function JumpPaletteProvider({ children }) {
     const el = lastFocusElRef.current;
     lastFocusElRef.current = null;
     if (!el) return undefined;
-    const id = window.requestAnimationFrame(() => {
-      try {
-        if (document.contains(el)) el.focus();
-      } catch {
-        /* ignore */
-      }
-    });
-    return () => cancelAnimationFrame(id);
+    return scheduleFocusRestore(el);
   }, [open]);
 
   useEffect(() => {
@@ -332,18 +326,10 @@ export function JumpPaletteProvider({ children }) {
       const root = dialogRef.current;
       if (!root) return;
       const focusables = getFocusableElements(root);
-      if (focusables.length === 0) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      const active = document.activeElement;
-      if (e.shiftKey) {
-        if (active === first) {
-          e.preventDefault();
-          last.focus();
-        }
-      } else if (active === last) {
+      const wrapTarget = getTabWrapTarget(focusables, document.activeElement, e.shiftKey);
+      if (wrapTarget) {
         e.preventDefault();
-        first.focus();
+        wrapTarget.focus();
       }
     };
     document.addEventListener('keydown', onKeyDown, true);
