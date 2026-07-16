@@ -84,6 +84,40 @@ export async function loadMergedPayrollHistory() {
   };
 }
 
+function payrollImportFallbackKey(rec) {
+  return `${rec?.processedDate || ''}-${(rec?.employee && rec.employee.id) || rec?.employeeId || ''}`;
+}
+
+function explicitPayrollRecordId(rec) {
+  if (rec?.id == null) return '';
+  return String(rec.id).trim();
+}
+
+/**
+ * Merge imported payroll rows without treating distinct source IDs as duplicates.
+ * Date + employee remains the fallback identity only for legacy rows without IDs.
+ */
+export function mergeUniquePayrollHistoryRecords(existingRecords, incomingRecords) {
+  const merged = Array.isArray(existingRecords) ? [...existingRecords] : [];
+  const explicitIds = new Set(merged.map(explicitPayrollRecordId).filter(Boolean));
+  const fallbackKeys = new Set(merged.map(payrollImportFallbackKey));
+  let imported = 0;
+
+  for (const rec of Array.isArray(incomingRecords) ? incomingRecords : []) {
+    const id = explicitPayrollRecordId(rec);
+    const fallbackKey = payrollImportFallbackKey(rec);
+
+    if (id ? explicitIds.has(id) : fallbackKeys.has(fallbackKey)) continue;
+
+    if (id) explicitIds.add(id);
+    fallbackKeys.add(fallbackKey);
+    merged.push(rec);
+    imported++;
+  }
+
+  return { records: merged, imported };
+}
+
 /**
  * Merge incoming records into existing file state, write JSON file, mirror full merged list to DB.
  * @returns {{ imported: number, total: number }}
@@ -99,22 +133,10 @@ export async function mergeImportPayrollHistory(records) {
   const seed = new Map();
   for (const rec of fileRecords) seed.set(stablePayrollRecordId(rec), rec);
   for (const rec of dbRecords) seed.set(stablePayrollRecordId(rec), rec);
-  let existing = [...seed.values()];
-
-  const existingIds = new Set(existing.map((r) => r.id).filter(Boolean));
-  const key = (r) => `${r.processedDate || ''}-${(r.employee && r.employee.id) || r.employeeId || ''}`;
-  const existingKeys = new Set(existing.map(key));
-  let imported = 0;
-  for (const rec of records) {
-    const id = rec.id;
-    const k = key(rec);
-    if (id && existingIds.has(id)) continue;
-    if (existingKeys.has(k)) continue;
-    existingIds.add(id);
-    existingKeys.add(k);
-    existing.push(rec);
-    imported++;
-  }
+  const { records: existing, imported } = mergeUniquePayrollHistoryRecords(
+    [...seed.values()],
+    records,
+  );
   existing.sort((a, b) => new Date(a.processedDate || 0) - new Date(b.processedDate || 0));
 
   await replaceAllPayrollHistoryInDb(existing);
