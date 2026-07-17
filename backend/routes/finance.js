@@ -424,6 +424,19 @@ router.get('/reimbursements', async (req, res) => {
       })),
       ...peopleWithSplit.map(p => ({ source_type: 'payroll_person', source_id: p.id, name: p.full_name, expected_amount: parseFloat(p.split_reimbursable_amount) || 0, expected_period: p.split_reimbursable_period || 'weekly', notes: p.split_reimbursable_notes }))
     ];
+    const activeSourcesByNormName = new Map();
+    for (const s of sources) {
+      const n = normalizePayrollDisplayName(s.name);
+      if (!activeSourcesByNormName.has(n)) activeSourcesByNormName.set(n, []);
+      activeSourcesByNormName.get(n).push(s);
+    }
+    const hasUnambiguousNameOwnership = (normName) => {
+      const sameNameSources = activeSourcesByNormName.get(normName) || [];
+      if (sameNameSources.length === 1) return true;
+      if (sameNameSources.length !== 2) return false;
+      return sameNameSources.filter((s) => s.source_type === 'user').length === 1
+        && sameNameSources.filter((s) => s.source_type === 'payroll_person').length === 1;
+    };
     const totalReceivedBySource = {};
     for (const p of payments) {
       const key = `${p.source_type}:${p.source_id}`;
@@ -520,10 +533,6 @@ router.get('/reimbursements', async (req, res) => {
     };
 
     // Same person as Calendar user + payroll-only row → one card; merge pay rows and recorded reimbursements.
-    const userSourceByNorm = new Map();
-    for (const s of sources) {
-      if (s.source_type === 'user') userSourceByNorm.set(normalizePayrollDisplayName(s.name), s);
-    }
     /** Payment rows roll up to this source key (e.g. payroll_person entries merged into user). */
     const rollupPaymentKeysBySource = new Map();
     for (const s of sources) {
@@ -533,7 +542,9 @@ router.get('/reimbursements', async (req, res) => {
     const ppKeysToDrop = new Set();
     for (const s of sources) {
       if (s.source_type !== 'payroll_person') continue;
-      const userSrc = userSourceByNorm.get(normalizePayrollDisplayName(s.name));
+      const normName = normalizePayrollDisplayName(s.name);
+      if (!hasUnambiguousNameOwnership(normName)) continue;
+      const userSrc = (activeSourcesByNormName.get(normName) || []).find((source) => source.source_type === 'user');
       if (!userSrc) continue;
       const uKey = `user:${userSrc.source_id}`;
       const pKey = `payroll_person:${s.source_id}`;
@@ -580,8 +591,11 @@ router.get('/reimbursements', async (req, res) => {
     for (const s of sources) {
       const key = `${s.source_type}:${s.source_id}`;
       const set = rollupPaymentKeysBySource.get(key) || new Set([key]);
-      for (const pid of ppIdsByNormName.get(normalizePayrollDisplayName(s.name)) || []) {
-        set.add(`payroll_person:${pid}`);
+      const normName = normalizePayrollDisplayName(s.name);
+      if (hasUnambiguousNameOwnership(normName)) {
+        for (const pid of ppIdsByNormName.get(normName) || []) {
+          set.add(`payroll_person:${pid}`);
+        }
       }
       rollupPaymentKeysBySource.set(key, set);
       let sum = 0;
