@@ -38,7 +38,7 @@
  *   bonusRulesJson: JSON array of bonus rules. Each object may include:
  *   id, label, description, tickets, actionUrl, actionLabel, proofFields (array of
  *   { id, input: "text"|"url"|"textarea", label, placeholder, requiredWhenBonus }).
- *   If blank, built-in defaults match the raffle app (Instagram, TikTok, Facebook, story tag, review, referral).
+ *   If blank / legacy shipped defaults, free ladder is empty (newsletter opt-in is separate).
  *
  * Entries (created automatically in column order)
  *   timestamp, slug, name, phone, email, raffleId, bonusInstagram, bonusReview, bonusReferral, totalEntries, isTest, ip, userAgent, extrasJson
@@ -113,35 +113,12 @@ function recordToObject_(headers, row) {
 }
 
 /**
- * Free bonuses we ship by default. Only verifiable by staff (URL or referrer match) — anything we
- * cannot prove was removed because raffles must stay fair without OAuth into social apps.
+ * Free bonus ladder defaults — must stay empty to match Next.js `DEFAULT_BONUS_RULES` (v3).
+ * Newsletter opt-in tickets are handled separately via Events.newsletterBonusEnabled / checkbox.
+ * Operators who want review/referral/etc. must set Events.bonusRulesJson explicitly.
  */
 function getDefaultBonuses_() {
-  return [
-    {
-      id: 'review',
-      label: 'Leave a public review',
-      description: 'Post a public Google, Facebook, or Yelp review and paste the link below — we click every link before awarding prizes.',
-      tickets: 4,
-      actionUrl: '',
-      actionLabel: '',
-      proofFields: [
-        { id: 'platform', input: 'text', label: 'Where did you review? (Google, Facebook, Yelp, …)', placeholder: 'e.g. Google Maps', requiredWhenBonus: true },
-        { id: 'reviewUrl', input: 'url', label: 'Public link to your review', placeholder: 'https://…', requiredWhenBonus: true },
-      ],
-    },
-    {
-      id: 'referral',
-      label: 'Refer a friend',
-      description: "Your friend must submit their own entry and type your full name in their referral field — that is how we verify it.",
-      tickets: 3,
-      actionUrl: '',
-      actionLabel: '',
-      proofFields: [
-        { id: 'friendName', input: 'text', label: "Friend's full name (must match what they type)", placeholder: 'First Last', requiredWhenBonus: true },
-      ],
-    },
-  ];
+  return [];
 }
 
 var SHIPPED_DEFAULT_BONUS_IDS_ = ['instagram', 'tiktok', 'facebook', 'story_tag', 'review', 'referral'];
@@ -1490,9 +1467,6 @@ function handleSubmitEntry_(data) {
   if (phoneNorm.length < 10) {
     return jsonResponse({ ok: false, error: 'Invalid phone', code: 'phone' }, 400);
   }
-  if (phoneExistsForSlug_(slug, phoneNorm)) {
-    return jsonResponse({ ok: false, error: 'This phone is already entered for this event.', code: 'duplicate_phone' }, 409);
-  }
 
   var baseTickets = getBaseTicketsPerEntry_(ev);
   var totalEntries = computeTicketsFromBonuses_(bonusById, bonuses, baseTickets);
@@ -1518,28 +1492,50 @@ function handleSubmitEntry_(data) {
   var ua = String(p.userAgent || '');
   var entryToken = generateEntryToken_();
 
-  return runEntryWritesAndMaybeEmail_(
-    slug,
-    name,
-    phoneNorm,
-    email,
-    p,
-    ev,
-    bonuses,
-    bonusById,
-    bonusProofTrimmed,
-    totalEntries,
-    ticketMode,
-    raffleId,
-    raffles,
-    testMode,
-    ip,
-    ua,
-    entryToken,
-    true,
-    newsletterOptIn,
-    newsletterBonusEarned
-  );
+  // Serialize phone-uniqueness check + sheet append so concurrent submits cannot race past phoneExistsForSlug_.
+  var entryLock = LockService.getScriptLock();
+  var gotEntryLock = false;
+  try {
+    gotEntryLock = entryLock.tryLock(30000);
+  } catch (entryLockErr) {
+    gotEntryLock = false;
+  }
+  if (!gotEntryLock) {
+    return jsonResponse({ ok: false, error: 'busy_retry', code: 'lock' }, 503);
+  }
+  try {
+    if (phoneExistsForSlug_(slug, phoneNorm)) {
+      return jsonResponse({ ok: false, error: 'This phone is already entered for this event.', code: 'duplicate_phone' }, 409);
+    }
+    return runEntryWritesAndMaybeEmail_(
+      slug,
+      name,
+      phoneNorm,
+      email,
+      p,
+      ev,
+      bonuses,
+      bonusById,
+      bonusProofTrimmed,
+      totalEntries,
+      ticketMode,
+      raffleId,
+      raffles,
+      testMode,
+      ip,
+      ua,
+      entryToken,
+      true,
+      newsletterOptIn,
+      newsletterBonusEarned
+    );
+  } finally {
+    try {
+      entryLock.releaseLock();
+    } catch (releaseEntryErr) {
+      /* ignore */
+    }
+  }
 }
 
 function handleGetEntryByToken_(data) {
@@ -1957,74 +1953,94 @@ function handleApplyPaidTickets_(data) {
     return jsonResponse({ ok: false, error: 'bad_signature' }, 401);
   }
 
-  var p = rawPayload;
-  var slug = String(p.slug || '').trim();
-  var token = String(p.token || '').trim();
-  var stripeSessionId = String(p.stripeSessionId || '').trim();
-  var totalPaid = Math.max(0, Math.floor(Number(p.totalPaidTickets) || 0));
-  if (!slug || !token || !stripeSessionId || totalPaid <= 0) {
-    return jsonResponse({ ok: false, error: 'missing_fields', code: 'fields' }, 400);
+  var lock = LockService.getScriptLock();
+  var gotLock = false;
+  try {
+    gotLock = lock.tryLock(30000);
+  } catch (lockErr) {
+    gotLock = false;
+  }
+  if (!gotLock) {
+    // Stripe should retry; concurrent apply without a lock can double-write tickets for one session.
+    return jsonResponse({ ok: false, error: 'busy_retry', code: 'lock' }, 503);
   }
 
-  var found = findEventRow_(slug);
-  if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
-
-  if (paidPurchaseAlreadyApplied_(slug, stripeSessionId)) {
-    return jsonResponse({ ok: true, alreadyApplied: true, totalPaidTickets: totalPaid });
-  }
-
-  var rows = readEntryRowsByToken_(slug, token);
-  if (!rows.length) return jsonResponse({ ok: false, error: 'entry_not_found', code: 'token' }, 404);
-
-  var raffles = getRafflesForSlug_(slug);
-  var validIds = {};
-  for (var ri = 0; ri < raffles.length; ri++) validIds[raffles[ri].id] = true;
-
-  var split = (p.ticketSplit && typeof p.ticketSplit === 'object' && !Array.isArray(p.ticketSplit)) ? p.ticketSplit : null;
-  var allocations = [];
-  if (split) {
-    var sum = 0;
-    Object.keys(split).forEach(function (k) {
-      var n = Math.max(0, Math.floor(Number(split[k]) || 0));
-      if (n > 0 && validIds[k]) {
-        allocations.push({ raffleId: k, tickets: n });
-        sum += n;
-      }
-    });
-    if (sum !== totalPaid) {
-      return jsonResponse({ ok: false, error: 'ticket_split_mismatch', code: 'split' }, 400);
+  try {
+    var p = rawPayload;
+    var slug = String(p.slug || '').trim();
+    var token = String(p.token || '').trim();
+    var stripeSessionId = String(p.stripeSessionId || '').trim();
+    var totalPaid = Math.max(0, Math.floor(Number(p.totalPaidTickets) || 0));
+    if (!slug || !token || !stripeSessionId || totalPaid <= 0) {
+      return jsonResponse({ ok: false, error: 'missing_fields', code: 'fields' }, 400);
     }
-  } else {
-    var firstId = rows[0].raffleId;
-    if (!validIds[firstId]) firstId = (raffles[0] && raffles[0].id) || '';
-    if (!firstId) return jsonResponse({ ok: false, error: 'no_pool_for_entry' }, 500);
-    allocations.push({ raffleId: firstId, tickets: totalPaid });
+
+    var found = findEventRow_(slug);
+    if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
+
+    if (paidPurchaseAlreadyApplied_(slug, stripeSessionId)) {
+      return jsonResponse({ ok: true, alreadyApplied: true, totalPaidTickets: totalPaid });
+    }
+
+    var rows = readEntryRowsByToken_(slug, token);
+    if (!rows.length) return jsonResponse({ ok: false, error: 'entry_not_found', code: 'token' }, 404);
+
+    var raffles = getRafflesForSlug_(slug);
+    var validIds = {};
+    for (var ri = 0; ri < raffles.length; ri++) validIds[raffles[ri].id] = true;
+
+    var split = (p.ticketSplit && typeof p.ticketSplit === 'object' && !Array.isArray(p.ticketSplit)) ? p.ticketSplit : null;
+    var allocations = [];
+    if (split) {
+      var sum = 0;
+      Object.keys(split).forEach(function (k) {
+        var n = Math.max(0, Math.floor(Number(split[k]) || 0));
+        if (n > 0 && validIds[k]) {
+          allocations.push({ raffleId: k, tickets: n });
+          sum += n;
+        }
+      });
+      if (sum !== totalPaid) {
+        return jsonResponse({ ok: false, error: 'ticket_split_mismatch', code: 'split' }, 400);
+      }
+    } else {
+      var firstId = rows[0].raffleId;
+      if (!validIds[firstId]) firstId = (raffles[0] && raffles[0].id) || '';
+      if (!firstId) return jsonResponse({ ok: false, error: 'no_pool_for_entry' }, 500);
+      allocations.push({ raffleId: firstId, tickets: totalPaid });
+    }
+
+    var paidMeta = {
+      stripeSessionId: stripeSessionId,
+      paidAt: String(p.paidAt || ''),
+      amountTotal: Number(p.amountTotal),
+      currency: String(p.currency || ''),
+    };
+
+    var name = rows[0].name;
+    var phoneNorm = rows[0].phoneNorm;
+    var email = rows[0].email;
+    var ip = String(p.clientIp || 'paid');
+    var ua = String(p.userAgent || 'stripe-webhook');
+
+    for (var ai = 0; ai < allocations.length; ai++) {
+      var a = allocations[ai];
+      appendPaidEntryRow_(slug, name, phoneNorm, email, a.raffleId, a.tickets, ip, ua, token, paidMeta);
+    }
+
+    return jsonResponse({
+      ok: true,
+      alreadyApplied: false,
+      totalPaidTickets: totalPaid,
+      poolsAffected: allocations.length,
+    });
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (releaseErr) {
+      /* ignore */
+    }
   }
-
-  var paidMeta = {
-    stripeSessionId: stripeSessionId,
-    paidAt: String(p.paidAt || ''),
-    amountTotal: Number(p.amountTotal),
-    currency: String(p.currency || ''),
-  };
-
-  var name = rows[0].name;
-  var phoneNorm = rows[0].phoneNorm;
-  var email = rows[0].email;
-  var ip = String(p.clientIp || 'paid');
-  var ua = String(p.userAgent || 'stripe-webhook');
-
-  for (var ai = 0; ai < allocations.length; ai++) {
-    var a = allocations[ai];
-    appendPaidEntryRow_(slug, name, phoneNorm, email, a.raffleId, a.tickets, ip, ua, token, paidMeta);
-  }
-
-  return jsonResponse({
-    ok: true,
-    alreadyApplied: false,
-    totalPaidTickets: totalPaid,
-    poolsAffected: allocations.length,
-  });
 }
 
 /**
