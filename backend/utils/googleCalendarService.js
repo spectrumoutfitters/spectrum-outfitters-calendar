@@ -741,6 +741,31 @@ export async function disconnectGoogleCalendar() {
   });
 }
 
+/**
+ * Collect FreeBusy incompleteness for requested calendar IDs.
+ * Missing response entries and per-calendar `errors` both mean busy times were not observed.
+ */
+export function collectFreeBusyErrors(calendarIds, calMap) {
+  const errors = [];
+  const map = calMap && typeof calMap === 'object' ? calMap : {};
+  for (const cid of calendarIds || []) {
+    const id = typeof cid === 'string' ? cid.trim() : '';
+    if (!id) continue;
+    const v = map[id];
+    if (!v) {
+      errors.push({ calendarId: id, reason: 'missing' });
+      continue;
+    }
+    const err = v.errors;
+    if (err && Array.isArray(err)) {
+      for (const e of err) {
+        errors.push({ calendarId: id, domain: e.domain, reason: e.reason });
+      }
+    }
+  }
+  return errors;
+}
+
 /** Query FreeBusy across multiple calendars (merge busy internally). Returns ISO strings. */
 export async function queryCalendarFreeBusy({ calendarIds, timeMinIso, timeMaxIso }) {
   if (!Array.isArray(calendarIds) || calendarIds.length === 0) {
@@ -785,13 +810,7 @@ export async function queryCalendarFreeBusy({ calendarIds, timeMinIso, timeMaxIs
     }
   }
 
-  const errors = [];
-  for (const [cid, v] of Object.entries(calMap)) {
-    const err = v?.errors;
-    if (err && Array.isArray(err)) {
-      for (const e of err) errors.push({ calendarId: cid, domain: e.domain, reason: e.reason });
-    }
-  }
+  const errors = collectFreeBusyErrors(calendarIds, calMap);
 
   return { calendars: calMap, busyIntervals: mergeIntervals(merged), errors };
 }
