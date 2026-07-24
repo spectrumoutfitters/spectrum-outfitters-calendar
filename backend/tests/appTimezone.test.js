@@ -18,10 +18,10 @@ describe('appTimezone', () => {
   });
 
   it('formats UTC instants as Houston calendar dates', () => {
-    // 2026-07-04 05:00 UTC is still July 3 evening in Houston (CDT, UTC-5)
-    assert.equal(formatDateInHouston(new Date('2026-07-04T05:00:00.000Z')), '2026-07-03');
-    // 2026-07-04 06:00 UTC is July 4 midnight Houston
-    assert.equal(formatDateInHouston(new Date('2026-07-04T06:00:00.000Z')), '2026-07-04');
+    // July is CDT (UTC-5): 04:59 UTC is still July 3 23:59 in Houston.
+    assert.equal(formatDateInHouston(new Date('2026-07-04T04:59:00.000Z')), '2026-07-03');
+    // 05:00 UTC is July 4 00:00 in Houston.
+    assert.equal(formatDateInHouston(new Date('2026-07-04T05:00:00.000Z')), '2026-07-04');
   });
 
   it('getTodayInHouston matches formatting the current instant', () => {
