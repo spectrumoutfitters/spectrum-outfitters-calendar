@@ -347,9 +347,19 @@ export async function computeAvailableBookingSlots() {
     }
   }
 
+  // FreeBusy per-calendar errors mean we did not observe that calendar's busy times.
+  // Fail closed for listing so we never advertise slots that may already be booked.
+  if (errors?.length) {
+    return {
+      slots: [],
+      reason: 'freebusy_incomplete',
+      freebusy_errors: errors
+    };
+  }
+
   return {
     slots: freeSlots.slice(0, 2000),
-    freebusy_errors: errors?.length ? errors : undefined
+    freebusy_errors: undefined
   };
 }
 
@@ -484,6 +494,13 @@ export async function submitCustomerBooking(payload) {
     timeMinIso: DateTime.fromMillis(slotNorm.startMs - 5 * 60 * 1000).toUTC().toISO(),
     timeMaxIso: DateTime.fromMillis(slotNorm.endMs + 5 * 60 * 1000).toUTC().toISO()
   });
+  if (fb.errors?.length) {
+    const err = new Error(
+      'Could not verify calendar availability. Please try again in a few minutes, or call the shop.'
+    );
+    err.code = 'google';
+    throw err;
+  }
   if (overlapsInterval(slotNorm.startMs, slotNorm.endMs, fb.busyIntervals)) {
     const err = new Error('That slot was just taken. Please choose another.');
     err.code = 'conflict';

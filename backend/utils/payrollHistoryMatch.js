@@ -58,14 +58,12 @@ export function namesLikelyMatch(calendarFullName, payrollDisplayName) {
   // One normalized string contains the other (avoid tiny strings)
   if (a.length >= 6 && b.length >= 6 && (a.includes(b) || b.includes(a))) return true;
 
-  // Every "significant" calendar token (3+ chars) appears in payroll string — e.g. Calendar
-  // "Patrick Tung Gaines" matches payroll export "Patrick Gaines" (patrick + gaines both in longer payroll name).
-  const sigA = ta.filter((t) => t.length >= 3);
-  if (sigA.length >= 2 && sigA.every((t) => b.includes(t))) return true;
-
-  // Reciprocal: payroll's significant tokens all appear in calendar full name (short payroll label)
-  const sigB = tb.filter((t) => t.length >= 3);
-  if (sigB.length >= 2 && sigB.every((t) => a.includes(t))) return true;
+  // Significant tokens must match as whole tokens — never as substrings of the other
+  // full name (e.g. "ann" must not match inside "joanne", "chris" inside "christina").
+  // Middle-name cases like "Patrick Tung Gaines" ↔ "Patrick Gaines" are already covered
+  // by the first+last and shorter-token checks above.
+  if (sa.length >= 2 && sa.every((t) => tb.includes(t))) return true;
+  if (sb.length >= 2 && sb.every((t) => ta.includes(t))) return true;
 
   return false;
 }
