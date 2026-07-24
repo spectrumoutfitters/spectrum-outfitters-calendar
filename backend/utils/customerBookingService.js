@@ -259,10 +259,12 @@ function parseHm(hmStr) {
 
 /**
  * Builds candidate UTC slot ranges from weekly hours configuration.
+ * @param {{ timezone: string, horizonDays: number, slotMinutes: number, weeklyHoursObj: object, now?: DateTime }} opts
+ *        `now` is optional (tests); defaults to current time in `timezone`.
  */
-function generateCandidateSlotsUtc({ timezone, horizonDays, slotMinutes, weeklyHoursObj }) {
+export function generateCandidateSlotsUtc({ timezone, horizonDays, slotMinutes, weeklyHoursObj, now }) {
   const slots = [];
-  const anchor = DateTime.now().setZone(timezone).startOf('day');
+  const anchor = (now && now.isValid ? now : DateTime.now().setZone(timezone)).startOf('day');
 
   for (let dayOffset = 0; dayOffset < horizonDays; dayOffset++) {
     const date = anchor.plus({ days: dayOffset });
@@ -294,6 +296,18 @@ function generateCandidateSlotsUtc({ timezone, horizonDays, slotMinutes, weeklyH
 
   slots.sort((a, b) => a.startMs - b.startMs);
   return slots;
+}
+
+/**
+ * True when the requested start/end exactly matches a weekly-hours candidate slot.
+ * Public submit must use this — freebusy alone would allow any empty calendar gap (nights/weekends).
+ */
+export function isOfferedBookingSlot({ startMs, endMs, candidates }) {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return false;
+  for (const c of candidates || []) {
+    if (c.startMs === startMs && c.endMs === endMs) return true;
+  }
+  return false;
 }
 
 export async function computeAvailableBookingSlots() {
@@ -438,6 +452,27 @@ export async function submitCustomerBooking(payload) {
   if (!slotNorm) {
     const err = new Error('Pick a valid time slot.');
     err.code = 'validation';
+    throw err;
+  }
+
+  const weekly = parseJsonSafe(cfg.weekly_hours_json, {});
+  const offered = generateCandidateSlotsUtc({
+    timezone: cfg.timezone,
+    horizonDays: cfg.horizonDays,
+    slotMinutes: cfg.slotMinutes,
+    weeklyHoursObj: weekly
+  });
+  if (!isOfferedBookingSlot({ startMs: slotNorm.startMs, endMs: slotNorm.endMs, candidates: offered })) {
+    const err = new Error('That time is outside bookable shop hours. Please choose a listed slot.');
+    err.code = 'validation';
+    throw err;
+  }
+
+  const nowMs = Date.now();
+  const bufferMs = cfg.bufferBeforeMinutes * 60 * 1000;
+  if (slotNorm.startMs < nowMs + bufferMs) {
+    const err = new Error('That slot is no longer available. Please choose a later time.');
+    err.code = 'conflict';
     throw err;
   }
 
