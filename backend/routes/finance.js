@@ -18,6 +18,7 @@ import {
   normalizePayRecordDate,
   dedupePayRecordsList,
 } from '../utils/payrollDedupe.js';
+import { calculateEntryHours } from '../utils/helpers.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -93,12 +94,12 @@ async function getWeeklyExpenses(weekStart, weekEnd) {
       payrollTotal += parseFloat(emp.weekly_salary);
     } else if (emp.hourly_rate && emp.hourly_rate > 0) {
       const entries = await db.allAsync(
-        'SELECT clock_in, clock_out, break_minutes FROM time_entries WHERE user_id = ? AND DATE(clock_in) >= ? AND DATE(clock_in) <= ? AND clock_out IS NOT NULL',
+        'SELECT clock_in, clock_out, break_minutes, notes FROM time_entries WHERE user_id = ? AND DATE(clock_in) >= ? AND DATE(clock_in) <= ? AND clock_out IS NOT NULL',
         [emp.id, weekStart, weekEnd]
       );
       let hours = 0;
       for (const e of entries) {
-        hours += Math.max(0, (new Date(e.clock_out) - new Date(e.clock_in)) / 3600000 - (e.break_minutes || 0) / 60);
+        hours += Math.max(0, calculateEntryHours(e) || 0);
       }
       payrollTotal += hours * parseFloat(emp.hourly_rate);
     }

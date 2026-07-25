@@ -95,7 +95,11 @@ router.get('/', async (req, res) => {
          (
            SELECT COALESCE(SUM(
              (strftime('%s', COALESCE(clock_out, datetime('now'))) - strftime('%s', clock_in)) / 3600.0
-             - break_minutes / 60.0
+             - CASE
+                 WHEN notes IS NOT NULL AND lower(notes) LIKE '%lunch break%' THEN 0
+                 WHEN COALESCE(break_minutes, 0) < 0 THEN 0
+                 ELSE COALESCE(break_minutes, 0)
+               END / 60.0
            ), 0)
            FROM time_entries
            WHERE user_id = u.id
