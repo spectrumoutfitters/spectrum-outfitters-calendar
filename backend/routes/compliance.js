@@ -11,6 +11,7 @@ import {
   addDaysInHouston,
 } from '../utils/appTimezone.js';
 import { normalizePayrollDisplayName } from '../utils/payrollDedupe.js';
+import { calculateEntryHours } from '../utils/helpers.js';
 
 const router = express.Router();
 
@@ -1096,7 +1097,7 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
     } else if (employee.hourly_rate && employee.hourly_rate > 0) {
       // Calculate from time entries
       timeEntries = await db.allAsync(`
-        SELECT clock_in, clock_out, break_minutes
+        SELECT clock_in, clock_out, break_minutes, notes
         FROM time_entries
         WHERE user_id = ?
           AND DATE(clock_in) >= ?
@@ -1106,10 +1107,7 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
 
       let totalHours = 0;
       for (const entry of timeEntries) {
-        const clockIn = new Date(entry.clock_in);
-        const clockOut = new Date(entry.clock_out);
-        const hours = (clockOut - clockIn) / (1000 * 60 * 60) - (entry.break_minutes || 0) / 60;
-        totalHours += Math.max(0, hours);
+        totalHours += Math.max(0, calculateEntryHours(entry) || 0);
       }
 
       hoursWorked = totalHours;

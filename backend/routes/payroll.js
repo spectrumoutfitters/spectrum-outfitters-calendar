@@ -7,6 +7,7 @@ import { dirname } from 'path';
 import fs from 'fs';
 import { getPayrollDataPath } from '../utils/payrollDataPath.js';
 import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/payrollHistoryRecords.js';
+import { calculateEntryHours, effectiveBreakMinutes } from '../utils/helpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -329,10 +330,9 @@ router.get('/sync/time-entries', requirePayrollAccess, async (req, res) => {
 
     // Calculate hours for each entry
     const timeData = entries.map(entry => {
-      const clockIn = new Date(entry.clock_in);
-      const clockOut = new Date(entry.clock_out);
-      const hours = (clockOut - clockIn) / (1000 * 60 * 60) - (entry.break_minutes || 0) / 60;
-      
+      const hours = calculateEntryHours(entry) || 0;
+      const paidBreak = effectiveBreakMinutes(entry.break_minutes, entry.notes);
+
       return {
         user_id: entry.user_id,
         full_name: entry.full_name,
@@ -341,7 +341,7 @@ router.get('/sync/time-entries', requirePayrollAccess, async (req, res) => {
         clock_in: entry.clock_in,
         clock_out: entry.clock_out,
         hours: Math.max(0, hours),
-        break_minutes: entry.break_minutes || 0,
+        break_minutes: paidBreak,
         hourly_rate: entry.hourly_rate || 0,
         weekly_salary: entry.weekly_salary || 0
       };
@@ -424,10 +424,9 @@ router.post('/sync/import-hours', requirePayrollAccess, async (req, res) => {
 
     // Calculate hours for each entry
     const timeData = entries.map(entry => {
-      const clockIn = new Date(entry.clock_in);
-      const clockOut = new Date(entry.clock_out);
-      const hours = (clockOut - clockIn) / (1000 * 60 * 60) - (entry.break_minutes || 0) / 60;
-      
+      const hours = calculateEntryHours(entry) || 0;
+      const paidBreak = effectiveBreakMinutes(entry.break_minutes, entry.notes);
+
       return {
         user_id: entry.user_id,
         full_name: entry.full_name,
@@ -436,7 +435,7 @@ router.post('/sync/import-hours', requirePayrollAccess, async (req, res) => {
         clock_in: entry.clock_in,
         clock_out: entry.clock_out,
         hours: Math.max(0, hours),
-        break_minutes: entry.break_minutes || 0,
+        break_minutes: paidBreak,
         hourly_rate: entry.hourly_rate || 0,
         weekly_salary: entry.weekly_salary || 0
       };
