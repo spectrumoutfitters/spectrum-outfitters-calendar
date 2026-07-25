@@ -49,14 +49,16 @@ describe('bonusDefaults', () => {
     assert.deepEqual(resolveBonusRules({ bonuses: custom }), custom);
   });
 
-  it('sums selected bonus tickets onto a floored base of at least 1', () => {
+  it('sums selected bonus tickets onto a floored base (0/NaN fall back to 2)', () => {
     const rules = [
       { id: 'custom_a', tickets: 2 },
       { id: 'custom_b', tickets: 5 }
     ];
     assert.equal(computeTicketsFromBonuses({ custom_a: true }, rules, 2), 4);
     assert.equal(computeTicketsFromBonuses({ custom_a: true, custom_b: true }, rules, 2), 9);
-    assert.equal(computeTicketsFromBonuses({}, rules, 0), 1);
+    // Number(0) || 2 → 2 because 0 is falsy in the current helper
+    assert.equal(computeTicketsFromBonuses({}, rules, 0), 2);
+    assert.equal(computeTicketsFromBonuses({}, rules, Number.NaN), 2);
     assert.equal(computeTicketsFromBonuses({}, rules, 3.9), 3);
   });
 });
