@@ -3,6 +3,7 @@ import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getClientIpFromRequest } from "@/lib/clientIp";
 import { getRaffleSiteOrigin, getStripeClient } from "@/lib/stripe";
+import { encodeTicketSplitMetadata } from "@/lib/stripeTicketSplitMetadata";
 import type { MyEntrySnapshot, EventConfig } from "@/lib/types";
 
 /**
@@ -142,8 +143,8 @@ export async function POST(request: Request) {
       metadata: {
         raffle_slug: slug,
         entry_token: token,
-        ticket_split: JSON.stringify(cleanSplit).slice(0, 480),
         total_tickets: String(totalTickets),
+        ...encodeTicketSplitMetadata(cleanSplit),
       },
     });
 
