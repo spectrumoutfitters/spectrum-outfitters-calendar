@@ -16,7 +16,6 @@ import {
   normalizePayrollDisplayName,
   normalizedNamesWithWeeklySalary,
   normalizePayRecordDate,
-  dedupePayRecordsList,
   mergePayrollHistoryWithSplitRuns,
   mergePayRecordsPreferringHistory,
   toPublicPayRecord,
