@@ -63,7 +63,11 @@ export async function getSplitPayRunsBySource() {
   for (const r of rows) {
     const key = `${r.source_type}:${r.source_id}`;
     if (!byKey[key]) byKey[key] = [];
-    byKey[key].push({ pay_date: r.week_ending_date, amount: toNumber(r.amount) });
+    byKey[key].push({
+      pay_date: r.week_ending_date,
+      amount: toNumber(r.amount),
+      from_split_run: true,
+    });
   }
   return byKey;
 }

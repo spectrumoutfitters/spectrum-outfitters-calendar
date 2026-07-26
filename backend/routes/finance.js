@@ -17,6 +17,9 @@ import {
   normalizedNamesWithWeeklySalary,
   normalizePayRecordDate,
   dedupePayRecordsList,
+  mergePayrollHistoryWithSplitRuns,
+  mergePayRecordsPreferringHistory,
+  toPublicPayRecord,
 } from '../utils/payrollDedupe.js';
 
 const router = express.Router();
@@ -485,7 +488,9 @@ router.get('/reimbursements', async (req, res) => {
         return { pay_date: payDate, amount };
       });
       const splitRuns = splitRunsBySource[`${src.source_type}:${src.source_id}`] || [];
-      const payRecords = dedupePayRecordsList([...payrollFileRecords, ...splitRuns]);
+      // Prefer history over split markers when dates align; split amount may be
+      // reimbursable share while history has a different weekly gross.
+      const payRecords = mergePayrollHistoryWithSplitRuns(payrollFileRecords, splitRuns);
       const totalPaidFromPayroll = payRecords.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
       let amountOwedEstimate = 0;
       if (src.expected_amount > 0 && payRecords.length > 0) {
@@ -502,7 +507,7 @@ router.get('/reimbursements', async (req, res) => {
       payRecordsBySource[`${src.source_type}:${src.source_id}`] = { pay_records: payRecords, total_paid_from_payroll: totalPaidFromPayroll, amount_owed_estimate: amountOwedEstimate };
     }
 
-    const mergePayRecordsDedupe = (listA, listB) => dedupePayRecordsList([...(listA || []), ...(listB || [])]);
+    const mergePayRecordsDedupe = (listA, listB) => mergePayRecordsPreferringHistory(listA, listB);
     const recomputeOwed = (src, payRecords, totalReceived) => {
       let amountOwedEstimate = 0;
       if (src.expected_amount > 0 && payRecords.length > 0) {
@@ -607,7 +612,7 @@ router.get('/reimbursements', async (req, res) => {
       const key = `${s.source_type}:${s.source_id}`;
       const data = payRecordsBySource[key];
       if (data) {
-        s.pay_records = data.pay_records;
+        s.pay_records = (data.pay_records || []).map(toPublicPayRecord);
         s.total_paid_from_payroll = data.total_paid_from_payroll;
         s.amount_owed_estimate = data.amount_owed_estimate;
       } else {
