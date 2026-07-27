@@ -62,7 +62,8 @@ async function loadOnPremConfig() {
   return defaults;
 }
 
-function haversineMeters(lat1, lng1, lat2, lng2) {
+/** Great-circle distance in meters (exported for unit tests). */
+export function haversineMeters(lat1, lng1, lat2, lng2) {
   const R = 6_371_000;
   const toRad = (d) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
@@ -73,7 +74,8 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function ipMatchesAllowlist(ip, allowedIPs) {
+/** Exact IP or CIDR allowlist match (exported for unit tests). */
+export function ipMatchesAllowlist(ip, allowedIPs) {
   if (!ip || !allowedIPs?.length) return false;
   const cleaned = ip.replace(/^::ffff:/, '');
   for (const entry of allowedIPs) {
@@ -86,7 +88,8 @@ function ipMatchesAllowlist(ip, allowedIPs) {
   return false;
 }
 
-function cidrMatch(ip, cidr) {
+/** IPv4 CIDR membership (exported for unit tests). */
+export function cidrMatch(ip, cidr) {
   const [range, bits] = cidr.split('/');
   const mask = ~(2 ** (32 - parseInt(bits, 10)) - 1) >>> 0;
   const ipNum = ipToLong(ip);
@@ -95,7 +98,8 @@ function cidrMatch(ip, cidr) {
   return (ipNum & mask) === (rangeNum & mask);
 }
 
-function ipToLong(ip) {
+/** IPv4 dotted-quad → uint32 (exported for unit tests). */
+export function ipToLong(ip) {
   const parts = ip.split('.');
   if (parts.length !== 4) return null;
   return parts.reduce((acc, p) => (acc << 8) + parseInt(p, 10), 0) >>> 0;
