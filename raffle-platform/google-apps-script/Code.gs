@@ -22,6 +22,8 @@
  *     Used to email magic links so entrants can view/update tickets until 10 minutes before each pool's drawAt.
  *   PAID_PURCHASE_SECRET — shared secret with the Next.js Stripe webhook handler. The webhook signs the
  *     applyPaidTickets payload with HMAC-SHA256 using this secret; Apps Script verifies before writing rows.
+ *   refundedSession:<slug>:<stripeSessionId> — written by refundPaidPurchase so a late webhook cannot
+ *     grant paid tickets after Stripe has already refunded the Checkout Session.
  *
  * Optional Events columns (auto-added on first save):
  *   paidTicketsEnabled (TRUE/FALSE) — show "Buy more tickets" UI for this event.
@@ -875,6 +877,58 @@ function deleteEntrySheetRowsDescending_(rowNumbersHighToLow) {
   for (var i = 0; i < rowNumbersHighToLow.length; i++) {
     sh.deleteRow(rowNumbersHighToLow[i]);
   }
+}
+
+/** Script Properties key for a Stripe session that was refunded (including before webhook apply). */
+function refundedSessionPropKey_(slug, sessionId) {
+  return 'refundedSession:' + String(slug || '').trim() + ':' + String(sessionId || '').trim();
+}
+
+/** Persist a refund deny-list marker so a late webhook cannot grant tickets after money is returned. */
+function markSessionRefunded_(slug, sessionId, meta) {
+  if (!slug || !sessionId) return;
+  try {
+    PropertiesService.getScriptProperties().setProperty(
+      refundedSessionPropKey_(slug, sessionId),
+      JSON.stringify({
+        at: new Date().toISOString(),
+        refundId: meta && meta.refundId ? String(meta.refundId) : '',
+        actor: meta && meta.actor ? String(meta.actor) : '',
+      })
+    );
+  } catch (e) {
+    // Best-effort; sheet __refunded flags still cover the post-apply path.
+  }
+}
+
+function isSessionMarkedRefunded_(slug, sessionId) {
+  if (!slug || !sessionId) return false;
+  try {
+    return Boolean(PropertiesService.getScriptProperties().getProperty(refundedSessionPropKey_(slug, sessionId)));
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * True if this Checkout Session was refunded: Script Properties deny-list and/or any
+ * Entries row for the session already has extras.__refunded === true.
+ */
+function paidPurchaseWasRefunded_(slug, sessionId) {
+  if (!sessionId) return false;
+  if (isSessionMarkedRefunded_(slug, sessionId)) return true;
+  var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
+  if (!sh || sh.getLastRow() < 2) return false;
+  var lastCol = Math.max(13, sh.getLastColumn());
+  var values = sh.getRange(2, 1, sh.getLastRow(), lastCol).getValues();
+  var exCol = getEntriesExtrasColumnIndex_();
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][1] || '').trim() !== String(slug).trim()) continue;
+    var ex = parseEntryExtrasJson_(values[i][exCol]);
+    if (String(ex.__stripeSessionId || '') !== String(sessionId)) continue;
+    if (ex.__refunded === true) return true;
+  }
+  return false;
 }
 
 /** Returns true if any Entries row for slug already has __stripeSessionId === sessionId in extrasJson. */
@@ -1770,11 +1824,15 @@ function handleUpdateEntryByToken_(data) {
     }
   }
 
+  // Free/editable rows are rewritten. Legacy __newsletterBonus rows used to be preserved
+  // while newsletter tickets were also folded into free totals → double-count in the draw.
+  // When newsletter is still opted in, delete legacy bonus rows so the folded total is the only award.
   var editableRowNums = [];
   for (var pr = 0; pr < rows.length; pr++) {
     var rrr = rows[pr];
     var ex = rrr.extras || {};
-    if (ex.__paid === true || ex.__newsletterBonus === true) continue;
+    if (ex.__paid === true) continue;
+    if (ex.__newsletterBonus === true && !newsletterOptIn2) continue;
     editableRowNums.push(rrr.sheetRow);
   }
   if (!editableRowNums.length) {
@@ -1811,7 +1869,8 @@ function handleUpdateEntryByToken_(data) {
 }
 
 /**
- * Update-only variant: rewrites editable rows. Preserves paid + legacy newsletter-bonus rows.
+ * Update-only variant: rewrites editable rows. Preserves paid rows.
+ * Legacy __newsletterBonus rows are removed when newsletter is still opted in (folded into free totals).
  * No magic-link email on update.
  */
 function runEntryWritesAndMaybeEmailPreservingNewsletter_(
@@ -1969,6 +2028,16 @@ function handleApplyPaidTickets_(data) {
   var found = findEventRow_(slug);
   if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
 
+  // Refund may have completed before this webhook ran — never grant tickets after money is returned.
+  if (paidPurchaseWasRefunded_(slug, stripeSessionId)) {
+    return jsonResponse({
+      ok: true,
+      skippedDueToRefund: true,
+      alreadyApplied: false,
+      totalPaidTickets: totalPaid,
+    });
+  }
+
   if (paidPurchaseAlreadyApplied_(slug, stripeSessionId)) {
     return jsonResponse({ ok: true, alreadyApplied: true, totalPaidTickets: totalPaid });
   }
@@ -2031,6 +2100,8 @@ function handleApplyPaidTickets_(data) {
  * Mark every Entries row tied to a Stripe session as refunded:
  *   - sets extras.__refunded = true, __refundedAt, __refundId, __refundedBy (admin)
  *   - zeroes the totalEntries column so refunded tickets stop counting
+ *   - always writes a Script Properties deny-list marker so a late applyPaidTickets
+ *     cannot grant tickets when refund raced ahead of the Stripe webhook
  * Idempotent: re-calling on a session that's already refunded returns ok:true with rowsChanged:0.
  */
 function handleRefundPaidPurchase_(data) {
@@ -2044,12 +2115,26 @@ function handleRefundPaidPurchase_(data) {
     return jsonResponse({ ok: false, error: 'unauthorized' }, 401);
   }
 
+  // Always record the deny-list marker first — even when no paid rows exist yet
+  // (refund-before-fulfillment) or the Entries sheet is empty for this event.
+  markSessionRefunded_(slug, stripeSessionId, { refundId: refundId, actor: actor });
+
   var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
   if (!sh || sh.getLastRow() < 2) {
-    return jsonResponse({ ok: false, error: 'no_entries' }, 404);
+    return jsonResponse({
+      ok: true,
+      rowsChanged: 0,
+      ticketsRefunded: 0,
+      amountCents: 0,
+      currency: '',
+      poolsAffected: [],
+      alreadyRefunded: false,
+      refundMarkerOnly: true,
+    });
   }
   var lastCol = Math.max(13, sh.getLastColumn());
-  var values = sh.getRange(2, 1, sh.getLastRow() - 1, lastCol).getValues();
+  // Include the last data row — prior getLastRow()-1 skipped newest paid appends (and threw when only one data row).
+  var values = sh.getRange(2, 1, sh.getLastRow(), lastCol).getValues();
   var exCol = getEntriesExtrasColumnIndex_();
   var ticketsColIdx0 = 9;
 
@@ -2058,13 +2143,19 @@ function handleRefundPaidPurchase_(data) {
   var amountCentsTotal = 0;
   var firstCurrency = '';
   var poolsAffected = {};
+  var matchingRows = 0;
+  var alreadyRefundedRows = 0;
 
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
     if (String(row[1] || '').trim() !== slug) continue;
     var ex = parseEntryExtrasJson_(row[exCol]);
     if (String(ex.__stripeSessionId || '') !== stripeSessionId) continue;
-    if (ex.__refunded === true) continue;
+    matchingRows++;
+    if (ex.__refunded === true) {
+      alreadyRefundedRows++;
+      continue;
+    }
 
     var rowNum = i + 2;
     var oldTickets = Number(row[ticketsColIdx0]) || 0;
@@ -2092,7 +2183,8 @@ function handleRefundPaidPurchase_(data) {
     amountCents: amountCentsTotal,
     currency: firstCurrency || '',
     poolsAffected: Object.keys(poolsAffected),
-    alreadyRefunded: rowsChanged === 0,
+    alreadyRefunded: matchingRows > 0 && rowsChanged === 0 && alreadyRefundedRows === matchingRows,
+    refundMarkerOnly: matchingRows === 0,
   });
 }
 
