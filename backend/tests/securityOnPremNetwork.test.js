@@ -10,7 +10,7 @@ import {
 describe('ipToLong / cidrMatch', () => {
   it('encodes IPv4 octets as uint32', () => {
     assert.equal(ipToLong('0.0.0.0'), 0);
-    assert.equal(ipToLong('127.0.0.1'), (127 << 24) >>> 0);
+    assert.equal(ipToLong('127.0.0.1'), ((127 << 24) + 1) >>> 0);
     assert.equal(ipToLong('255.255.255.255'), 0xffffffff);
   });
 
