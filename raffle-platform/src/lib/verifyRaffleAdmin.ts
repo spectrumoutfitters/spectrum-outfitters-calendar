@@ -1,5 +1,5 @@
-import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
-import { getAppsScriptUrl } from "@/lib/env";
+import { fetchAppsScriptPost } from "./appsScriptFetch.ts";
+import { getAppsScriptUrl } from "./env.ts";
 
 /** Confirms admin key for slug via Apps Script (same path as stats). */
 export async function verifyRaffleAdminKey(slug: string, adminKey: string): Promise<boolean> {
