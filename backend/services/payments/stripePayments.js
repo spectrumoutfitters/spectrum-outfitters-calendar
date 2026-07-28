@@ -1,5 +1,11 @@
 import Stripe from 'stripe';
 import db from '../../database/db.js';
+import {
+  isOpenStripePaymentIntentStatus,
+  selectCandidateOpenPaymentRows,
+  shouldReuseRetrievedPaymentIntent,
+  stripePaymentIntentIdempotencyKey,
+} from '../../utils/stripePaymentIntentReuse.js';
 
 function getStripe() {
   const key = (process.env.STRIPE_SECRET_KEY || '').trim().replace(/^["']|["']$/g, '');
@@ -191,24 +197,95 @@ export async function createStripePaymentIntentForInvoice(crmInvoiceId) {
   const { providerCustomerId, error } = await getOrCreateStripeCustomerForCrmCustomer(invoice.crm_customer_id);
   if (error) return { error };
 
-  const intent = await stripe.paymentIntents.create({
-    amount: amountDue,
-    currency: 'usd',
-    customer: providerCustomerId,
-    automatic_payment_methods: { enabled: true },
-    metadata: {
-      crm_invoice_id: String(crmInvoiceId),
-      crm_customer_id: String(invoice.crm_customer_id),
-      shopmonkey_order_id: String(invoice.shopmonkey_order_id || ''),
-    },
-  });
+  // Reuse an existing open PaymentIntent for this amount so refresh / multi-tab
+  // create-intent calls cannot leave multiple full-balance charges payable.
+  const priorRows = await db.allAsync(
+    `SELECT id, provider_payment_intent_id, amount_cents, status
+     FROM crm_invoice_payments
+     WHERE crm_invoice_id = ? AND provider = 'stripe'
+       AND provider_payment_intent_id IS NOT NULL
+     ORDER BY datetime(created_at) DESC, id DESC`,
+    [crmInvoiceId]
+  ).catch(() => []);
 
-  await db.runAsync(
-    `INSERT INTO crm_invoice_payments
-      (crm_invoice_id, provider, amount_cents, payment_method_type, provider_payment_intent_id, status, raw_json)
-     VALUES (?, 'stripe', ?, 'card', ?, ?, ?)`,
-    [crmInvoiceId, amountDue, intent.id, intent.status || 'created', JSON.stringify(intent)]
-  ).catch(() => {});
+  for (const row of selectCandidateOpenPaymentRows(priorRows, amountDue)) {
+    try {
+      const existing = await stripe.paymentIntents.retrieve(row.provider_payment_intent_id);
+      if (shouldReuseRetrievedPaymentIntent(existing, amountDue)) {
+        await db.runAsync(
+          `UPDATE crm_invoice_payments
+           SET status = ?, amount_cents = ?, raw_json = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [existing.status || row.status, amountDue, JSON.stringify(existing), row.id]
+        ).catch(() => {});
+        return { clientSecret: existing.client_secret, amountDueCents: amountDue, reused: true };
+      }
+      // Only cancel when the open intent is for a stale amount. Same-amount opens
+      // must not be canceled before create(): the idempotency key would replay the
+      // canceled PaymentIntent and leave no payable client secret.
+      if (
+        isOpenStripePaymentIntentStatus(existing.status) &&
+        Math.round(Number(existing.amount)) !== amountDue
+      ) {
+        await stripe.paymentIntents.cancel(existing.id).catch(() => {});
+        await db.runAsync(
+          `UPDATE crm_invoice_payments
+           SET status = 'canceled', updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [row.id]
+        ).catch(() => {});
+      } else if (existing?.status && !isOpenStripePaymentIntentStatus(existing.status)) {
+        await db.runAsync(
+          `UPDATE crm_invoice_payments
+           SET status = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [existing.status, row.id]
+        ).catch(() => {});
+      }
+    } catch {
+      // Fall through to create a new intent if retrieve/cancel fails.
+    }
+  }
+
+  const intent = await stripe.paymentIntents.create(
+    {
+      amount: amountDue,
+      currency: 'usd',
+      customer: providerCustomerId,
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        crm_invoice_id: String(crmInvoiceId),
+        crm_customer_id: String(invoice.crm_customer_id),
+        shopmonkey_order_id: String(invoice.shopmonkey_order_id || ''),
+      },
+    },
+    {
+      // Collapses concurrent create-intent races for the same invoice+amount.
+      idempotencyKey: stripePaymentIntentIdempotencyKey(crmInvoiceId, amountDue),
+    }
+  );
+
+  const existingIntentRow = await db.getAsync(
+    `SELECT id FROM crm_invoice_payments
+     WHERE provider = 'stripe' AND provider_payment_intent_id = ?`,
+    [intent.id]
+  ).catch(() => null);
+
+  if (existingIntentRow?.id) {
+    await db.runAsync(
+      `UPDATE crm_invoice_payments
+       SET amount_cents = ?, status = ?, raw_json = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [amountDue, intent.status || 'created', JSON.stringify(intent), existingIntentRow.id]
+    ).catch(() => {});
+  } else {
+    await db.runAsync(
+      `INSERT INTO crm_invoice_payments
+        (crm_invoice_id, provider, amount_cents, payment_method_type, provider_payment_intent_id, status, raw_json)
+       VALUES (?, 'stripe', ?, 'card', ?, ?, ?)`,
+      [crmInvoiceId, amountDue, intent.id, intent.status || 'created', JSON.stringify(intent)]
+    ).catch(() => {});
+  }
 
   return { clientSecret: intent.client_secret, amountDueCents: amountDue };
 }
