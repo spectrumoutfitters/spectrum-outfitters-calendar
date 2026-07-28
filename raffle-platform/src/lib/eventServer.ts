@@ -1,4 +1,4 @@
-import { getAppsScriptUrl } from "@/lib/env";
+import { getAppsScriptUrl } from "./env.ts";
 import type { EventConfig } from "@/lib/types";
 
 export type GetEventResponse =
