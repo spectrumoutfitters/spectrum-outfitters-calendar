@@ -2,6 +2,15 @@ import db from '../database/db.js';
 import { getHoustonDayOfWeek, getTodayInHouston } from './appTimezone.js';
 import { syncPayrollHistoryFromFile } from './payrollHistoryRecords.js';
 import { recordWeeklySplitPayRuns } from './payrollSplitRuns.js';
+import {
+  evaluatePayrollHistoryAutoSyncGate,
+  parsePayrollHistorySyncStatus,
+} from './payrollHistoryAutoSyncGate.js';
+
+export {
+  evaluatePayrollHistoryAutoSyncGate,
+  parsePayrollHistorySyncStatus,
+} from './payrollHistoryAutoSyncGate.js';
 
 const SETTING_KEY = 'payroll_history_last_auto_sync_date';
 const STATUS_KEY = 'payroll_history_last_sync_status';
@@ -31,12 +40,7 @@ async function setSyncStatus(status) {
 
 export async function readPayrollHistorySyncStatus() {
   const raw = await getSetting(STATUS_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+  return parsePayrollHistorySyncStatus(raw);
 }
 
 export async function runPayrollHistorySyncNow(reason = 'manual') {
@@ -75,13 +79,16 @@ export async function runPayrollHistorySyncNow(reason = 'manual') {
 export async function runPayrollHistoryAutoSyncIfDue(opts = {}) {
   const force = !!opts.force;
   const today = getTodayInHouston();
-  const dow = getHoustonDayOfWeek(today); // 6 = Saturday
-  if (!force && dow !== 6) {
-    return { ran: false, reason: 'not_saturday', today };
-  }
+  const dayOfWeek = getHoustonDayOfWeek(today); // 6 = Saturday
   const last = await getSetting(SETTING_KEY);
-  if (!force && last === today) {
-    return { ran: false, reason: 'already_ran_today', today };
+  const gate = evaluatePayrollHistoryAutoSyncGate({
+    force,
+    today,
+    dayOfWeek,
+    lastSyncDate: last,
+  });
+  if (!gate.shouldRun) {
+    return gate;
   }
   const result = await runPayrollHistorySyncNow('scheduled_saturday');
   await setSetting(SETTING_KEY, today);
@@ -113,4 +120,3 @@ export function startPayrollHistoryAutoSyncJob() {
     }
   }, SIX_HOURS_MS);
 }
-
