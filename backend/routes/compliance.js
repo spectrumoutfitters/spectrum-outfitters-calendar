@@ -11,6 +11,7 @@ import {
   addDaysInHouston,
 } from '../utils/appTimezone.js';
 import { normalizePayrollDisplayName } from '../utils/payrollDedupe.js';
+import { calculateComplianceDueDate } from '../utils/complianceDueDate.js';
 
 const router = express.Router();
 
@@ -23,48 +24,8 @@ function getTodayInCentral() {
   return getTodayInHouston();
 }
 
-// Calculate due date based on obligation rules
 function calculateDueDate(obligation, periodStart, periodEnd) {
-  const rules = JSON.parse(obligation.due_rule_json || '{}');
-  const endDate = new Date(periodEnd);
-  
-  if (obligation.frequency === 'monthly') {
-    // Monthly: due on specific day of following month
-    const dueDate = new Date(endDate);
-    dueDate.setMonth(dueDate.getMonth() + (rules.offset_months || 1));
-    dueDate.setDate(rules.day_of_month || obligation.due_day || 15);
-    return dueDate.toISOString().split('T')[0];
-  } else if (obligation.frequency === 'quarterly') {
-    // Quarterly: use quarter-specific due dates
-    const month = endDate.getMonth() + 1;
-    let quarter;
-    if (month <= 3) quarter = 'Q1';
-    else if (month <= 6) quarter = 'Q2';
-    else if (month <= 9) quarter = 'Q3';
-    else quarter = 'Q4';
-    
-    if (rules.quarters && rules.quarters[quarter]) {
-      const dueStr = rules.quarters[quarter].due;
-      const year = quarter === 'Q4' ? endDate.getFullYear() + 1 : endDate.getFullYear();
-      return `${year}-${dueStr}`;
-    }
-    // Fallback: last day of month after quarter
-    const dueDate = new Date(endDate);
-    dueDate.setMonth(dueDate.getMonth() + 1);
-    dueDate.setDate(0); // Last day of previous month (which is the next month's last day)
-    return dueDate.toISOString().split('T')[0];
-  } else if (obligation.frequency === 'annual') {
-    // Annual: due on specific date of following year
-    const dueYear = endDate.getFullYear() + 1;
-    const dueMonth = rules.due_month || 1;
-    const dueDay = rules.due_day || obligation.due_day || 31;
-    return `${dueYear}-${String(dueMonth).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`;
-  }
-  
-  // Default: 30 days after period end
-  const dueDate = new Date(endDate);
-  dueDate.setDate(dueDate.getDate() + 30);
-  return dueDate.toISOString().split('T')[0];
+  return calculateComplianceDueDate(obligation, periodStart, periodEnd);
 }
 
 // Generate period label
@@ -179,6 +140,21 @@ async function ensureInstances(io) {
           (obligation_id, period_start, period_end, period_label, due_date)
           VALUES (?, ?, ?, ?, ?)
         `, [obligation.id, period.start, period.end, periodLabel, dueDate]);
+
+        // Repair open instances that were stored with month-overflow due dates
+        // (e.g. Jan 31 period → Mar 15 instead of Feb 15). Do not rewrite paid/filed.
+        await db.runAsync(`
+          UPDATE compliance_instances
+          SET due_date = ?,
+              notified_due_soon = 0,
+              notified_overdue = 0,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE obligation_id = ?
+            AND period_start = ?
+            AND period_end = ?
+            AND status NOT IN ('paid', 'filed')
+            AND due_date != ?
+        `, [dueDate, obligation.id, period.start, period.end, dueDate]);
       } catch (e) {
         // Ignore duplicate errors
       }
