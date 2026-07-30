@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
-import { formatDateTime } from '../../utils/helpers';
+import { formatDateTime, formatDateInHouston, getTodayCentralTime } from '../../utils/helpers';
 import { useAuth } from '../../contexts/AuthContext';
 
 // Central Time Zone (Houston, Texas)
@@ -379,11 +379,25 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
               } else {
                 // No return entry found - if admin is editing, create the return entry
                 if (isAdmin && formData.lunch_return_clock_in) {
+                  const returnClockInUtc = centralToUTC(formData.lunch_return_clock_in);
+                  const returnHoustonDate = formatDateInHouston(returnClockInUtc);
+                  const todayHouston = getTodayCentralTime();
+
+                  // Historical open return entries become phantom active sessions
+                  // (wrong week_ending + block future clock-in / inflate hours on close).
+                  if (returnHoustonDate !== todayHouston) {
+                    setError(
+                      'No return-from-lunch entry exists for this day. Add or edit the afternoon work entry with both clock-in and clock-out instead of creating an open historical return.'
+                    );
+                    setLoading(false);
+                    return;
+                  }
+
                   console.log('Admin creating return entry for lunch break');
                   try {
                     const createResponse = await api.post('/time/entries', {
                       user_id: entry.user_id,
-                      clock_in: centralToUTC(formData.lunch_return_clock_in),
+                      clock_in: returnClockInUtc,
                       clock_out: null,
                       break_minutes: 0,
                       notes: null
