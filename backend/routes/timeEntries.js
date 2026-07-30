@@ -2,6 +2,7 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { calculateHours, getWeekEndingDate } from '../utils/helpers.js';
+import { resolveAdminCreatedTimeEntry } from '../utils/adminTimeEntryCreate.js';
 import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { sendPushToAdmins } from '../utils/pushNotifications.js';
 
@@ -1306,12 +1307,26 @@ router.post('/entries', requireAdmin, async (req, res) => {
     if (!user_id || !clock_in) {
       return res.status(400).json({ error: 'user_id and clock_in are required' });
     }
-    
-    const weekEnding = getWeekEndingDate();
+
+    const resolved = resolveAdminCreatedTimeEntry({ clock_in, clock_out });
+    if (!resolved.ok) {
+      return res.status(resolved.status || 400).json({ error: resolved.error });
+    }
+
+    // Open entries block clock-in; never create a second active session.
+    if (!resolved.resolvedClockOut) {
+      const existingOpen = await db.getAsync(
+        'SELECT id FROM time_entries WHERE user_id = ? AND clock_out IS NULL',
+        [user_id]
+      );
+      if (existingOpen) {
+        return res.status(400).json({ error: 'User already has an open time entry' });
+      }
+    }
     
     const result = await db.runAsync(
       'INSERT INTO time_entries (user_id, clock_in, clock_out, break_minutes, notes, week_ending_date) VALUES (?, ?, ?, ?, ?, ?)',
-      [user_id, clock_in, clock_out || null, break_minutes || 0, notes || null, weekEnding]
+      [user_id, clock_in, resolved.resolvedClockOut, break_minutes || 0, notes || null, resolved.weekEnding]
     );
     
     const entry = await db.getAsync('SELECT * FROM time_entries WHERE id = ?', [result.lastID]);
