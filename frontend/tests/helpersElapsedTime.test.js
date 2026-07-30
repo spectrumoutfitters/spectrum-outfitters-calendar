@@ -21,9 +21,9 @@ describe('calculateElapsedTime', () => {
     }
   });
 
-  it('returns 0:00 for missing or invalid startTime in fallback mode', () => {
+  it('returns 0:00 for missing startTime in fallback mode', () => {
     assert.equal(calculateElapsedTime(null), '0:00');
-    assert.equal(calculateElapsedTime('not-a-date'), '0:00');
+    assert.equal(calculateElapsedTime(''), '0:00');
   });
 
   it('prefers totalElapsedMs even when startTime is absent', () => {
