@@ -7,6 +7,7 @@ import { dirname } from 'path';
 import fs from 'fs';
 import { getPayrollDataPath } from '../utils/payrollDataPath.js';
 import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/payrollHistoryRecords.js';
+import { formatDateInHouston, getHoustonWeekMondayToSundayUtcRange } from '../utils/appTimezone.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -291,18 +292,10 @@ router.get('/sync/time-entries', requirePayrollAccess, async (req, res) => {
       return res.status(400).json({ error: 'week_ending_date is required' });
     }
 
-    // Calculate week start (Monday) and end (Sunday) from week_ending_date
-    const weekEnd = new Date(week_ending_date);
-    const dayOfWeek = weekEnd.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Days to get to Monday
-    const weekStart = new Date(weekEnd);
-    weekStart.setDate(weekEnd.getDate() - daysToSubtract);
-    weekStart.setHours(0, 0, 0, 0);
-    
-    const weekEndDate = new Date(weekEnd);
-    weekEndDate.setHours(23, 59, 59, 999);
+    // Houston Monday–Sunday week; compare UTC instants (not SQLite DATE which is UTC-day)
+    const { startIso, endExclusiveIso } = getHoustonWeekMondayToSundayUtcRange(week_ending_date);
 
-    // Get time entries for the week (Monday to Sunday)
+    // Get time entries for the week (Monday to Sunday, Houston)
     let query = `
       SELECT 
         te.*,
@@ -312,11 +305,11 @@ router.get('/sync/time-entries', requirePayrollAccess, async (req, res) => {
         u.weekly_salary
       FROM time_entries te
       JOIN users u ON te.user_id = u.id
-      WHERE DATE(te.clock_in) >= DATE(?)
-        AND DATE(te.clock_in) <= DATE(?)
+      WHERE te.clock_in >= ?
+        AND te.clock_in < ?
         AND te.clock_out IS NOT NULL
     `;
-    const params = [weekStart.toISOString(), weekEndDate.toISOString()];
+    const params = [startIso, endExclusiveIso];
 
     if (user_id) {
       query += ' AND te.user_id = ?';
@@ -337,7 +330,7 @@ router.get('/sync/time-entries', requirePayrollAccess, async (req, res) => {
         user_id: entry.user_id,
         full_name: entry.full_name,
         username: entry.username,
-        date: entry.clock_in.split('T')[0],
+        date: formatDateInHouston(entry.clock_in),
         clock_in: entry.clock_in,
         clock_out: entry.clock_out,
         hours: Math.max(0, hours),
@@ -386,16 +379,8 @@ router.post('/sync/import-hours', requirePayrollAccess, async (req, res) => {
       return res.status(400).json({ error: 'week_ending_date is required' });
     }
 
-    // Calculate week start (Monday) and end (Sunday) from week_ending_date
-    const weekEnd = new Date(week_ending_date);
-    const dayOfWeek = weekEnd.getDay();
-    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const weekStart = new Date(weekEnd);
-    weekStart.setDate(weekEnd.getDate() - daysToSubtract);
-    weekStart.setHours(0, 0, 0, 0);
-    
-    const weekEndDate = new Date(weekEnd);
-    weekEndDate.setHours(23, 59, 59, 999);
+    // Houston Monday–Sunday week; compare UTC instants (not SQLite DATE which is UTC-day)
+    const { startIso, endExclusiveIso } = getHoustonWeekMondayToSundayUtcRange(week_ending_date);
 
     // Reuse the time-entries query logic
     let query = `
@@ -407,11 +392,11 @@ router.post('/sync/import-hours', requirePayrollAccess, async (req, res) => {
         u.weekly_salary
       FROM time_entries te
       JOIN users u ON te.user_id = u.id
-      WHERE DATE(te.clock_in) >= DATE(?)
-        AND DATE(te.clock_in) <= DATE(?)
+      WHERE te.clock_in >= ?
+        AND te.clock_in < ?
         AND te.clock_out IS NOT NULL
     `;
-    const params = [weekStart.toISOString(), weekEndDate.toISOString()];
+    const params = [startIso, endExclusiveIso];
 
     if (user_id) {
       query += ' AND te.user_id = ?';
@@ -432,7 +417,7 @@ router.post('/sync/import-hours', requirePayrollAccess, async (req, res) => {
         user_id: entry.user_id,
         full_name: entry.full_name,
         username: entry.username,
-        date: entry.clock_in.split('T')[0],
+        date: formatDateInHouston(entry.clock_in),
         clock_in: entry.clock_in,
         clock_out: entry.clock_out,
         hours: Math.max(0, hours),

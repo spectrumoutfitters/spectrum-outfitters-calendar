@@ -9,6 +9,7 @@ import {
   getWeekStartHouston,
   getWeekEndingFridayHouston,
   addDaysInHouston,
+  houstonInclusiveDateRangeToUtc,
 } from '../utils/appTimezone.js';
 import { normalizePayrollDisplayName } from '../utils/payrollDedupe.js';
 
@@ -1094,15 +1095,16 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
       // Use weekly salary directly
       employeeCost = parseFloat(employee.weekly_salary);
     } else if (employee.hourly_rate && employee.hourly_rate > 0) {
-      // Calculate from time entries
+      // Inclusive Houston calendar days → UTC instant range (DATE(clock_in) is UTC-day and drops evening punches)
+      const { startIso, endExclusiveIso } = houstonInclusiveDateRangeToUtc(weekStart, weekEnd);
       timeEntries = await db.allAsync(`
         SELECT clock_in, clock_out, break_minutes
         FROM time_entries
         WHERE user_id = ?
-          AND DATE(clock_in) >= ?
-          AND DATE(clock_in) <= ?
+          AND clock_in >= ?
+          AND clock_in < ?
           AND clock_out IS NOT NULL
-      `, [employee.id, weekStart, weekEnd]);
+      `, [employee.id, startIso, endExclusiveIso]);
 
       let totalHours = 0;
       for (const entry of timeEntries) {
