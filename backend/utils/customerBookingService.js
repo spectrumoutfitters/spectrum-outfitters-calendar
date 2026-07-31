@@ -8,6 +8,12 @@ import {
   isGoogleCalendarConnected,
   hasBookingOutboundMailScopes
 } from './googleCalendarService.js';
+import {
+  clampBookingBufferBeforeMinutes,
+  clampBookingHorizonDays,
+  clampBookingSlotMinutes,
+  uniqCalendarIds,
+} from './bookingConfigClamp.js';
 
 const SETTINGS_DEFAULTS = {
   booking_enabled: '0',
@@ -47,18 +53,6 @@ function uniqStrings(list) {
     if (!s || seen.has(s)) continue;
     seen.add(s);
     out.push(s);
-  }
-  return out;
-}
-
-function uniqCalendarIds(ids) {
-  const out = [];
-  const seen = new Set();
-  for (const x of ids || []) {
-    const id = typeof x === 'string' ? x.trim() : '';
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    out.push(id);
   }
   return out;
 }
@@ -188,9 +182,9 @@ export async function getResolvedBookingConfig() {
   await ensureDefaultSettingsSilently();
 
   const gcfg = await getGoogleCalendarConfig();
-  const slotMinutes = Math.min(480, Math.max(15, parseInt(await loadSetting('booking_slot_minutes'), 10) || 30));
-  const horizonDays = Math.min(60, Math.max(1, parseInt(await loadSetting('booking_horizon_days'), 10) || 21));
-  const bufferBefore = Math.min(120, Math.max(0, parseInt(await loadSetting('booking_buffer_before_minutes'), 10) || 0));
+  const slotMinutes = clampBookingSlotMinutes(await loadSetting('booking_slot_minutes'));
+  const horizonDays = clampBookingHorizonDays(await loadSetting('booking_horizon_days'));
+  const bufferBefore = clampBookingBufferBeforeMinutes(await loadSetting('booking_buffer_before_minutes'));
 
   let tz = (await loadSetting('booking_timezone')) || SETTINGS_DEFAULTS.booking_timezone;
   try {

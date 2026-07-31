@@ -1,6 +1,13 @@
 import jwt from 'jsonwebtoken';
 import db from '../database/db.js';
 import { ensureUserColumns } from '../database/startup.js';
+import {
+  requireAdmin,
+  requireMasterAdmin,
+  requirePayrollAccess,
+} from '../utils/authGates.js';
+
+export { requireAdmin, requireMasterAdmin, requirePayrollAccess };
 
 export const authenticateToken = async (req, res, next) => {
   // Prefer Authorization header so a stale `token` cookie cannot block a valid Bearer (local dev / rotated secrets).
@@ -33,38 +40,3 @@ export const authenticateToken = async (req, res, next) => {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 };
-
-export const requireAdmin = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  const isAdmin = req.user.role === 'admin' || req.user.is_master_admin === true;
-  if (!isAdmin) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-};
-
-export const requireMasterAdmin = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  if (req.user.role !== 'admin' || !req.user.is_master_admin) {
-    return res.status(403).json({ error: 'Master admin access required' });
-  }
-  next();
-};
-
-export const requirePayrollAccess = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  if (!req.user.payroll_access && !req.user.is_master_admin) {
-    return res.status(403).json({ error: 'Payroll access denied. Contact master admin.' });
-  }
-  next();
-};
-

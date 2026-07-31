@@ -1,6 +1,6 @@
-import { computeTicketsFromBonuses, DEFAULT_BONUS_RULES } from "@/lib/bonusDefaults";
+import { computeTicketsFromBonuses, DEFAULT_BONUS_RULES } from "./bonusDefaults.ts";
 
-export { computeTicketsFromBonuses, DEFAULT_BONUS_RULES, resolveBonusRules } from "@/lib/bonusDefaults";
+export { computeTicketsFromBonuses, DEFAULT_BONUS_RULES, resolveBonusRules } from "./bonusDefaults.ts";
 
 /** @deprecated kept only for legacy entries that referenced these IDs. */
 export const BONUS_WEIGHTS = {
