@@ -3,6 +3,8 @@
  * All "today", week boundaries, and date arithmetic use this timezone regardless of server location.
  */
 
+import { DateTime } from 'luxon';
+
 export const APP_TIMEZONE = 'America/Chicago';
 
 /**
@@ -110,4 +112,43 @@ export function getWeekEndingFridayHouston(dateStr) {
   const dayOfWeek = getHoustonDayOfWeek(dateStr);
   const daysToFriday = dayOfWeek <= 5 ? (5 - dayOfWeek) : (5 - dayOfWeek + 7);
   return addDaysInHouston(dateStr, daysToFriday);
+}
+
+/**
+ * Convert an inclusive Houston calendar-date range (YYYY-MM-DD) into UTC ISO bounds
+ * suitable for comparing against stored UTC `clock_in` timestamps.
+ *
+ * Prefer `clock_in >= startIso AND clock_in < endExclusiveIso` over SQLite
+ * `DATE(clock_in)`, which buckets by the UTC calendar day and drops evening
+ * Houston punches into the next UTC date.
+ */
+export function houstonInclusiveDateRangeToUtc(startYmd, endYmdInclusive) {
+  const start = String(startYmd || '').trim().slice(0, 10);
+  const end = String(endYmdInclusive || '').trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    throw new Error('houstonInclusiveDateRangeToUtc requires YYYY-MM-DD start and end');
+  }
+  const startIso = DateTime.fromISO(start, { zone: APP_TIMEZONE }).startOf('day').toUTC().toISO();
+  const endExclusiveIso = DateTime.fromISO(end, { zone: APP_TIMEZONE })
+    .plus({ days: 1 })
+    .startOf('day')
+    .toUTC()
+    .toISO();
+  return { startIso, endExclusiveIso };
+}
+
+/**
+ * Monday–Sunday Houston week containing `weekEndingDate` (any day in the week, typically Sunday).
+ * Returns Houston YYYY-MM-DD bounds plus UTC ISO range for time-entry queries.
+ */
+export function getHoustonWeekMondayToSundayUtcRange(weekEndingDate) {
+  const weekEndSunday = getWeekEndingSundayHouston(weekEndingDate);
+  const weekStartMonday = addDaysInHouston(weekEndSunday, -6);
+  const { startIso, endExclusiveIso } = houstonInclusiveDateRangeToUtc(weekStartMonday, weekEndSunday);
+  return {
+    weekStartMonday,
+    weekEndSunday,
+    startIso,
+    endExclusiveIso
+  };
 }
