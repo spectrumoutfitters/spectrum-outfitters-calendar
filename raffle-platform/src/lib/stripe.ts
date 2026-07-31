@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+export { getRaffleSiteOrigin } from "./env.ts";
 
 let cached: Stripe | null = null;
 
@@ -11,13 +12,4 @@ export function getStripeClient(): Stripe {
   }
   cached = new Stripe(key);
   return cached;
-}
-
-/** Site origin used for Stripe success/cancel return URLs. */
-export function getRaffleSiteOrigin(): string {
-  const fromEnv =
-    process.env.NEXT_PUBLIC_RAFFLE_SITE_URL?.trim() ||
-    process.env.RAFFLE_SITE_URL?.trim() ||
-    "";
-  return fromEnv.replace(/\/$/, "");
 }
