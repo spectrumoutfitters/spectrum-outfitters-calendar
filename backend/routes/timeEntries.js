@@ -2,6 +2,7 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { calculateHours, getWeekEndingDate } from '../utils/helpers.js';
+import { isDuplicateOfLunchWorkEntry } from '../utils/lunchEntryDedupe.js';
 import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { sendPushToAdmins } from '../utils/pushNotifications.js';
 
@@ -449,25 +450,18 @@ router.get('/current', async (req, res) => {
     totalElapsedMs = 0;
     
     // Separate entries into work entries and return entries (same as grouped view)
-    // IMPORTANT: Filter out duplicates - if a lunch break entry exists, it represents all work
-    // from its clock_in to clock_out, so any other entry that starts before the lunch break's
-    // clock_out should be excluded (same logic as grouped view)
+    // IMPORTANT: Filter out duplicates of the lunch-tagged morning session only
+    // (starts inside [lunch.clock_in, lunch.clock_out)). Earlier non-overlapping
+    // sessions must be kept — same logic as grouped view.
     const workEntries = todayEntriesFiltered.filter(entry => {
       if (returnEntryIds.has(entry.id)) return false; // Exclude return entries
-      
-      // Check if this entry is a duplicate of a lunch break entry
-      // A lunch break entry represents work from its clock_in to clock_out
-      // So any entry that starts before a lunch break's clock_out is a duplicate
-      const entryInTime = new Date(entry.clock_in);
+
       for (const lunchEntry of lunchBreakEntries) {
-        if (!lunchEntry.clock_out || entry.id === lunchEntry.id) continue;
-        const lunchOutTime = new Date(lunchEntry.clock_out);
-        // If this entry starts before the lunch break's clock_out, it's a duplicate
-        if (entryInTime < lunchOutTime) {
-          return false; // Exclude duplicate
+        if (isDuplicateOfLunchWorkEntry(entry, lunchEntry)) {
+          return false;
         }
       }
-      return true; // Include this entry
+      return true;
     });
     const returnEntries = todayEntriesFiltered.filter(entry => returnEntryIds.has(entry.id));
     
@@ -862,25 +856,20 @@ router.get('/entries/grouped', async (req, res) => {
         }
       } else {
         // Regular work entry - only add if it's NOT a duplicate of a lunch break entry FROM THE SAME DATE
-        // A lunch break entry represents work from its clock_in to clock_out
-        // So skip any entry that starts before a lunch break entry's clock_out (for the same user on the same date)
+        // A lunch break entry represents work from its clock_in to clock_out; skip only
+        // entries that start inside that window (not earlier non-overlapping sessions).
         let isDuplicate = false;
-        
+
         // Check lunch breaks for this user ON THE SAME DATE only
         const userLunchBreaks = lunchBreakByUser[entry.user_id] || [];
         for (const lunchEntry of userLunchBreaks) {
           if (!lunchEntry.clock_out) continue;
-          
+
           // CRITICAL: Only compare to lunch breaks from the same date
           const lunchDate = extractCentralTimeDate(lunchEntry.clock_in);
           if (lunchDate !== date) continue;
-          
-          const entryInTime = new Date(entry.clock_in);
-          const lunchOutTime = new Date(lunchEntry.clock_out);
-          
-          // If this entry starts before the lunch break's clock_out, it's a duplicate
-          // The lunch break entry already represents all work from its clock_in to clock_out
-          if (entryInTime < lunchOutTime) {
+
+          if (isDuplicateOfLunchWorkEntry(entry, lunchEntry)) {
             isDuplicate = true;
             break;
           }
