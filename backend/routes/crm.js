@@ -9,6 +9,13 @@ import {
   scheduleBackfillWorker,
   syncShopmonkeyOrderToCrm,
 } from '../services/crm/shopmonkeyCrmSync.js';
+import {
+  bucketInvoiceLineCents,
+  invoiceTotalCents,
+  normalizeLineType,
+  paymentStatusFromPaid,
+  toInt
+} from '../utils/crmInvoiceLineMath.js';
 
 const router = express.Router();
 
@@ -19,25 +26,10 @@ router.use(authenticateToken);
 // Ensure backfill worker loop is running (cheap idempotent call)
 scheduleBackfillWorker();
 
-function toInt(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.round(n) : null;
-}
-
 function cleanStr(v) {
   const s = v == null ? '' : String(v);
   const t = s.trim();
   return t ? t : null;
-}
-
-function normalizeLineType(v) {
-  const t = String(v || '').trim().toLowerCase();
-  if (!t) return 'part';
-  if (t.startsWith('lab')) return 'labor';
-  if (t.startsWith('fee') || t === 'misc') return 'fee';
-  if (t.startsWith('tax')) return 'fee';
-  if (t.startsWith('par')) return 'part';
-  return t;
 }
 
 function baseAppUrl(req) {
@@ -62,21 +54,9 @@ async function recalcInvoiceTotals(invoiceId) {
     [invoiceId]
   );
 
-  let parts = 0;
-  let labor = 0;
-  let fees = 0;
-
-  for (const it of items || []) {
-    const cents = toInt(it?.total_cents) || 0;
-    const type = normalizeLineType(it?.line_type);
-    if (type === 'labor') labor += cents;
-    else if (type === 'fee') fees += cents;
-    else parts += cents;
-  }
-
+  const { parts, labor, fees } = bucketInvoiceLineCents(items);
   const inv = await db.getAsync('SELECT tax_cents FROM crm_invoices WHERE id = ?', [invoiceId]);
-  const tax = toInt(inv?.tax_cents) || 0;
-  const total = parts + labor + fees + tax;
+  const total = invoiceTotalCents({ parts, labor, fees }, inv?.tax_cents);
 
   await db.runAsync(
     `UPDATE crm_invoices
@@ -94,7 +74,7 @@ async function recalcInvoiceTotals(invoiceId) {
       [invoiceId]
     );
     const paid = toInt(paidRow?.paid) || 0;
-    const paymentStatus = paid >= total && total > 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
+    const paymentStatus = paymentStatusFromPaid(paid, total);
     await db.runAsync(
       `UPDATE crm_invoices
        SET payment_status = ?, paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE paid_at END
