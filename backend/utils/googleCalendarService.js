@@ -1,6 +1,15 @@
 import { google } from 'googleapis';
 import crypto from 'crypto';
 import db from '../database/db.js';
+import {
+  addDaysDateOnly,
+  eventToScheduleDates,
+  isShopClosedEvent,
+  normalizeText,
+  parseTypeFromSummary,
+  shouldSyncEntryToGoogle,
+  toDateOnly
+} from './googleCalendarScheduleSync.js';
 
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
@@ -8,27 +17,14 @@ export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
 export const USERINFO_EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email';
 export const GOOGLE_BOOKING_SCOPES = [CALENDAR_SCOPE, GMAIL_SEND_SCOPE, USERINFO_EMAIL_SCOPE];
 
+export { shouldSyncEntryToGoogle };
+
 const SCOPES = [...GOOGLE_BOOKING_SCOPES];
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 function nowIso() {
   return new Date().toISOString();
-}
-
-function toDateOnly(value) {
-  if (!value) return null;
-  // value could be 'YYYY-MM-DD' or ISO datetime
-  if (typeof value === 'string' && value.length >= 10) return value.slice(0, 10);
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString().slice(0, 10);
-}
-
-function addDaysDateOnly(dateOnly, days) {
-  const d = new Date(`${dateOnly}T00:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
 }
 
 function getRedirectUri() {
@@ -369,10 +365,6 @@ function typeLabel(type) {
   return labels[type] || type || 'Other';
 }
 
-function normalizeText(s) {
-  return (s || '').toLowerCase();
-}
-
 /** Match user by Google organizer email (case-insensitive). */
 async function findUserIdByEmail(email) {
   if (!email || typeof email !== 'string') return null;
@@ -401,13 +393,6 @@ async function findUserIdFromEventText(text) {
     if (u.email && haystack.includes(normalizeText(u.email))) return u.id;
   }
   return null;
-}
-
-export function shouldSyncEntryToGoogle(entry) {
-  if (!entry) return false;
-  if (entry.status === 'pending') return false;
-  if (entry.type === 'time_off_request') return false;
-  return true;
 }
 
 export async function pushEventToGoogle(entry) {
@@ -478,41 +463,6 @@ export async function deleteEventFromGoogle(googleEventId) {
     calendarId,
     eventId: googleEventId
   });
-}
-
-function eventToScheduleDates(ev) {
-  if (ev?.start?.date && ev?.end?.date) {
-    const start = ev.start.date;
-    // end is exclusive for all-day events
-    const inclusiveEnd = addDaysDateOnly(ev.end.date, -1);
-    return { start_date: start, end_date: inclusiveEnd };
-  }
-
-  // Timed event: collapse to date-only range
-  const startDt = ev?.start?.dateTime || ev?.start?.date;
-  const endDt = ev?.end?.dateTime || ev?.end?.date || startDt;
-  const start = toDateOnly(startDt);
-  const end = toDateOnly(endDt) || start;
-  return { start_date: start, end_date: end };
-}
-
-function parseTypeFromSummary(summary) {
-  const s = normalizeText(summary);
-  if (s.includes('vacation')) return 'vacation';
-  if (s.includes('sick')) return 'sick_leave';
-  if (s.includes('personal')) return 'personal_leave';
-  if (s.includes('training')) return 'training';
-  if (s.includes('meeting')) return 'meeting';
-  if (s.includes('out of office') || s.includes('ooo')) return 'out_of_office';
-  if (s.includes('approved time off')) return 'approved_time_off';
-  if (s.includes('day off')) return 'day_off';
-  return 'other';
-}
-
-function isShopClosedEvent(summary, description) {
-  const s = normalizeText(summary);
-  const d = normalizeText(description);
-  return s.includes('shop closed') || d.includes('shop closed');
 }
 
 async function upsertEntryFromGoogleEvent(ev, sourceCalendarId = null) {

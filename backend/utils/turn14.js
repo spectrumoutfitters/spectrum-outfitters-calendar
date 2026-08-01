@@ -6,6 +6,13 @@
  * Uses OAuth2 Client Credentials flow for authentication
  */
 
+import {
+  checkCircuitBreaker as checkBreakerState,
+  createCircuitBreakerState,
+  recordFailure as recordBreakerFailure,
+  recordSuccess as recordBreakerSuccess
+} from './turn14CircuitBreaker.js';
+
 // Turn14 API base URL - from official documentation: https://turn14.com/api/
 // Base URL: https://api.turn14.com/v1/
 const TURN14_API_BASE = process.env.TURN14_API_BASE_URL || 'https://api.turn14.com/v1';
@@ -20,42 +27,23 @@ let accessToken = null;
 let tokenExpiry = null;
 
 // Circuit breaker to prevent spamming on repeated failures
-let circuitBreaker = {
-  failures: 0,
-  lastFailure: null,
-  isOpen: false,
-  cooldown: 60000 // 1 minute cooldown after 3 failures
-};
+const circuitBreaker = createCircuitBreakerState();
 
 function checkCircuitBreaker() {
-  // If circuit is open and cooldown hasn't passed, reject immediately
-  if (circuitBreaker.isOpen) {
-    const timeSinceLastFailure = Date.now() - circuitBreaker.lastFailure;
-    if (timeSinceLastFailure < circuitBreaker.cooldown) {
-      throw new Error(`Turn14 API is temporarily disabled due to repeated failures. Please wait ${Math.ceil((circuitBreaker.cooldown - timeSinceLastFailure) / 1000)} seconds or check your API configuration.`);
-    } else {
-      // Cooldown passed, reset circuit breaker
-      circuitBreaker.isOpen = false;
-      circuitBreaker.failures = 0;
-    }
-  }
+  checkBreakerState(circuitBreaker);
 }
 
 function recordFailure() {
-  circuitBreaker.failures++;
-  circuitBreaker.lastFailure = Date.now();
-  
-  // Open circuit after 3 consecutive failures
-  if (circuitBreaker.failures >= 3) {
-    circuitBreaker.isOpen = true;
-    console.error(`[Turn14] Circuit breaker OPENED after ${circuitBreaker.failures} failures. API calls disabled for ${circuitBreaker.cooldown / 1000} seconds.`);
+  recordBreakerFailure(circuitBreaker);
+  if (circuitBreaker.isOpen) {
+    console.error(
+      `[Turn14] Circuit breaker OPENED after ${circuitBreaker.failures} failures. API calls disabled for ${circuitBreaker.cooldownMs / 1000} seconds.`
+    );
   }
 }
 
 function recordSuccess() {
-  // Reset on success
-  circuitBreaker.failures = 0;
-  circuitBreaker.isOpen = false;
+  recordBreakerSuccess(circuitBreaker);
 }
 
 /**
