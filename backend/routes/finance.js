@@ -2,7 +2,10 @@ import express from 'express';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import db from '../database/db.js';
 import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/payrollHistoryRecords.js';
-import { payrollHistoryRecordMatchesSource } from '../utils/payrollHistoryMatch.js';
+import {
+  payrollHistoryRecordMatchesSource,
+  payrollHistoryRecordStronglyMatchesSource,
+} from '../utils/payrollHistoryMatch.js';
 import { readPayrollEmployeesFromAnyPath } from '../utils/payrollDataPath.js';
 import { readPayrollHistorySyncStatus, runPayrollHistorySyncNow } from '../utils/payrollHistoryAutoSync.js';
 import { getSplitPayRunsBySource } from '../utils/payrollSplitRuns.js';
@@ -424,6 +427,21 @@ router.get('/reimbursements', async (req, res) => {
       })),
       ...peopleWithSplit.map(p => ({ source_type: 'payroll_person', source_id: p.id, name: p.full_name, expected_amount: parseFloat(p.split_reimbursable_amount) || 0, expected_period: p.split_reimbursable_period || 'weekly', notes: p.split_reimbursable_notes }))
     ];
+    // Name-only history attribution is only safe when one active split source owns the name
+    // (or the intended unique user + payroll_person pair that will later merge into one card).
+    const activeSourcesByNormName = new Map();
+    for (const s of sources) {
+      const n = normalizePayrollDisplayName(s.name);
+      if (!activeSourcesByNormName.has(n)) activeSourcesByNormName.set(n, []);
+      activeSourcesByNormName.get(n).push(s);
+    }
+    const hasUnambiguousNameOwnership = (normName) => {
+      const sameNameSources = activeSourcesByNormName.get(normName) || [];
+      if (sameNameSources.length === 1) return true;
+      if (sameNameSources.length !== 2) return false;
+      return sameNameSources.filter((s) => s.source_type === 'user').length === 1
+        && sameNameSources.filter((s) => s.source_type === 'payroll_person').length === 1;
+    };
     const totalReceivedBySource = {};
     for (const p of payments) {
       const key = `${p.source_type}:${p.source_id}`;
@@ -448,27 +466,25 @@ router.get('/reimbursements', async (req, res) => {
     };
 
     const sourceMatchesRecord = (rec, src) => {
-      if (payrollHistoryRecordMatchesSource(rec, src)) return true;
-      const empId = String(rec?.employee?.id || rec?.employeeId || rec?.employee_id || '').trim();
-      if (!empId) return false;
-      const linked = payrollEmployeeById.get(empId);
-      if (!linked) return false;
+      // Strong identity always wins — even when multiple active sources share a display name.
+      if (payrollHistoryRecordStronglyMatchesSource(rec, src)) return true;
 
-      if (src.source_type === 'user') {
+      const empId = String(rec?.employee?.id || rec?.employeeId || rec?.employee_id || '').trim();
+      const linked = empId ? payrollEmployeeById.get(empId) : null;
+      if (src.source_type === 'user' && linked) {
         // Strong link when Payroll employee carries calendarId from employee sync.
         if (String(linked.calendarId || '').trim() === String(src.source_id)) return true;
-        // Fallback to email/name from Payroll employees.json.
         const linkedEmail = normLower(linked.email);
         if (linkedEmail && src.email && linkedEmail === normLower(src.email)) return true;
-        const linkedName = linked.name || firstLastName(linked);
-        if (linkedName) {
-          return payrollHistoryRecordMatchesSource(
-            { employee: { name: linkedName } },
-            src
-          );
-        }
+      }
+
+      // Name-only attribution: refuse when more than one active split source would claim the row.
+      if (!hasUnambiguousNameOwnership(normalizePayrollDisplayName(src.name))) {
         return false;
       }
+
+      if (payrollHistoryRecordMatchesSource(rec, src)) return true;
+      if (!linked) return false;
 
       const linkedName = linked.name || firstLastName(linked);
       if (!linkedName) return false;
