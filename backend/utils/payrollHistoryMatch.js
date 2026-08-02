@@ -119,7 +119,7 @@ function employeeFirstLastName(emp) {
   return parts.map((p) => String(p).trim()).join(' ').trim();
 }
 
-export function payrollHistoryRecordMatchesSource(rec, src) {
+function recordDisplayFields(rec) {
   const emp = rec.employee || {};
   const stubEmp = rec.paystub?.employee || rec.paystubEmployee || {};
   const sel = rec.selectedEmployee || {};
@@ -150,19 +150,47 @@ export function payrollHistoryRecordMatchesSource(rec, src) {
     .join(' ')
     .trim();
 
-  const emailsMatch = () => {
-    const want = (src.email || '').trim().toLowerCase();
-    if (!want || !want.includes('@')) return false;
-    const candidates = [emp.email, emp.workEmail, stubEmp.email, sel.email, rec.email].filter(Boolean).map((x) => String(x).trim().toLowerCase());
-    return candidates.some((c) => c === want);
-  };
+  return { emp, stubEmp, sel, displayName, nameBlob };
+}
+
+function emailsMatchSource(rec, src, fields) {
+  const want = (src.email || '').trim().toLowerCase();
+  if (!want || !want.includes('@')) return false;
+  const { emp, stubEmp, sel } = fields;
+  const candidates = [emp.email, emp.workEmail, stubEmp.email, sel.email, rec.email]
+    .filter(Boolean)
+    .map((x) => String(x).trim().toLowerCase());
+  return candidates.some((c) => c === want);
+}
+
+/**
+ * Strong identity match: calendar/user id or email. Never name-only.
+ * Used so ambiguous same-name reimbursement sources can still claim their own
+ * history when Payroll System rows carry a linked id/email.
+ */
+export function payrollHistoryRecordStronglyMatchesSource(rec, src) {
+  if (!rec || !src) return false;
+  const fields = recordDisplayFields(rec);
 
   if (src.source_type === 'user') {
     const want = String(src.source_id);
     for (const id of recordEmployeeIds(rec)) {
       if (id === want) return true;
     }
-    if (emailsMatch()) return true;
+    if (emailsMatchSource(rec, src, fields)) return true;
+    return false;
+  }
+
+  // payroll_person rows have no durable calendar id in history exports today.
+  return false;
+}
+
+export function payrollHistoryRecordMatchesSource(rec, src) {
+  if (payrollHistoryRecordStronglyMatchesSource(rec, src)) return true;
+
+  const { displayName, nameBlob } = recordDisplayFields(rec);
+
+  if (src.source_type === 'user') {
     if (namesLikelyMatch(src.name, displayName)) return true;
     if (nameBlob && namesLikelyMatch(src.name, nameBlob)) return true;
     if (src.username && namesLikelyMatch(src.username, displayName)) return true;
