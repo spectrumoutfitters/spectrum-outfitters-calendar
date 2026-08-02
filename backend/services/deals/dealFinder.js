@@ -1,49 +1,10 @@
-function stripCdata(s) {
-  if (s == null) return '';
-  return String(s).replace(/^<!\\[CDATA\\[/, '').replace(/\\]\\]>$/, '');
-}
-
-function decodeXmlEntities(s) {
-  if (s == null) return '';
-  return String(s)
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-function extractFirstTag(xml, tag) {
-  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i');
-  const m = String(xml).match(re);
-  if (!m) return null;
-  return decodeXmlEntities(stripCdata(m[1]).trim());
-}
-
-function extractPriceFromText(text) {
-  if (!text) return null;
-  const t = String(text);
-  if (/\\bfree\\b/i.test(t)) return 0;
-  const m = t.match(/\\$\\s*(\\d+(?:\\.\\d{1,2})?)/);
-  if (!m) return null;
-  const n = Number.parseFloat(m[1]);
-  return Number.isFinite(n) ? n : null;
-}
-
-function normalizeQuery(s) {
-  return String(s || '')
-    .replace(/\\s+/g, ' ')
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .trim();
-}
-
-function buildItemQuery(item) {
-  const supplierPart = normalizeQuery(item?.supplier_part_number);
-  const name = normalizeQuery(item?.name);
-  if (supplierPart) return supplierPart;
-  return name;
-}
+import {
+  buildAmazonLink,
+  buildItemQuery,
+  extractPriceFromText,
+  normalizeQuery,
+  parseRssItems,
+} from '../../utils/dealFinderParse.js';
 
 async function fetchText(url, timeoutMs = 8000) {
   const ctrl = new AbortController();
@@ -64,20 +25,6 @@ async function fetchText(url, timeoutMs = 8000) {
   } finally {
     clearTimeout(t);
   }
-}
-
-function parseRssItems(xml) {
-  const text = String(xml || '');
-  const items = [];
-  // NOTE: use a single backslash to escape the forward slash in a regex literal.
-  const itemMatches = text.match(/<item[\s\S]*?<\/item>/gi) || [];
-  for (const raw of itemMatches) {
-    const title = extractFirstTag(raw, 'title');
-    const link = extractFirstTag(raw, 'link');
-    const pubDate = extractFirstTag(raw, 'pubDate');
-    items.push({ title: title || null, link: link || null, pubDate: pubDate || null });
-  }
-  return items.filter((i) => i.link);
 }
 
 async function findSlickdeals(query) {
@@ -110,15 +57,6 @@ async function findSlickdeals(query) {
   });
 }
 
-function buildAmazonLink(item, quantity = 1) {
-  const asin = normalizeQuery(item?.amazon_asin);
-  const url = normalizeQuery(item?.amazon_url);
-  if (url) return url;
-  if (!asin) return null;
-  // Add-to-cart URL (not guaranteed; best-effort).
-  return `https://www.amazon.com/gp/aws/cart/add.html?ASIN.1=${encodeURIComponent(asin)}&Quantity.1=${encodeURIComponent(String(quantity))}`;
-}
-
 export async function findDealsForInventoryItem(item) {
   const query = buildItemQuery(item);
 
@@ -147,4 +85,3 @@ export async function findDealsForInventoryItem(item) {
 
   return deals;
 }
-

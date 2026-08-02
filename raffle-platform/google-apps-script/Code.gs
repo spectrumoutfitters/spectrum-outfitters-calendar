@@ -433,6 +433,7 @@ function isValidRaffleId_(id) {
   return /^[a-zA-Z0-9_-]+$/.test(s);
 }
 
+/** Keep in sync with raffle-platform/src/lib/safeHttpsImageUrl.js */
 function isSafeHttpsImageUrl_(url) {
   var u = String(url || '').trim();
   if (!u) return true;
