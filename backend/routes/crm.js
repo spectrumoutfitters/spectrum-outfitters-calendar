@@ -9,6 +9,7 @@ import {
   scheduleBackfillWorker,
   syncShopmonkeyOrderToCrm,
 } from '../services/crm/shopmonkeyCrmSync.js';
+import { cancelOpenStripePaymentIntentsForInvoice } from '../services/payments/stripePayments.js';
 
 const router = express.Router();
 
@@ -104,6 +105,10 @@ async function recalcInvoiceTotals(invoiceId) {
   } catch {
     // ignore
   }
+
+  // Total may have dropped while a public pay page still holds a stale
+  // PaymentIntent client_secret for the previous amount due — cancel opens.
+  await cancelOpenStripePaymentIntentsForInvoice(invoiceId).catch(() => {});
 }
 
 async function nextInvoiceNumber() {

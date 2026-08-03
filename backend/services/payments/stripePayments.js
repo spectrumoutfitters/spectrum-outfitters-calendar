@@ -1,5 +1,10 @@
 import Stripe from 'stripe';
 import db from '../../database/db.js';
+import {
+  computeOverchargeRefundCents,
+  isOpenStripePaymentIntentStatus,
+  selectOpenPaymentRowsToCancel,
+} from '../../utils/stripeInvoiceAmountDueGuard.js';
 
 function getStripe() {
   const key = (process.env.STRIPE_SECRET_KEY || '').trim().replace(/^["']|["']$/g, '');
@@ -10,6 +15,57 @@ function getStripe() {
 function cents(n) {
   const x = Number(n);
   return Number.isFinite(x) ? Math.round(x) : null;
+}
+
+/**
+ * Cancel open Stripe PaymentIntents for an invoice after amount due drops
+ * (manual payment / total edit). Prevents a customer from confirming a stale
+ * client_secret for the old balance.
+ */
+export async function cancelOpenStripePaymentIntentsForInvoice(crmInvoiceId) {
+  const stripe = getStripe();
+  if (!stripe) return { canceled: 0 };
+
+  const invoiceId = Number(crmInvoiceId);
+  if (!Number.isFinite(invoiceId) || invoiceId <= 0) return { canceled: 0 };
+
+  const rows = await db.allAsync(
+    `SELECT id, provider_payment_intent_id, status
+     FROM crm_invoice_payments
+     WHERE crm_invoice_id = ? AND provider = 'stripe'
+       AND provider_payment_intent_id IS NOT NULL
+     ORDER BY datetime(created_at) DESC, id DESC`,
+    [invoiceId]
+  ).catch(() => []);
+
+  let canceled = 0;
+  for (const row of selectOpenPaymentRowsToCancel(rows)) {
+    try {
+      const existing = await stripe.paymentIntents.retrieve(row.provider_payment_intent_id);
+      if (!isOpenStripePaymentIntentStatus(existing?.status)) {
+        if (existing?.status) {
+          await db.runAsync(
+            `UPDATE crm_invoice_payments
+             SET status = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [existing.status, row.id]
+          ).catch(() => {});
+        }
+        continue;
+      }
+      await stripe.paymentIntents.cancel(existing.id);
+      await db.runAsync(
+        `UPDATE crm_invoice_payments
+         SET status = 'canceled', updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [row.id]
+      ).catch(() => {});
+      canceled += 1;
+    } catch {
+      // Intent may already be succeeded/canceled; leave row for webhook to reconcile.
+    }
+  }
+  return { canceled };
 }
 
 export async function getOrCreateStripeCustomerForCrmCustomer(crmCustomerId) {
@@ -219,16 +275,62 @@ export async function handleStripeEvent(event) {
 
   if (type === 'payment_intent.succeeded' || type === 'payment_intent.payment_failed') {
     const intentId = obj.id;
-    const status = obj.status || (type === 'payment_intent.succeeded' ? 'succeeded' : 'failed');
+    let status = obj.status || (type === 'payment_intent.succeeded' ? 'succeeded' : 'failed');
     const crmInvoiceId = obj.metadata?.crm_invoice_id ? Number(obj.metadata.crm_invoice_id) : null;
     if (!crmInvoiceId || !Number.isFinite(crmInvoiceId)) return { ok: true };
 
     const chargeId = obj.latest_charge || null;
+    let recordedAmountCents = cents(obj.amount);
+
+    // If amount due dropped after this PaymentIntent was created (e.g. cash
+    // payment recorded while the customer still had the old client_secret),
+    // refund the excess so the invoice is not overcharged.
+    if (type === 'payment_intent.succeeded') {
+      const invoice = await db.getAsync('SELECT total_cents FROM crm_invoices WHERE id = ?', [crmInvoiceId]);
+      const total = cents(invoice?.total_cents) || 0;
+      const paidOthersRow = await db.getAsync(
+        `SELECT SUM(amount_cents) AS paid
+         FROM crm_invoice_payments
+         WHERE crm_invoice_id = ?
+           AND status IN ('succeeded', 'paid')
+           AND (provider_payment_intent_id IS NULL OR provider_payment_intent_id != ?)`,
+        [crmInvoiceId, intentId]
+      );
+      const otherPaid = cents(paidOthersRow?.paid) || 0;
+      const charged = recordedAmountCents != null ? recordedAmountCents : 0;
+      const { keepCents, refundCents } = computeOverchargeRefundCents(total, otherPaid, charged);
+
+      if (refundCents > 0) {
+        const stripe = getStripe();
+        if (stripe) {
+          try {
+            await stripe.refunds.create({
+              payment_intent: intentId,
+              amount: refundCents,
+              reason: 'duplicate',
+              metadata: {
+                crm_invoice_id: String(crmInvoiceId),
+                reason: 'stale_payment_intent_amount_due_decreased',
+              },
+            });
+          } catch (err) {
+            console.error('Stripe overcharge refund failed:', err?.message || err);
+          }
+        }
+        recordedAmountCents = keepCents;
+        if (keepCents <= 0) status = 'refunded';
+      }
+    }
+
     await db.runAsync(
       `UPDATE crm_invoice_payments
-       SET status = ?, provider_charge_id = COALESCE(provider_charge_id, ?), raw_json = ?, updated_at = CURRENT_TIMESTAMP
+       SET status = ?,
+           amount_cents = COALESCE(?, amount_cents),
+           provider_charge_id = COALESCE(provider_charge_id, ?),
+           raw_json = ?,
+           updated_at = CURRENT_TIMESTAMP
        WHERE provider = 'stripe' AND provider_payment_intent_id = ?`,
-      [status, chargeId, JSON.stringify(obj), intentId]
+      [status, recordedAmountCents, chargeId, JSON.stringify(obj), intentId]
     ).catch(() => {});
 
     // Update invoice payment_status (simple: paid if any succeeded payments cover total)

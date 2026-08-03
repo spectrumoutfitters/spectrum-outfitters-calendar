@@ -2,6 +2,7 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import {
+  cancelOpenStripePaymentIntentsForInvoice,
   createStripePaymentIntentForInvoice,
   createStripeSetupIntent,
   detachStripePaymentMethod,
@@ -138,6 +139,12 @@ router.post('/invoices/:id/record-manual', async (req, res) => {
        VALUES (?, 'manual', ?, ?, 'paid', ?)`,
       [invoiceId, Math.round(amount), type, JSON.stringify({ ref })]
     );
+
+    // Amount due dropped — invalidate any open card PaymentIntents still payable
+    // for the previous balance (stale public pay-page client secrets).
+    await cancelOpenStripePaymentIntentsForInvoice(invoiceId).catch((err) => {
+      console.error('Cancel open PaymentIntents after manual payment failed:', err?.message || err);
+    });
 
     // Update invoice status
     const invoice = await db.getAsync('SELECT total_cents FROM crm_invoices WHERE id = ?', [invoiceId]);
