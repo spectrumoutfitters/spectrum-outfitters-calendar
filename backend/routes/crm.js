@@ -9,6 +9,12 @@ import {
   scheduleBackfillWorker,
   syncShopmonkeyOrderToCrm,
 } from '../services/crm/shopmonkeyCrmSync.js';
+import {
+  baseAppUrl,
+  buildInvoicePayUrl,
+  buildSecureShortUrl,
+  shortLinkBase,
+} from '../utils/crmPaymentLinkUrls.js';
 
 const router = express.Router();
 
@@ -38,20 +44,6 @@ function normalizeLineType(v) {
   if (t.startsWith('tax')) return 'fee';
   if (t.startsWith('par')) return 'part';
   return t;
-}
-
-function baseAppUrl(req) {
-  const env = (process.env.PUBLIC_APP_URL || process.env.FRONTEND_URL || '').trim().replace(/\/+$/, '');
-  if (env) return env;
-  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString().split(',')[0].trim();
-  const host = (req.headers['x-forwarded-host'] || req.headers.host || '').toString().split(',')[0].trim();
-  return host ? `${proto}://${host}` : '';
-}
-
-function shortLinkBase(req) {
-  const base = (process.env.SHORT_LINK_BASE_URL || '').trim().replace(/\/+$/, '');
-  if (base) return base;
-  return baseAppUrl(req);
 }
 
 async function recalcInvoiceTotals(invoiceId) {
@@ -525,8 +517,7 @@ router.post('/invoices/:id/payment-link', async (req, res) => {
     }
 
     const appUrl = baseAppUrl(req);
-    const payPath = `/pay/${link.token}`;
-    const payUrl = appUrl ? `${appUrl}${payPath}` : payPath;
+    const payUrl = buildInvoicePayUrl(appUrl, link.token);
 
     // Optional short link: /secure/:slug that redirects to payUrl
     let shortUrl = null;
@@ -549,8 +540,7 @@ router.post('/invoices/:id/payment-link', async (req, res) => {
     }
 
     if (link.slug) {
-      const base = shortLinkBase(req);
-      if (base) shortUrl = `${base}/secure/${link.slug}`;
+      shortUrl = buildSecureShortUrl(shortLinkBase(req), link.slug);
     }
 
     res.json({ token: link.token, pay_url: payUrl, short_url: shortUrl });
