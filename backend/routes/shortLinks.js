@@ -2,18 +2,13 @@ import express from 'express';
 import crypto from 'crypto';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import {
+  buildShortLinkFullUrl,
+  isValidAbsoluteUrl,
+  normalizeSlug,
+} from '../utils/shortLinkSlug.js';
 
 const router = express.Router();
-
-function normalizeSlug(input) {
-  if (!input) return '';
-  return String(input)
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-') // only allow a–z, 0–9, dash
-    .replace(/^-+|-+$/g, '')       // trim leading/trailing dashes
-    .slice(0, 50);
-}
 
 function generateRandomSlug() {
   // 10 random base36 chars from crypto for uniqueness
@@ -35,10 +30,7 @@ router.post('/api/links/shorten', authenticateToken, requireAdmin, async (req, r
   }
 
   // Basic URL validation; allow both http and https
-  try {
-    // eslint-disable-next-line no-new
-    new URL(target);
-  } catch {
+  if (!isValidAbsoluteUrl(target)) {
     return res.status(400).json({ error: 'target_url must be a valid URL (include http:// or https://)' });
   }
 
@@ -80,8 +72,7 @@ router.post('/api/links/shorten', authenticateToken, requireAdmin, async (req, r
     );
 
     const path = `/secure/${slug}`;
-    const base = (process.env.SHORT_LINK_BASE_URL || '').trim().replace(/\/+$/, '');
-    const fullUrl = base ? `${base}${path}` : undefined;
+    const fullUrl = buildShortLinkFullUrl(process.env.SHORT_LINK_BASE_URL, slug);
     res.json({
       slug,
       target_url: target,
