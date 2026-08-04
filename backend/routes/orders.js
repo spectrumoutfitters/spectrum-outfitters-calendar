@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { validateOrderItemLines } from '../utils/orderItemValidation.js';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -139,14 +140,21 @@ router.post('/', upload.single('photo'), async (req, res) => {
       return res.status(400).json({ error: 'Order must contain at least one item' });
     }
 
-    // Calculate total
+    const validated = validateOrderItemLines(items);
+    if (!validated.ok) {
+      return res.status(400).json({ error: validated.error });
+    }
+
+    // Validate quantities and resolve products before any writes
+    const resolvedItems = [];
     let totalAmount = 0;
-    for (const item of items) {
-      const product = await db.getAsync('SELECT price FROM products WHERE id = ? AND is_active = 1', [item.product_id]);
+    for (const line of validated.lines) {
+      const product = await db.getAsync('SELECT id, price FROM products WHERE id = ? AND is_active = 1', [line.product_id]);
       if (!product) {
-        return res.status(400).json({ error: `Product ${item.product_id} not found or inactive` });
+        return res.status(400).json({ error: `Product ${line.product_id} not found or inactive` });
       }
-      totalAmount += product.price * (item.quantity || 1);
+      totalAmount += product.price * line.quantity;
+      resolvedItems.push({ product_id: product.id, quantity: line.quantity, price: product.price });
     }
 
     const photoUrl = req.file ? `/uploads/orders/${req.file.filename}` : null;
@@ -160,11 +168,10 @@ router.post('/', upload.single('photo'), async (req, res) => {
     const orderId = orderResult.lastID;
 
     // Create order items
-    for (const item of items) {
-      const product = await db.getAsync('SELECT price FROM products WHERE id = ?', [item.product_id]);
+    for (const item of resolvedItems) {
       await db.runAsync(
         'INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)',
-        [orderId, item.product_id, item.quantity || 1, product.price]
+        [orderId, item.product_id, item.quantity, item.price]
       );
     }
 
@@ -296,26 +303,29 @@ router.put('/:id', requireAdmin, async (req, res) => {
     // Update items if provided
     let finalTotalAmount = existingOrder.total_amount;
     if (items !== undefined && Array.isArray(items)) {
-      // Delete existing order items
-      await db.runAsync('DELETE FROM order_items WHERE order_id = ?', [id]);
+      const validated = validateOrderItemLines(items);
+      if (!validated.ok) {
+        return res.status(400).json({ error: validated.error });
+      }
 
-      // Calculate new total and insert new items
+      // Validate + resolve every line before deleting existing rows (avoids empty/partial orders on error).
+      const resolvedItems = [];
       finalTotalAmount = 0;
-      for (const item of items) {
-        if (!item.product_id || !item.quantity) {
-          continue;
-        }
-        const product = await db.getAsync('SELECT price FROM products WHERE id = ?', [item.product_id]);
+      for (const line of validated.lines) {
+        const product = await db.getAsync('SELECT price FROM products WHERE id = ?', [line.product_id]);
         if (!product) {
-          return res.status(400).json({ error: `Product ${item.product_id} not found` });
+          return res.status(400).json({ error: `Product ${line.product_id} not found` });
         }
-        const itemPrice = item.price !== undefined ? parseFloat(item.price) : product.price;
-        const quantity = parseInt(item.quantity) || 1;
-        finalTotalAmount += itemPrice * quantity;
+        const itemPrice = line.priceOverride != null ? line.priceOverride : product.price;
+        finalTotalAmount += itemPrice * line.quantity;
+        resolvedItems.push({ product_id: line.product_id, quantity: line.quantity, price: itemPrice });
+      }
 
+      await db.runAsync('DELETE FROM order_items WHERE order_id = ?', [id]);
+      for (const item of resolvedItems) {
         await db.runAsync(
           'INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)',
-          [id, item.product_id, quantity, itemPrice]
+          [id, item.product_id, item.quantity, item.price]
         );
       }
 

@@ -1011,13 +1011,29 @@ router.post('/items/:id/use', async (req, res) => {
       return res.status(400).json({ error: 'Barcode does not match this item. Scan the correct item.' });
     }
 
-    const quantityBefore = row.quantity ?? 0;
-    const quantityAfter = Math.max(0, quantityBefore - quantityUsed);
+    const onHand = Number(row.quantity) || 0;
+    if (quantityUsed > onHand) {
+      return res.status(400).json({
+        error: `Cannot use ${quantityUsed}; only ${onHand} in stock.`
+      });
+    }
 
-    await db.runAsync(
-      `UPDATE inventory_items SET quantity = ?, last_counted_at = CURRENT_TIMESTAMP, last_counted_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [quantityAfter, req.user.id, id]
+    // Atomic decrement: concurrent scan-outs cannot overwrite each other or go negative.
+    const dec = await db.runAsync(
+      `UPDATE inventory_items
+       SET quantity = quantity - ?,
+           last_counted_at = CURRENT_TIMESTAMP,
+           last_counted_by = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND quantity >= ?`,
+      [quantityUsed, req.user.id, id, quantityUsed]
     );
+    if (!dec?.changes) {
+      return res.status(409).json({ error: 'Stock changed concurrently or is insufficient; refresh and retry.' });
+    }
+    const afterRow = await db.getAsync('SELECT quantity FROM inventory_items WHERE id = ?', [id]);
+    const quantityAfter = afterRow?.quantity ?? 0;
+    const quantityBefore = quantityAfter + quantityUsed;
 
     await db.runAsync(
       `INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'use')`,
@@ -1582,15 +1598,22 @@ router.post('/refill-requests/:id/receive', async (req, res) => {
     }
 
     const quantityBefore = row.current_quantity ?? 0;
-    const quantityAfter = quantityBefore + qty;
 
     await db.runAsync(
-      `UPDATE inventory_items SET quantity = ?, last_counted_at = CURRENT_TIMESTAMP, last_counted_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [quantityAfter, req.user.id, row.item_id]
+      `UPDATE inventory_items
+       SET quantity = quantity + ?,
+           last_counted_at = CURRENT_TIMESTAMP,
+           last_counted_by = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [qty, req.user.id, row.item_id]
     );
+    const afterRow = await db.getAsync('SELECT quantity FROM inventory_items WHERE id = ?', [row.item_id]);
+    const quantityAfter = afterRow?.quantity ?? quantityBefore + qty;
+
     await db.runAsync(
       `INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason, refill_request_id) VALUES (?, ?, ?, ?, 'refill_received', ?)`,
-      [row.item_id, quantityBefore, quantityAfter, req.user.id, id]
+      [row.item_id, quantityAfter - qty, quantityAfter, req.user.id, id]
     ).catch(() => {});
     await db.runAsync(
       `UPDATE inventory_refill_requests SET status = 'received', quantity_received = ?, received_at = CURRENT_TIMESTAMP, received_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -1632,13 +1655,28 @@ router.post('/use-on-task', async (req, res) => {
     const task = await db.getAsync('SELECT id FROM tasks WHERE id = ?', [taskId]);
     if (!task) return res.status(404).json({ error: 'Task not found' });
 
-    const quantityBefore = row.quantity ?? 0;
-    const quantityAfter = Math.max(0, quantityBefore - quantityUsed);
+    const onHand = Number(row.quantity) || 0;
+    if (quantityUsed > onHand) {
+      return res.status(400).json({
+        error: `Cannot use ${quantityUsed}; only ${onHand} in stock.`
+      });
+    }
 
-    await db.runAsync(
-      'UPDATE inventory_items SET quantity = ?, last_counted_at = CURRENT_TIMESTAMP, last_counted_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [quantityAfter, req.user.id, itemId]
+    const dec = await db.runAsync(
+      `UPDATE inventory_items
+       SET quantity = quantity - ?,
+           last_counted_at = CURRENT_TIMESTAMP,
+           last_counted_by = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND quantity >= ?`,
+      [quantityUsed, req.user.id, itemId, quantityUsed]
     );
+    if (!dec?.changes) {
+      return res.status(409).json({ error: 'Stock changed concurrently or is insufficient; refresh and retry.' });
+    }
+    const afterRow = await db.getAsync('SELECT quantity FROM inventory_items WHERE id = ?', [itemId]);
+    const quantityAfter = afterRow?.quantity ?? 0;
+    const quantityBefore = quantityAfter + quantityUsed;
 
     await db.runAsync(
       "INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'used_on_task')",
@@ -1808,18 +1846,23 @@ router.post('/batch-receive', async (req, res) => {
       const row = await db.getAsync('SELECT id, name, quantity FROM inventory_items WHERE id = ?', [itemId]);
       if (!row) continue;
 
-      const quantityBefore = row.quantity ?? 0;
-      const quantityAfter = quantityBefore + qty;
+      await db.runAsync(
+        `UPDATE inventory_items
+         SET quantity = quantity + ?,
+             last_counted_at = CURRENT_TIMESTAMP,
+             last_counted_by = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [qty, req.user.id, itemId]
+      );
+      const afterRow = await db.getAsync('SELECT quantity FROM inventory_items WHERE id = ?', [itemId]);
+      const quantityAfter = afterRow?.quantity ?? (Number(row.quantity) || 0) + qty;
+      const quantityBefore = quantityAfter - qty;
 
       await db.runAsync(
-        'UPDATE inventory_items SET quantity = ?, last_counted_at = CURRENT_TIMESTAMP, last_counted_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [quantityAfter, req.user.id, itemId]
-      );
-
-    await db.runAsync(
-      "INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'batch_received')",
-      [itemId, quantityBefore, quantityAfter, req.user.id]
-    ).catch(() => {});
+        "INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'batch_received')",
+        [itemId, quantityBefore, quantityAfter, req.user.id]
+      ).catch(() => {});
 
       results.push({ item_id: itemId, item_name: row.name, quantity_added: qty, new_quantity: quantityAfter });
     }

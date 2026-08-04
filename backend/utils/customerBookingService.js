@@ -473,6 +473,40 @@ export async function submitCustomerBooking(payload) {
     `Slot (${cfg.timezone}): ${payload.slot_start_iso}`
   ].filter((x) => x !== '');
 
+  // Claim the slot in SQLite before the Google insert so concurrent submits cannot
+  // both pass FreeBusy and create overlapping calendar events.
+  let bookingId = null;
+  try {
+    const insertResult = await db.runAsync(
+      `INSERT INTO customer_bookings
+       (customer_name, customer_phone, customer_email, vehicles_json, selected_services_json,
+        notes, slot_start_iso, slot_end_iso, timezone, google_event_id, google_write_calendar_id,
+        notify_emails_json, email_sent, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 0, 'pending')`,
+      [
+        name,
+        phone,
+        customer_email,
+        JSON.stringify(vehicles),
+        JSON.stringify(selectedIds),
+        notes,
+        slotNorm.startISO,
+        slotNorm.endISO,
+        cfg.timezone,
+        cfg.write_calendar_id,
+        JSON.stringify(notify)
+      ]
+    );
+    bookingId = insertResult?.lastID;
+  } catch (e) {
+    if (String(e?.message || '').includes('UNIQUE constraint')) {
+      const err = new Error('That slot was just taken. Please choose another.');
+      err.code = 'conflict';
+      throw err;
+    }
+    throw e;
+  }
+
   let google_event_id = null;
 
   try {
@@ -490,34 +524,19 @@ export async function submitCustomerBooking(payload) {
     });
     google_event_id = inserted.google_event_id || null;
   } catch (e) {
+    await db.runAsync('DELETE FROM customer_bookings WHERE id = ?', [bookingId]).catch(() => {});
     const err = new Error(e?.message || 'Could not create calendar event.');
     err.code = 'google_insert';
     err.cause = e;
     throw err;
   }
 
-  const insertResult = await db.runAsync(
-    `INSERT INTO customer_bookings
-     (customer_name, customer_phone, customer_email, vehicles_json, selected_services_json,
-      notes, slot_start_iso, slot_end_iso, timezone, google_event_id, google_write_calendar_id,
-      notify_emails_json, email_sent, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'confirmed')`,
-    [
-      name,
-      phone,
-      customer_email,
-      JSON.stringify(vehicles),
-      JSON.stringify(selectedIds),
-      notes,
-      slotNorm.startISO,
-      slotNorm.endISO,
-      cfg.timezone,
-      google_event_id,
-      cfg.write_calendar_id,
-      JSON.stringify(notify)
-    ]
+  await db.runAsync(
+    `UPDATE customer_bookings
+     SET google_event_id = ?, status = 'confirmed'
+     WHERE id = ?`,
+    [google_event_id, bookingId]
   );
-  const bookingId = insertResult?.lastID;
 
   const localWhen = slotNorm.startISO ? DateTime.fromISO(slotNorm.startISO, { zone: 'utc' }).setZone(cfg.timezone).toLocaleString(DateTime.DATETIME_FULL) : payload.slot_start_iso;
 

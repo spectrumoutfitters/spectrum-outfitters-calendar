@@ -24,4 +24,10 @@ export async function addCustomerBookingsTable() {
   `);
   await db.runAsync('CREATE INDEX IF NOT EXISTS idx_customer_bookings_created ON customer_bookings(created_at)').catch(() => {});
   await db.runAsync('CREATE INDEX IF NOT EXISTS idx_customer_bookings_google ON customer_bookings(google_event_id)').catch(() => {});
+  // Prevent concurrent FreeBusy TOCTOU double-books of the same write-calendar slot.
+  await db.runAsync(
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_customer_bookings_calendar_slot
+     ON customer_bookings(google_write_calendar_id, slot_start_iso)
+     WHERE status IS NULL OR status != 'cancelled'`
+  ).catch(() => {});
 }

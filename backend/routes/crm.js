@@ -9,6 +9,7 @@ import {
   scheduleBackfillWorker,
   syncShopmonkeyOrderToCrm,
 } from '../services/crm/shopmonkeyCrmSync.js';
+import { assertNonNegativeInvoiceMoney } from '../utils/crmInvoiceMoneyGuards.js';
 
 const router = express.Router();
 
@@ -436,12 +437,20 @@ router.put('/invoice-items/:id', async (req, res) => {
 
     const unitPriceCents = req.body?.unit_price_cents != null ? toInt(req.body.unit_price_cents) : null;
     const totalCents = req.body?.total_cents != null ? toInt(req.body.total_cents) : null;
+    const moneyCheck = assertNonNegativeInvoiceMoney(unitPriceCents, totalCents);
+    if (!moneyCheck.ok) {
+      return res.status(400).json({ error: moneyCheck.error });
+    }
 
     // Recompute total if quantity/unit updated but total not provided
     let computedTotal = totalCents;
     const q = quantity != null ? quantity : Number(existing.quantity) || 1;
     const u = unitPriceCents != null ? unitPriceCents : toInt(existing.unit_price_cents);
     if (computedTotal == null && u != null) computedTotal = Math.round(q * u);
+    const computedCheck = assertNonNegativeInvoiceMoney(null, computedTotal);
+    if (!computedCheck.ok) {
+      return res.status(400).json({ error: computedCheck.error });
+    }
 
     await db.runAsync(
       `UPDATE crm_invoice_items
