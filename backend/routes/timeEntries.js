@@ -4,23 +4,12 @@ import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { calculateHours, getWeekEndingDate } from '../utils/helpers.js';
 import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { sendPushToAdmins } from '../utils/pushNotifications.js';
+import { evaluateClockInGeofence } from '../utils/clockInGeofence.js';
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(authenticateToken);
-
-// Haversine formula — returns distance in meters between two lat/lng points
-function haversineMeters(lat1, lng1, lat2, lng2) {
-  const R = 6371000; // Earth radius in meters
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 // POST /api/time/clock-in - Clock in
 router.post('/clock-in', async (req, res) => {
@@ -53,36 +42,26 @@ router.post('/clock-in', async (req, res) => {
         db.getAsync("SELECT value FROM app_settings WHERE key = 'geofence_enforcement'"),
       ]);
 
-      const enforcement = geoEnforcement?.value || 'off';
+      const geo = evaluateClockInGeofence({
+        lat,
+        lng,
+        fenceLat: geoLat?.value,
+        fenceLng: geoLng?.value,
+        radiusMeters: geoRadius?.value || '300',
+        enforcement: geoEnforcement?.value || 'off',
+      });
 
-      if (enforcement !== 'off' && geoLat?.value && geoLng?.value) {
-        const fenceLat = parseFloat(geoLat.value);
-        const fenceLng = parseFloat(geoLng.value);
-        const radius = parseFloat(geoRadius?.value || '300');
+      distanceMeters = geo.distanceMeters;
+      locationVerified = geo.locationVerified;
+      geofenceWarning = geo.geofenceWarning;
 
-        distanceMeters = haversineMeters(
-          parseFloat(lat), parseFloat(lng),
-          fenceLat, fenceLng
-        );
-
-        if (distanceMeters <= radius) {
-          locationVerified = 1;
-        } else {
-          if (enforcement === 'hard') {
-            return res.status(403).json({
-              error: 'You must be at the shop to clock in.',
-              code: 'GEOFENCE_VIOLATION',
-              distanceMeters: Math.round(distanceMeters),
-              radiusMeters: radius
-            });
-          }
-          // soft enforcement — allow but warn
-          geofenceWarning = {
-            message: `You appear to be ${Math.round(distanceMeters)}m from the shop (limit: ${radius}m). Clock-in recorded but flagged.`,
-            distanceMeters: Math.round(distanceMeters),
-            radiusMeters: radius
-          };
-        }
+      if (!geo.allowed && geo.violation) {
+        return res.status(403).json({
+          error: geo.violation.error,
+          code: geo.violation.code,
+          distanceMeters: geo.violation.distanceMeters,
+          radiusMeters: geo.violation.radiusMeters,
+        });
       }
     }
 
