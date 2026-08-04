@@ -316,48 +316,80 @@ router.post('/:id/record-deduction', async (req, res) => {
     const week = (week_ending_date || '').trim();
     if (!week) return res.status(400).json({ error: 'week_ending_date is required (e.g. pay week ending Friday)' });
 
-    const plan = await db.getAsync('SELECT * FROM employee_shop_financing WHERE id = ?', [id]);
-    if (!plan) return res.status(404).json({ error: 'Plan not found' });
-    if (plan.status !== 'active') {
-      return res.status(400).json({ error: 'Only active plans can receive deductions' });
+    // Serialize concurrent deductions so two weeks cannot both read the same
+    // balance_due and overwrite each other (lost update underpays the plan).
+    await db.runAsync('BEGIN IMMEDIATE');
+    let payAmount;
+    let reasonNote;
+    try {
+      const plan = await db.getAsync('SELECT * FROM employee_shop_financing WHERE id = ?', [id]);
+      if (!plan) {
+        await db.runAsync('ROLLBACK').catch(() => {});
+        return res.status(404).json({ error: 'Plan not found' });
+      }
+      if (plan.status !== 'active') {
+        await db.runAsync('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: 'Only active plans can receive deductions' });
+      }
+
+      const bal = roundMoney(plan.balance_due);
+      if (bal <= 0) {
+        await db.runAsync('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: 'Balance is already zero' });
+      }
+
+      const dup = await db.getAsync(
+        'SELECT id FROM employee_shop_financing_deductions WHERE financing_id = ? AND week_ending_date = ?',
+        [id, week]
+      );
+      if (dup) {
+        await db.runAsync('ROLLBACK').catch(() => {});
+        return res.status(400).json({
+          error: `A deduction for week ending ${week} already exists for this plan.`
+        });
+      }
+
+      payAmount = amount != null ? roundMoney(amount) : roundMoney(plan.weekly_payment);
+      if (payAmount <= 0) {
+        await db.runAsync('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: 'Amount must be greater than 0' });
+      }
+      payAmount = Math.min(payAmount, bal);
+
+      const baseReason = (plan.deduction_reason || '').trim() || 'Shop financing repayment';
+      const extra = (extra_note || '').trim();
+      reasonNote = extra ? `${baseReason} — ${extra}` : baseReason;
+
+      await db.runAsync(
+        `INSERT INTO employee_shop_financing_deductions (financing_id, week_ending_date, amount, reason_note, applied_by)
+         VALUES (?, ?, ?, ?, ?)`,
+        [id, week, payAmount, reasonNote, req.user.id]
+      );
+
+      // Atomic arithmetic: never SET balance from a stale read.
+      const balUpdate = await db.runAsync(
+        `UPDATE employee_shop_financing
+         SET balance_due = ROUND(balance_due - ?, 2),
+             status = CASE WHEN ROUND(balance_due - ?, 2) <= 0 THEN 'paid_off' ELSE 'active' END,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND status = 'active' AND balance_due >= ?`,
+        [payAmount, payAmount, id, payAmount]
+      );
+      if (!balUpdate?.changes) {
+        await db.runAsync('ROLLBACK').catch(() => {});
+        return res.status(409).json({ error: 'Balance changed concurrently; retry the deduction.' });
+      }
+
+      await db.runAsync('COMMIT');
+    } catch (txErr) {
+      await db.runAsync('ROLLBACK').catch(() => {});
+      if (String(txErr?.message || '').includes('UNIQUE constraint')) {
+        return res.status(400).json({
+          error: `A deduction for week ending ${week} already exists for this plan.`
+        });
+      }
+      throw txErr;
     }
-
-    const bal = roundMoney(plan.balance_due);
-    if (bal <= 0) return res.status(400).json({ error: 'Balance is already zero' });
-
-    const dup = await db.getAsync(
-      'SELECT id FROM employee_shop_financing_deductions WHERE financing_id = ? AND week_ending_date = ?',
-      [id, week]
-    );
-    if (dup) {
-      return res.status(400).json({
-        error: `A deduction for week ending ${week} already exists for this plan.`
-      });
-    }
-
-    let payAmount = amount != null ? roundMoney(amount) : roundMoney(plan.weekly_payment);
-    if (payAmount <= 0) {
-      return res.status(400).json({ error: 'Amount must be greater than 0' });
-    }
-    payAmount = Math.min(payAmount, bal);
-
-    const baseReason = (plan.deduction_reason || '').trim() || 'Shop financing repayment';
-    const extra = (extra_note || '').trim();
-    const reasonNote = extra ? `${baseReason} — ${extra}` : baseReason;
-
-    await db.runAsync(
-      `INSERT INTO employee_shop_financing_deductions (financing_id, week_ending_date, amount, reason_note, applied_by)
-       VALUES (?, ?, ?, ?, ?)`,
-      [id, week, payAmount, reasonNote, req.user.id]
-    );
-
-    const newBal = roundMoney(bal - payAmount);
-    const newStatus = newBal <= 0 ? 'paid_off' : 'active';
-
-    await db.runAsync(
-      `UPDATE employee_shop_financing SET balance_due = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [newBal, newStatus, id]
-    );
 
     const row = await db.getAsync(`${SELECT_PLAN} WHERE f.id = ?`, [id]);
 
