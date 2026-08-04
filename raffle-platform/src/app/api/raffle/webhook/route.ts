@@ -103,6 +103,15 @@ export async function POST(request: Request) {
     if (!res.ok) {
       return NextResponse.json({ ok: false, error: "apps_script_error", upstream: data }, { status: 502 });
     }
+    // Apps Script ContentService always returns HTTP 200; trust JSON `ok`.
+    const body = data as { ok?: boolean; error?: string; code?: string };
+    if (!body || body.ok !== true) {
+      const status = body?.code === "lock" ? 503 : 502;
+      return NextResponse.json(
+        { ok: false, error: body?.error || "apps_script_logical_failure", upstream: data },
+        { status }
+      );
+    }
     return NextResponse.json({ ok: true, applied: data });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "upstream_unreachable";

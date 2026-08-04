@@ -877,20 +877,58 @@ function deleteEntrySheetRowsDescending_(rowNumbersHighToLow) {
   }
 }
 
-/** Returns true if any Entries row for slug already has __stripeSessionId === sessionId in extrasJson. */
-function paidPurchaseAlreadyApplied_(slug, sessionId) {
-  if (!sessionId) return false;
+/** Sum paid tickets already written for a Stripe session (0 if none). */
+function sumPaidTicketsForSession_(slug, sessionId) {
+  if (!sessionId) return 0;
   var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
-  if (!sh || sh.getLastRow() < 2) return false;
+  if (!sh || sh.getLastRow() < 2) return 0;
   var lastCol = Math.max(13, sh.getLastColumn());
   var values = sh.getRange(2, 1, sh.getLastRow(), lastCol).getValues();
   var exCol = getEntriesExtrasColumnIndex_();
+  var sum = 0;
   for (var i = 0; i < values.length; i++) {
     if (String(values[i][1] || '').trim() !== String(slug).trim()) continue;
     var ex = parseEntryExtrasJson_(values[i][exCol]);
-    if (String(ex.__stripeSessionId || '') === String(sessionId)) return true;
+    if (String(ex.__stripeSessionId || '') !== String(sessionId)) continue;
+    var fromExtra = Math.floor(Number(ex.__paidTickets) || 0);
+    var fromCol = Math.floor(Number(values[i][9]) || 0);
+    sum += fromExtra > 0 ? fromExtra : fromCol;
   }
-  return false;
+  return sum;
+}
+
+/**
+ * True only when this Stripe session already has a complete paid apply
+ * (ticket sum >= expected). A partial multi-pool write must NOT short-circuit retries.
+ */
+function paidPurchaseAlreadyApplied_(slug, sessionId, expectedTickets) {
+  if (!sessionId) return false;
+  var expected = Math.max(0, Math.floor(Number(expectedTickets) || 0));
+  var applied = sumPaidTicketsForSession_(slug, sessionId);
+  if (expected > 0) return applied >= expected;
+  return applied > 0;
+}
+
+/** Delete incomplete paid rows for a session so apply can rewrite the full allocation. */
+function deletePartialPaidRowsForSession_(slug, sessionId) {
+  if (!sessionId) return;
+  var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
+  if (!sh || sh.getLastRow() < 2) return;
+  var lastCol = Math.max(13, sh.getLastColumn());
+  var values = sh.getRange(2, 1, sh.getLastRow(), lastCol).getValues();
+  var exCol = getEntriesExtrasColumnIndex_();
+  var toDelete = [];
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][1] || '').trim() !== String(slug).trim()) continue;
+    var ex = parseEntryExtrasJson_(values[i][exCol]);
+    if (String(ex.__stripeSessionId || '') === String(sessionId)) {
+      toDelete.push(i + 2);
+    }
+  }
+  toDelete.sort(function (a, b) {
+    return b - a;
+  });
+  deleteEntrySheetRowsDescending_(toDelete);
 }
 
 function getRaffleDrawAtMsMapForSlug_(slug) {
@@ -1462,6 +1500,33 @@ function handleSubmitEntry_(data) {
     if (!okRaffle) return jsonResponse({ ok: false, error: 'Invalid raffle', code: 'raffle' }, 400);
   }
 
+  // Block new entries into pools inside the T−10m draw lock window (UI hides these; API must enforce).
+  var submitLockIds = [];
+  if (ticketMode === 'split') {
+    try {
+      // totalEntries unknown yet — lock-check every pool the split may target
+      var rawSplitLock = p.splitRaffleIds;
+      if (Array.isArray(rawSplitLock) && rawSplitLock.length) {
+        for (var sli = 0; sli < rawSplitLock.length; sli++) {
+          var slid = String(rawSplitLock[sli] || '').trim();
+          if (slid) submitLockIds.push(slid);
+        }
+      } else {
+        for (var sri = 0; sri < raffles.length; sri++) submitLockIds.push(raffles[sri].id);
+      }
+    } catch (splitLockErr) {
+      submitLockIds = [];
+    }
+  } else {
+    submitLockIds.push(raffleId);
+  }
+  if (entryUpdateLockedForRaffleIds_(slug, submitLockIds)) {
+    return jsonResponse(
+      { ok: false, error: 'Entries are locked within 10 minutes of a scheduled draw for that prize pool.', code: 'locked' },
+      409
+    );
+  }
+
   var bonuses = parseBonusRulesFromRow_(ev);
   var bonusById = {};
   if (p.bonusById && typeof p.bonusById === 'object' && !Array.isArray(p.bonusById)) {
@@ -1648,6 +1713,29 @@ function handleUpdateEntryByToken_(data) {
     return jsonResponse({ ok: false, error: 'Rate limited', code: 'rate_limited' }, 429);
   }
 
+  var lock = LockService.getScriptLock();
+  var gotLock = false;
+  try {
+    gotLock = lock.tryLock(30000);
+  } catch (lockErr) {
+    gotLock = false;
+  }
+  if (!gotLock) {
+    return jsonResponse({ ok: false, error: 'busy_retry', code: 'lock' }, 503);
+  }
+
+  try {
+    return handleUpdateEntryByTokenLocked_(data, p, slug, token, ip);
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (releaseErr) {
+      /* ignore */
+    }
+  }
+}
+
+function handleUpdateEntryByTokenLocked_(data, p, slug, token, ip) {
   var found = findEventRow_(slug);
   if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
   var ev = recordToObject_(found.headers, found.record);
@@ -1660,12 +1748,6 @@ function handleUpdateEntryByToken_(data) {
   var raffleIdsForLock = [];
   for (var rli = 0; rli < rows.length; rli++) {
     raffleIdsForLock.push(rows[rli].raffleId);
-  }
-  if (entryUpdateLockedForRaffleIds_(slug, raffleIdsForLock)) {
-    return jsonResponse(
-      { ok: false, error: 'Edits are locked within 10 minutes of a scheduled draw for your pools.', code: 'locked' },
-      409
-    );
   }
 
   var name = String(p.name || '').trim();
@@ -1770,12 +1852,53 @@ function handleUpdateEntryByToken_(data) {
     }
   }
 
+  // Lock existing pools AND destination pools (prevents moving tickets into a drawing pool).
+  var targetLockIds = raffleIdsForLock.slice();
+  var splitPlanPreflight = null;
+  if (ticketMode === 'split') {
+    try {
+      splitPlanPreflight = buildTicketSplitPlan_(p, raffles, totalEntries);
+    } catch (planErr) {
+      return jsonResponse({
+        ok: false,
+        error: String(planErr && planErr.message ? planErr.message : planErr),
+        code: 'split',
+      }, 400);
+    }
+    if (!splitPlanPreflight || !splitPlanPreflight.rows.length) {
+      return jsonResponse({ ok: false, error: 'Could not build ticket split.', code: 'split' }, 400);
+    }
+    for (var tpi = 0; tpi < splitPlanPreflight.poolIds.length; tpi++) {
+      targetLockIds.push(splitPlanPreflight.poolIds[tpi]);
+    }
+  } else {
+    targetLockIds.push(raffleId);
+  }
+  if (entryUpdateLockedForRaffleIds_(slug, targetLockIds)) {
+    return jsonResponse(
+      { ok: false, error: 'Edits are locked within 10 minutes of a scheduled draw for your pools.', code: 'locked' },
+      409
+    );
+  }
+
   var editableRowNums = [];
   for (var pr = 0; pr < rows.length; pr++) {
     var rrr = rows[pr];
     var ex = rrr.extras || {};
     if (ex.__paid === true || ex.__newsletterBonus === true) continue;
     editableRowNums.push(rrr.sheetRow);
+  }
+  if (!editableRowNums.length) {
+    return jsonResponse({ ok: false, error: 'no_editable_rows', code: 'editable' }, 400);
+  }
+  // Re-read row numbers under the lock so concurrent updates cannot delete shifted rows.
+  rows = readEntryRowsByToken_(slug, token);
+  editableRowNums = [];
+  for (var pr2 = 0; pr2 < rows.length; pr2++) {
+    var rrr2 = rows[pr2];
+    var ex2 = rrr2.extras || {};
+    if (ex2.__paid === true || ex2.__newsletterBonus === true) continue;
+    editableRowNums.push(rrr2.sheetRow);
   }
   if (!editableRowNums.length) {
     return jsonResponse({ ok: false, error: 'no_editable_rows', code: 'editable' }, 400);
@@ -1957,74 +2080,98 @@ function handleApplyPaidTickets_(data) {
     return jsonResponse({ ok: false, error: 'bad_signature' }, 401);
   }
 
-  var p = rawPayload;
-  var slug = String(p.slug || '').trim();
-  var token = String(p.token || '').trim();
-  var stripeSessionId = String(p.stripeSessionId || '').trim();
-  var totalPaid = Math.max(0, Math.floor(Number(p.totalPaidTickets) || 0));
-  if (!slug || !token || !stripeSessionId || totalPaid <= 0) {
-    return jsonResponse({ ok: false, error: 'missing_fields', code: 'fields' }, 400);
+  var lock = LockService.getScriptLock();
+  var gotLock = false;
+  try {
+    gotLock = lock.tryLock(30000);
+  } catch (lockErr) {
+    gotLock = false;
+  }
+  if (!gotLock) {
+    return jsonResponse({ ok: false, error: 'busy_retry', code: 'lock' }, 503);
   }
 
-  var found = findEventRow_(slug);
-  if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
-
-  if (paidPurchaseAlreadyApplied_(slug, stripeSessionId)) {
-    return jsonResponse({ ok: true, alreadyApplied: true, totalPaidTickets: totalPaid });
-  }
-
-  var rows = readEntryRowsByToken_(slug, token);
-  if (!rows.length) return jsonResponse({ ok: false, error: 'entry_not_found', code: 'token' }, 404);
-
-  var raffles = getRafflesForSlug_(slug);
-  var validIds = {};
-  for (var ri = 0; ri < raffles.length; ri++) validIds[raffles[ri].id] = true;
-
-  var split = (p.ticketSplit && typeof p.ticketSplit === 'object' && !Array.isArray(p.ticketSplit)) ? p.ticketSplit : null;
-  var allocations = [];
-  if (split) {
-    var sum = 0;
-    Object.keys(split).forEach(function (k) {
-      var n = Math.max(0, Math.floor(Number(split[k]) || 0));
-      if (n > 0 && validIds[k]) {
-        allocations.push({ raffleId: k, tickets: n });
-        sum += n;
-      }
-    });
-    if (sum !== totalPaid) {
-      return jsonResponse({ ok: false, error: 'ticket_split_mismatch', code: 'split' }, 400);
+  try {
+    var p = rawPayload;
+    var slug = String(p.slug || '').trim();
+    var token = String(p.token || '').trim();
+    var stripeSessionId = String(p.stripeSessionId || '').trim();
+    var totalPaid = Math.max(0, Math.floor(Number(p.totalPaidTickets) || 0));
+    if (!slug || !token || !stripeSessionId || totalPaid <= 0) {
+      return jsonResponse({ ok: false, error: 'missing_fields', code: 'fields' }, 400);
     }
-  } else {
-    var firstId = rows[0].raffleId;
-    if (!validIds[firstId]) firstId = (raffles[0] && raffles[0].id) || '';
-    if (!firstId) return jsonResponse({ ok: false, error: 'no_pool_for_entry' }, 500);
-    allocations.push({ raffleId: firstId, tickets: totalPaid });
+
+    var found = findEventRow_(slug);
+    if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
+
+    var alreadySum = sumPaidTicketsForSession_(slug, stripeSessionId);
+    if (alreadySum >= totalPaid) {
+      return jsonResponse({ ok: true, alreadyApplied: true, totalPaidTickets: totalPaid });
+    }
+    // Partial multi-pool apply left some rows; wipe and rewrite the full allocation.
+    if (alreadySum > 0) {
+      deletePartialPaidRowsForSession_(slug, stripeSessionId);
+    }
+
+    var rows = readEntryRowsByToken_(slug, token);
+    if (!rows.length) return jsonResponse({ ok: false, error: 'entry_not_found', code: 'token' }, 404);
+
+    var raffles = getRafflesForSlug_(slug);
+    var validIds = {};
+    for (var ri = 0; ri < raffles.length; ri++) validIds[raffles[ri].id] = true;
+
+    var split = (p.ticketSplit && typeof p.ticketSplit === 'object' && !Array.isArray(p.ticketSplit)) ? p.ticketSplit : null;
+    var allocations = [];
+    if (split) {
+      var sum = 0;
+      Object.keys(split).forEach(function (k) {
+        var n = Math.max(0, Math.floor(Number(split[k]) || 0));
+        if (n > 0 && validIds[k]) {
+          allocations.push({ raffleId: k, tickets: n });
+          sum += n;
+        }
+      });
+      if (sum !== totalPaid) {
+        return jsonResponse({ ok: false, error: 'ticket_split_mismatch', code: 'split' }, 400);
+      }
+    } else {
+      var firstId = rows[0].raffleId;
+      if (!validIds[firstId]) firstId = (raffles[0] && raffles[0].id) || '';
+      if (!firstId) return jsonResponse({ ok: false, error: 'no_pool_for_entry' }, 500);
+      allocations.push({ raffleId: firstId, tickets: totalPaid });
+    }
+
+    var paidMeta = {
+      stripeSessionId: stripeSessionId,
+      paidAt: String(p.paidAt || ''),
+      amountTotal: Number(p.amountTotal),
+      currency: String(p.currency || ''),
+    };
+
+    var name = rows[0].name;
+    var phoneNorm = rows[0].phoneNorm;
+    var email = rows[0].email;
+    var ip = String(p.clientIp || 'paid');
+    var ua = String(p.userAgent || 'stripe-webhook');
+
+    for (var ai = 0; ai < allocations.length; ai++) {
+      var a = allocations[ai];
+      appendPaidEntryRow_(slug, name, phoneNorm, email, a.raffleId, a.tickets, ip, ua, token, paidMeta);
+    }
+
+    return jsonResponse({
+      ok: true,
+      alreadyApplied: false,
+      totalPaidTickets: totalPaid,
+      poolsAffected: allocations.length,
+    });
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (releaseErr) {
+      /* ignore */
+    }
   }
-
-  var paidMeta = {
-    stripeSessionId: stripeSessionId,
-    paidAt: String(p.paidAt || ''),
-    amountTotal: Number(p.amountTotal),
-    currency: String(p.currency || ''),
-  };
-
-  var name = rows[0].name;
-  var phoneNorm = rows[0].phoneNorm;
-  var email = rows[0].email;
-  var ip = String(p.clientIp || 'paid');
-  var ua = String(p.userAgent || 'stripe-webhook');
-
-  for (var ai = 0; ai < allocations.length; ai++) {
-    var a = allocations[ai];
-    appendPaidEntryRow_(slug, name, phoneNorm, email, a.raffleId, a.tickets, ip, ua, token, paidMeta);
-  }
-
-  return jsonResponse({
-    ok: true,
-    alreadyApplied: false,
-    totalPaidTickets: totalPaid,
-    poolsAffected: allocations.length,
-  });
 }
 
 /**
