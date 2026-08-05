@@ -1,18 +1,15 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import {
+  toDispatchStatus,
+  computeDispatchProgress,
+  computeElapsedMinutes,
+} from '../utils/dispatchBoard.js';
 
 const router = express.Router();
 router.use(authenticateToken);
 router.use(requireAdmin);
-
-// Map DB task status → dispatch display status
-const toDispatchStatus = (dbStatus) => {
-  if (dbStatus === 'todo') return 'received';
-  if (dbStatus === 'in_progress') return 'in_progress';
-  if (dbStatus === 'review') return 'ready';
-  return dbStatus;
-};
 
 // GET /api/admin/dispatch
 router.get('/', async (req, res) => {
@@ -50,24 +47,6 @@ router.get('/', async (req, res) => {
 
     const now = Date.now();
     const jobs = jobRows.map((row) => {
-      const elapsedMinutes = row.started_at
-        ? Math.floor((now - new Date(row.started_at).getTime()) / 60000)
-        : null;
-
-      let progress = 0;
-      if (row.subtask_count > 0) {
-        progress = Math.round((row.subtasks_done / row.subtask_count) * 100);
-      } else if (row.status === 'review') {
-        progress = 90;
-      } else if (row.status === 'in_progress') {
-        if (row.started_at && row.estimated_time_minutes) {
-          const elapsed = (now - new Date(row.started_at).getTime()) / 60000;
-          progress = Math.min(85, Math.max(25, Math.round((elapsed / row.estimated_time_minutes) * 100)));
-        } else {
-          progress = 25;
-        }
-      }
-
       return {
         id: row.id,
         title: row.title,
@@ -76,10 +55,10 @@ router.get('/', async (req, res) => {
         assigned_to_id: row.assigned_to || null,
         assigned_to_name: row.assigned_to_name || null,
         started_at: row.started_at || null,
-        elapsed_minutes: elapsedMinutes,
+        elapsed_minutes: computeElapsedMinutes(row.started_at, now),
         estimated_hours: row.estimated_time_minutes ? Math.round(row.estimated_time_minutes / 60 * 10) / 10 : null,
         priority: row.priority || 'medium',
-        progress,
+        progress: computeDispatchProgress(row, now),
       };
     });
 
