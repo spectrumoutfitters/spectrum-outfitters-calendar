@@ -2,6 +2,10 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { getTodayInHouston } from '../utils/appTimezone.js';
+import {
+  markTaskAdminApproved,
+  deductInventoryForApprovedTask,
+} from '../utils/taskApproveInventory.js';
 
 const router = express.Router();
 
@@ -1111,10 +1115,10 @@ router.post('/items/:id/quick-approve-time', async (req, res) => {
       return res.status(400).json({ error: 'No time entries to approve' });
     }
 
-    // Approve all time entries
+    // Approve all time entries (time_entries has approved_by only — no approved_at column)
     await db.runAsync(`
       UPDATE time_entries
-      SET approved_by = ?, approved_at = CURRENT_TIMESTAMP
+      SET approved_by = ?
       WHERE id IN (${metadata.entry_ids.map(() => '?').join(',')})
     `, [req.user.id, ...metadata.entry_ids]);
 
@@ -1151,12 +1155,22 @@ router.post('/items/:id/quick-approve-task', async (req, res) => {
       return res.status(400).json({ error: 'No tasks to approve' });
     }
 
-    // Approve all tasks
-    await db.runAsync(`
-      UPDATE tasks
-      SET status = 'completed', approved_by = ?, approved_at = CURRENT_TIMESTAMP
-      WHERE id IN (${metadata.task_ids.map(() => '?').join(',')})
-    `, [req.user.id, ...metadata.task_ids]);
+    // Approve each task the same way as POST /api/tasks/:id/approve:
+    // set admin_approved, complete the task, and deduct linked inventory once.
+    // (tasks has no approved_by/approved_at columns — the previous UPDATE 500'd.)
+    for (const taskId of metadata.task_ids) {
+      const firstApprove = await markTaskAdminApproved(db, {
+        taskId,
+        userId: req.user.id,
+        archive: false,
+      });
+      if (!firstApprove) continue;
+      await db.runAsync(
+        'INSERT INTO task_history (task_id, changed_by, field_changed, old_value, new_value) VALUES (?, ?, ?, ?, ?)',
+        [taskId, req.user.id, 'admin_approved', '0', '1']
+      );
+      await deductInventoryForApprovedTask(db, { taskId, userId: req.user.id });
+    }
 
     // Mark worklist item as completed
     await db.runAsync(`

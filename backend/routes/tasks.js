@@ -18,6 +18,10 @@ import {
   getCurrentElapsedTime
 } from '../utils/taskTimeTracking.js';
 import { sendPushToUser } from '../utils/pushNotifications.js';
+import {
+  markTaskAdminApproved,
+  deductInventoryForApprovedTask,
+} from '../utils/taskApproveInventory.js';
 
 /**
  * Helper function to add time tracking data to a task object
@@ -1323,30 +1327,20 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    // Set completed_at if not already set
-    const updateFields = [
-      "status = 'completed'",
-      'admin_approved = 1',
-      `is_archived = ${archive ? 1 : 0}`,
-      'updated_at = CURRENT_TIMESTAMP'
-    ];
-    
-    if (!task.completed_at) {
-      updateFields.push('completed_at = ?');
-      updateFields.push('completed_by = ?');
+    // First approver wins: only one request may transition admin_approved 0→1 and deduct stock.
+    const firstApprove = await markTaskAdminApproved(db, {
+      taskId: id,
+      userId: req.user.id,
+      archive: Boolean(archive),
+    });
+
+    // Idempotent re-approve (archive toggle / retry): update archive flag without re-deducting.
+    if (!firstApprove) {
+      await db.runAsync(
+        `UPDATE tasks SET is_archived = ?, status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [archive ? 1 : 0, id]
+      );
     }
-    
-    const updateParams = [];
-    if (!task.completed_at) {
-      updateParams.push(new Date().toISOString());
-      updateParams.push(req.user.id);
-    }
-    updateParams.push(id);
-    
-    await db.runAsync(
-      `UPDATE tasks SET ${updateFields.join(', ')} WHERE id = ?`,
-      updateParams
-    );
 
     // Sync to ShopMonkey if task has a ShopMonkey order ID
     if (task.shopmonkey_order_id) {
@@ -1362,40 +1356,16 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
     }
 
     // Log history
-    await db.runAsync(
-      'INSERT INTO task_history (task_id, changed_by, field_changed, old_value, new_value) VALUES (?, ?, ?, ?, ?)',
-      [id, req.user.id, 'admin_approved', '0', '1']
-    );
-
-    // Decrement inventory for parts/materials used on this task (only when task is approved)
-    const usages = await db.allAsync(
-      'SELECT item_id, quantity_used FROM task_inventory_usage WHERE task_id = ?',
-      [id]
-    );
-    for (const u of usages) {
-      const deduct = (u.quantity_used != null && Number(u.quantity_used) > 0)
-        ? Number(u.quantity_used)
-        : 1;
-      const item = await db.getAsync('SELECT id, quantity FROM inventory_items WHERE id = ?', [u.item_id]);
-      if (!item) continue;
-      const before = item.quantity ?? 0;
-      const after = Math.max(0, before - deduct);
+    if (firstApprove) {
       await db.runAsync(
-        `UPDATE inventory_items SET quantity = ?, last_counted_at = CURRENT_TIMESTAMP, last_counted_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [after, req.user.id, u.item_id]
+        'INSERT INTO task_history (task_id, changed_by, field_changed, old_value, new_value) VALUES (?, ?, ?, ?, ?)',
+        [id, req.user.id, 'admin_approved', '0', '1']
       );
-      try {
-        await db.runAsync(
-          `INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason, task_id, notes)
-           VALUES (?, ?, ?, ?, 'task_approved', ?, ?)`,
-          [u.item_id, before, after, req.user.id, id, 'Approved task inventory decrement']
-        );
-      } catch (_) {
-        await db.runAsync(
-          `INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'task_approved')`,
-          [u.item_id, before, after, req.user.id]
-        ).catch(() => {});
-      }
+    }
+
+    // Decrement inventory for parts/materials linked on this task (only on first approve).
+    if (firstApprove) {
+      await deductInventoryForApprovedTask(db, { taskId: id, userId: req.user.id });
     }
 
     const updatedTask = await db.getAsync(`

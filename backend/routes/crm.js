@@ -9,6 +9,10 @@ import {
   scheduleBackfillWorker,
   syncShopmonkeyOrderToCrm,
 } from '../services/crm/shopmonkeyCrmSync.js';
+import {
+  assertNonNegativeInvoiceMoney,
+  assertNonNegativeTaxCents,
+} from '../utils/crmInvoiceMoneyGuards.js';
 
 const router = express.Router();
 
@@ -327,6 +331,8 @@ router.post('/invoices', async (req, res) => {
 
     const invoiceDate = cleanStr(req.body?.invoice_date) || new Date().toISOString().slice(0, 10);
     const taxCents = toInt(req.body?.tax_cents) || 0;
+    const taxGuard = assertNonNegativeTaxCents(taxCents);
+    if (!taxGuard.ok) return res.status(400).json({ error: taxGuard.error });
     const status = cleanStr(req.body?.status) || 'open';
 
     const number = await nextInvoiceNumber();
@@ -360,6 +366,8 @@ router.put('/invoices/:id', async (req, res) => {
     const invoiceDate = cleanStr(req.body?.invoice_date);
     const status = cleanStr(req.body?.status);
     const taxCents = req.body?.tax_cents != null ? toInt(req.body.tax_cents) : null;
+    const taxGuard = assertNonNegativeTaxCents(taxCents);
+    if (!taxGuard.ok) return res.status(400).json({ error: taxGuard.error });
 
     await db.runAsync(
       `UPDATE crm_invoices
@@ -442,6 +450,9 @@ router.put('/invoice-items/:id', async (req, res) => {
     const q = quantity != null ? quantity : Number(existing.quantity) || 1;
     const u = unitPriceCents != null ? unitPriceCents : toInt(existing.unit_price_cents);
     if (computedTotal == null && u != null) computedTotal = Math.round(q * u);
+
+    const moneyGuard = assertNonNegativeInvoiceMoney(unitPriceCents, computedTotal);
+    if (!moneyGuard.ok) return res.status(400).json({ error: moneyGuard.error });
 
     await db.runAsync(
       `UPDATE crm_invoice_items
