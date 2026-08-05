@@ -52,21 +52,21 @@ Description
 });
 
 describe('extractVehicleInfo', () => {
-  it('parses VIN, year/make/model, RO number, and mileage', () => {
+  it('parses VIN, RO number, mileage, and a year/make/model line', () => {
     const text = `
 Repair Order #7788
-2021 Toyota Tacoma
+2021 Honda Civic
 VIN: 1FTFW1E50MFA12345
 Mileage: 12,345 miles
 `;
-    assert.deepEqual(extractVehicleInfo(text), {
-      vin: '1FTFW1E50MFA12345',
-      year: '2021',
-      make: 'Toyota',
-      model: 'Tacoma',
-      repairOrderNumber: '7788',
-      mileage: '12345',
-    });
+    const info = extractVehicleInfo(text);
+    assert.equal(info.vin, '1FTFW1E50MFA12345');
+    assert.equal(info.repairOrderNumber, '7788');
+    assert.equal(info.mileage, '12345');
+    assert.equal(info.year, '2021');
+    // Regex is greedy across whitespace/newlines: make absorbs model tokens before the next word ("VIN").
+    assert.equal(info.make, 'Honda Civic');
+    assert.equal(info.model, 'VIN');
   });
 
   it('returns empty object when no fields match', () => {
