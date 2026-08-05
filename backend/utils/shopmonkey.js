@@ -4,6 +4,10 @@
  */
 
 import { toTitleCase } from './helpers.js';
+import {
+  extractVehicleInfoFromOrder as extractVehicleInfoFromOrderPure,
+  mapShopMonkeyLineItemsToWorkItems,
+} from './shopmonkeyOrderExtract.js';
 
 // ShopMonkey API base URL
 // Documentation: https://shopmonkey.dev/
@@ -651,86 +655,8 @@ export function extractWorkItemsFromOrder(order, lineItemsFromAPI = null) {
 
   console.log(`Found ${lineItems.length} line items in ShopMonkey order`);
 
-  lineItems.forEach((lineItem, index) => {
-    // Get description from various possible fields
-    let description = lineItem.description || 
-                     lineItem.name || 
-                     lineItem.title || 
-                     lineItem.item || 
-                     lineItem.partName ||
-                     lineItem.laborName ||
-                     '';
-
-    // Skip if empty
-    if (!description || typeof description !== 'string') {
-      return;
-    }
-
-    description = description.trim();
-
-    // Skip if it's just a price or too short
-    if (description.length < 3 || description.match(/^\$[\d,]+\.\d{2}$/)) {
-      return;
-    }
-
-    // Filter for parts and labor only (exclude other types like fees, taxes, etc.)
-    // ShopMonkey uses lineItemType field (e.g., "Service", "Part", "Labor")
-    const itemType = (lineItem.lineItemType || lineItem.type || lineItem.itemType || lineItem.category || '').toLowerCase();
-    const isPart = itemType.includes('part') || 
-                   itemType.includes('inventory') ||
-                   itemType === 'part';
-    const isLabor = itemType.includes('labor') || 
-                    itemType.includes('service') ||
-                    itemType.includes('work') ||
-                    itemType === 'service' ||
-                    itemType === 'labor';
-    
-    // If lineItemType is explicitly set, only include Service, Part, or Labor
-    if (lineItem.lineItemType) {
-      const lineItemType = lineItem.lineItemType.toLowerCase();
-      if (lineItemType !== 'service' && lineItemType !== 'part' && lineItemType !== 'labor') {
-        console.log(`Skipping line item with type "${lineItem.lineItemType}": ${description.substring(0, 50)}`);
-        return;
-      }
-    }
-    
-    // Skip if it's not a part or labor item (and no explicit type was set)
-    if (!isPart && !isLabor && !lineItem.lineItemType) {
-      // If no type is specified, include it anyway (might be a work item)
-      // But log it for debugging
-      console.log(`Including line item with no explicit type: ${description.substring(0, 50)}`);
-    }
-
-    // Remove pricing information
-    description = description.replace(/\$\s*[\d,]+\.\d{2}/g, '').trim();
-    description = description.replace(/[\d,]+\.\d{2}\s*$/g, '').trim(); // Remove trailing prices
-    
-    // Remove quantity information
-    description = description.replace(/\s*(QTY|Qty|qty|Quantity|quantity)[:\s]*\d+\s*$/i, '').trim();
-    description = description.replace(/\s+\d+\s*$/, '').trim(); // Remove standalone numbers at end
-    
-    // Remove part number references (keep the description but remove "Part #: XXX")
-    description = description.replace(/Part\s*#:\s*[A-Z0-9-]+/gi, '').trim();
-    description = description.replace(/P\/N[:\s]*[A-Z0-9-]+/gi, '').trim();
-    
-    // Clean up extra spaces
-    description = description.replace(/\s+/g, ' ').trim();
-
-    // Only add if we have a meaningful description
-    if (description.length > 3) {
-      // Check for duplicates
-      const exists = items.some(item => 
-        item.title.toLowerCase() === description.toLowerCase()
-      );
-      
-      if (!exists) {
-        items.push({
-          title: toTitleCase(description),
-          order: index + 1
-        });
-      }
-    }
-  });
+  const mapped = mapShopMonkeyLineItemsToWorkItems(lineItems);
+  items.push(...mapped);
 
   console.log(`Extracted ${items.length} work items from ShopMonkey order`);
   return items;
@@ -740,25 +666,7 @@ export function extractWorkItemsFromOrder(order, lineItemsFromAPI = null) {
  * Extract vehicle information from a ShopMonkey repair order
  */
 export function extractVehicleInfoFromOrder(order) {
-  const info = {};
-  
-  if (order.vehicle) {
-    if (order.vehicle.year) info.year = order.vehicle.year;
-    if (order.vehicle.make) info.make = order.vehicle.make;
-    if (order.vehicle.model) info.model = order.vehicle.model;
-    if (order.vehicle.vin) info.vin = order.vehicle.vin;
-    if (order.vehicle.mileage) info.mileage = order.vehicle.mileage.toString();
-  }
-  
-  if (order.number) {
-    info.repairOrderNumber = order.number.toString();
-  }
-  
-  if (order.customer && order.customer.name) {
-    info.customerName = order.customer.name;
-  }
-
-  return info;
+  return extractVehicleInfoFromOrderPure(order);
 }
 
 /**

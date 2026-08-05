@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { buildAffiliateCustomerUrls } from '../utils/affiliateCustomerUrls.js';
 
 const router = express.Router();
 
@@ -11,22 +12,6 @@ function makeToken(bytes = 12) {
 }
 
 router.use(express.json({ limit: '50mb' }));
-
-function customerBaseUrl() {
-  const base =
-    (process.env.CUSTOMER_AFFILIATE_BASE_URL ||
-      process.env.CUSTOMER_PUBLIC_URL ||
-      process.env.PUBLIC_APP_URL ||
-      process.env.FRONTEND_URL ||
-      '').trim().replace(/\/+$/, '');
-  return base || '';
-}
-
-function customerPathPrefix() {
-  const p = (process.env.CUSTOMER_AFFILIATE_PATH_PREFIX || '').trim().replace(/\/+$/, '');
-  if (!p) return '';
-  return p.startsWith('/') ? p : `/${p}`;
-}
 
 // Admin: create affiliate link token
 router.post('/links', authenticateToken, requireAdmin, async (req, res) => {
@@ -56,14 +41,12 @@ router.post('/links', authenticateToken, requireAdmin, async (req, res) => {
 
     // Customer landing page is served directly by the backend (not the React SPA),
     // so we build an absolute URL to /affiliates/:token on the public main site.
-    const cBase = customerBaseUrl();
-    const prefix = customerPathPrefix();
-    const path = `${prefix}/affiliates/${token}`.replace(/\/+/g, '/');
+    const urls = buildAffiliateCustomerUrls(token);
 
     res.status(201).json({
       link,
-      path: path.startsWith('/') ? path : `/${path}`,
-      full_url: cBase ? `${cBase}${path}` : null,
+      path: urls.path,
+      full_url: urls.full_url,
     });
   } catch (e) {
     console.error('Create affiliate link error:', e);
@@ -94,15 +77,12 @@ router.get('/links', authenticateToken, requireAdmin, async (req, res) => {
       `
     );
 
-    const cBase = customerBaseUrl();
-    const prefix = customerPathPrefix();
-
     const mapped = (links || []).map((l) => {
-      const path = `${prefix}/affiliates/${l.token}`.replace(/\/+/g, '/');
+      const urls = buildAffiliateCustomerUrls(l.token);
       return {
         ...l,
-        full_url: cBase ? `${cBase}${path}` : null,
-        path: path.startsWith('/') ? path : `/${path}`,
+        full_url: urls.full_url,
+        path: urls.path,
       };
     });
 
