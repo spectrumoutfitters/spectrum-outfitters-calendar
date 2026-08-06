@@ -4,6 +4,7 @@
  */
 
 import { toTitleCase } from './helpers.js';
+import { buildWorkItemsFromOrderFallback } from './shopmonkeyWorkItemFallback.js';
 
 // ShopMonkey API base URL
 // Documentation: https://shopmonkey.dev/
@@ -568,85 +569,17 @@ export function extractWorkItemsFromOrder(order, lineItemsFromAPI = null) {
 
   if (lineItems.length === 0) {
     console.warn('No line items found in ShopMonkey order. All order keys:', allKeys);
-    
-    // Fallback: Extract from order fields when no line items found
-    // Prefer generatedName (service description) over name
-    const serviceName = order.generatedName || order.name || order.coalescedName || '';
-    if (serviceName && serviceName.trim().length > 0) {
-      console.log(`Using service name as work item: ${serviceName}`);
-      items.push({
-        title: toTitleCase(serviceName.trim()),
-        order: items.length + 1,
-        source: 'shopmonkey'
-      });
-    }
-    
-    // Add inspection if needed
-    if (order.inspectionStatus === 'NotCompleted' && order.inspectionCount > 0) {
-      console.log(`Adding inspection work item (status: ${order.inspectionStatus}, count: ${order.inspectionCount})`);
-      items.push({
-        title: 'Vehicle Inspection',
-        order: items.length + 1,
-        source: 'shopmonkey'
-      });
-    }
-    
-    // Add labor if present
-    if (order.laborCents > 0 && order.totalLaborHours > 0) {
-      const laborHours = order.totalLaborHours;
-      console.log(`Adding labor work item: ${laborHours} hours ($${(order.laborCents / 100).toFixed(2)})`);
-      items.push({
-        title: `Labor - ${laborHours} hour${laborHours !== 1 ? 's' : ''}`,
-        order: items.length + 1,
-        source: 'shopmonkey'
-      });
-    } else if (order.laborCents > 0) {
-      // Labor present but no hours specified
-      console.log(`Adding labor work item: $${(order.laborCents / 100).toFixed(2)}`);
-      items.push({
-        title: 'Labor',
-        order: items.length + 1,
-        source: 'shopmonkey'
-      });
-    }
-    
-    // Add parts if present
-    if (order.partsCents > 0) {
-      console.log(`Adding parts work item: $${(order.partsCents / 100).toFixed(2)}`);
-      items.push({
-        title: 'Parts',
-        order: items.length + 1,
-        source: 'shopmonkey'
-      });
-    }
-    
-    // Also check if there's a complaint/recommendation that might describe the work
-    if (order.complaint && order.complaint.trim().length > 0) {
-      items.push({
-        title: toTitleCase(order.complaint.trim()),
-        order: items.length + 1,
-        source: 'shopmonkey'
-      });
-    }
-    
-    // Add recommendation if available
-    if (order.recommendation && order.recommendation.trim().length > 0) {
-      items.push({
-        title: toTitleCase(order.recommendation.trim()),
-        order: items.length + 1,
-        source: 'shopmonkey'
-      });
-    }
-    
-    if (items.length === 0) {
+
+    const fallbackItems = buildWorkItemsFromOrderFallback(order);
+    if (fallbackItems.length === 0) {
       console.warn('⚠️ ShopMonkey API does not include line items in order response.');
       console.warn('⚠️ You may need to contact ShopMonkey support to get the correct endpoint for line items.');
       console.warn('⚠️ Or check if your API key has permissions to access line items.');
     } else {
-      console.log(`✅ Extracted ${items.length} work items from order data:`, items.map(i => i.title));
+      console.log(`✅ Extracted ${fallbackItems.length} work items from order data:`, fallbackItems.map(i => i.title));
     }
-    
-    return items;
+
+    return fallbackItems;
   }
 
   console.log(`Found ${lineItems.length} line items in ShopMonkey order`);

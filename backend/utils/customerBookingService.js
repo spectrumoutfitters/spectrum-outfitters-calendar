@@ -8,6 +8,7 @@ import {
   isGoogleCalendarConnected,
   hasBookingOutboundMailScopes
 } from './googleCalendarService.js';
+import { overlapsInterval } from './bookingBusyOverlap.js';
 
 const SETTINGS_DEFAULTS = {
   booking_enabled: '0',
@@ -126,16 +127,6 @@ function parseJsonSafe(raw, fallback) {
   } catch (_) {
     return fallback;
   }
-}
-
-function overlapsInterval(startMs, endMs, intervals) {
-  for (const b of intervals || []) {
-    const bs = Date.parse(b.start);
-    const be = Date.parse(b.end);
-    if (!Number.isFinite(bs) || !Number.isFinite(be)) continue;
-    if (startMs < be && bs < endMs) return true;
-  }
-  return false;
 }
 
 function sanitizeWeeklyHoursJson(rawStr) {
