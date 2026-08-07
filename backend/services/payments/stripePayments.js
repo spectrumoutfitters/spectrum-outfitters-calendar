@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import db from '../../database/db.js';
+import { paymentMethodBelongsToCustomer } from '../../utils/stripePaymentMethodOwnership.js';
 
 function getStripe() {
   const key = (process.env.STRIPE_SECRET_KEY || '').trim().replace(/^["']|["']$/g, '');
@@ -133,6 +134,16 @@ export async function setStripeDefaultPaymentMethod(crmCustomerId, providerPayme
   const { providerCustomerId, error } = await getOrCreateStripeCustomerForCrmCustomer(crmCustomerId);
   if (error) return { error };
 
+  let pm;
+  try {
+    pm = await stripe.paymentMethods.retrieve(providerPaymentMethodId);
+  } catch {
+    return { error: 'Payment method not found' };
+  }
+  if (!paymentMethodBelongsToCustomer(pm, providerCustomerId)) {
+    return { error: 'Payment method does not belong to this customer' };
+  }
+
   await stripe.customers.update(providerCustomerId, {
     invoice_settings: { default_payment_method: providerPaymentMethodId },
   });
@@ -149,6 +160,22 @@ export async function setStripeDefaultPaymentMethod(crmCustomerId, providerPayme
 export async function detachStripePaymentMethod(crmCustomerId, providerPaymentMethodId) {
   const stripe = getStripe();
   if (!stripe) return { error: 'Stripe is not configured (missing STRIPE_SECRET_KEY)' };
+
+  // Resolve the CRM customer's Stripe customer and verify ownership BEFORE detach.
+  // Without this, DELETE /payments/customers/:id/payment-methods/:pmId would detach any
+  // pm_* reachable by the Stripe API key (cross-customer IDOR / accidental wipe).
+  const { providerCustomerId, error } = await getOrCreateStripeCustomerForCrmCustomer(crmCustomerId);
+  if (error) return { error };
+
+  let pm;
+  try {
+    pm = await stripe.paymentMethods.retrieve(providerPaymentMethodId);
+  } catch {
+    return { error: 'Payment method not found' };
+  }
+  if (!paymentMethodBelongsToCustomer(pm, providerCustomerId)) {
+    return { error: 'Payment method does not belong to this customer' };
+  }
 
   await stripe.paymentMethods.detach(providerPaymentMethodId);
   await db.runAsync(
