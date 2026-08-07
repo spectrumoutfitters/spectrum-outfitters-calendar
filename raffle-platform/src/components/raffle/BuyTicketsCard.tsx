@@ -8,6 +8,7 @@ import {
   maxTicketsForPool,
   sumPoolTickets,
 } from "@/lib/poolTicketAlloc";
+import { isAnyPoolDrawLocked } from "@/lib/poolDrawLock";
 
 type Props = {
   event: EventConfig;
@@ -34,11 +35,12 @@ export function BuyTicketsCard({ event, entryToken, restrictToPoolIds, disabled 
   const maxPerPurchase = Math.max(1, Math.floor(Number(event.paidTicketsMaxPerPurchase) || 100));
 
   const buyablePools = useMemo<RaffleOption[]>(() => {
-    if (restrictToPoolIds && restrictToPoolIds.length) {
-      const set = new Set(restrictToPoolIds);
-      return event.raffles.filter((r) => set.has(r.id));
-    }
-    return event.raffles;
+    const base =
+      restrictToPoolIds && restrictToPoolIds.length
+        ? event.raffles.filter((r) => new Set(restrictToPoolIds).has(r.id))
+        : event.raffles;
+    // Hide pools inside the T−10m draw lock (checkout API enforces the same rule).
+    return base.filter((r) => !isAnyPoolDrawLocked(event.raffles, [r.id]));
   }, [event.raffles, restrictToPoolIds]);
 
   const orderedIds = useMemo(() => buyablePools.map((r) => r.id), [buyablePools]);

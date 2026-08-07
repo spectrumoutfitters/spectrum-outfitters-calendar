@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
-import { formatDateTime } from '../../utils/helpers';
+import { formatDateTime, formatDateInHouston, getTodayCentralTime } from '../../utils/helpers';
 import { useAuth } from '../../contexts/AuthContext';
 
 // Central Time Zone (Houston, Texas)
@@ -202,6 +202,20 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
         break_minutes: parseInt(formData.break_minutes) || 0,
         notes: formData.notes || null
       };
+
+      // Clearing clock_out on a historical entry reopens a phantom active session
+      // (blocks clock-in; closing later can attribute days of paid hours).
+      if (!entry.isLunchBreak && !updateData.clock_out) {
+        const clockInHouston = formatDateInHouston(updateData.clock_in);
+        const todayHouston = getTodayCentralTime();
+        if (clockInHouston !== todayHouston) {
+          setError(
+            'Clock out is required for past or future entries. Clearing it would leave the employee stuck clocked in and can inflate paid hours when closed later.'
+          );
+          setLoading(false);
+          return;
+        }
+      }
       
       // If this is a lunch break, handle it differently
       if (entry.isLunchBreak) {
@@ -530,7 +544,9 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100"
               />
               {!isLunchBreak && (
-                <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">Leave empty if still clocked in</p>
+                <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">
+                  Leave empty only if this is today&apos;s still-open session. Past entries require a clock-out time.
+                </p>
               )}
               {isLunchBreak && (
                 <p className="text-xs text-gray-500 dark:text-neutral-100 mt-1">Time when employee went to lunch</p>
