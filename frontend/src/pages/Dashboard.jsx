@@ -5,6 +5,7 @@ import ClockInOut from '../components/TimeClock/ClockInOut';
 import QuickClockButton from '../components/TimeEntry/QuickClockButton';
 import api from '../utils/api';
 import { formatDate, getUpcomingDayLabel, getTodayCentralTime, getLastCompletedWeekFridayHouston } from '../utils/helpers';
+import { calculateTaskProgress } from '../utils/taskProgress';
 import TaskModal from '../components/Tasks/TaskModal';
 import EmployeeTaskModal from '../components/Tasks/EmployeeTaskModal';
 import EmployeeDashboard from '../components/Employee/EmployeeDashboard';
@@ -35,29 +36,6 @@ const urgencyStyles = {
   medium: 'border-l-4 border-l-primary bg-primary-subtle dark:bg-primary/20 dark:border-l-primary',
   low: 'border-l-4 border-l-neutral-300 bg-neutral-50/80 dark:bg-neutral-950/80 dark:border-l-neutral-500',
   none: 'border-l border-l-transparent'
-};
-
-const calculateTaskProgress = (task) => {
-  if (task.status === 'completed') return 100;
-  if (task.subtasks && task.subtasks.length > 0) {
-    const done = task.subtasks.filter(st => st.is_completed === 1).length;
-    const pct = (done / task.subtasks.length) * 100;
-    let bonus = 0;
-    if (task.status === 'review') bonus = 20;
-    else if (task.status === 'in_progress' && task.started_at) bonus = 10;
-    else if (task.status === 'in_progress') bonus = 5;
-    return Math.min(100, Math.round(pct + bonus));
-  }
-  if (task.status === 'review') return 90;
-  if (task.started_at && task.status === 'in_progress') {
-    if (task.estimated_time_minutes) {
-      const elapsed = (new Date() - new Date(task.started_at)) / (1000 * 60);
-      return Math.round(Math.min(85, Math.max(50, (elapsed / task.estimated_time_minutes) * 100)));
-    }
-    return 50;
-  }
-  if (task.status === 'in_progress') return 25;
-  return 0;
 };
 
 const fmt$ = (n) => {
