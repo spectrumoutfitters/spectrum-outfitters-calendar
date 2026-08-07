@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getClientIpFromRequest } from "@/lib/clientIp";
+import { isAnyPoolDrawLocked } from "@/lib/poolDrawLock";
 import { getRaffleSiteOrigin, getStripeClient } from "@/lib/stripe";
 import type { MyEntrySnapshot, EventConfig } from "@/lib/types";
 
@@ -83,6 +84,12 @@ export async function POST(request: Request) {
       { ok: false, error: `max_${maxPerPurchase}_per_purchase`, maxPerPurchase },
       { status: 400 },
     );
+  }
+
+  // Destination pools (not only the entrant's existing pools) must respect T−10m draw lock.
+  // editLocked on the entry snapshot only covers pools they already hold.
+  if (isAnyPoolDrawLocked(event.raffles, Object.keys(cleanSplit))) {
+    return NextResponse.json({ ok: false, error: "entry_locked" }, { status: 409 });
   }
 
   let snapshot: MyEntrySnapshot | null = null;

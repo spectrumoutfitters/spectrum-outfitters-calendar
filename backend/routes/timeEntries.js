@@ -2,6 +2,7 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { calculateHours, getWeekEndingDate } from '../utils/helpers.js';
+import { resolveAdminTimeEntryUpdate } from '../utils/adminTimeEntryUpdate.js';
 import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { sendPushToAdmins } from '../utils/pushNotifications.js';
 
@@ -1337,15 +1338,38 @@ router.put('/entries/:id', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Time entry not found' });
     }
 
+    const resolved = resolveAdminTimeEntryUpdate({
+      currentEntry,
+      clock_in,
+      clock_out,
+      break_minutes,
+      notes,
+    });
+    if (!resolved.ok) {
+      return res.status(resolved.status || 400).json({ error: resolved.error });
+    }
+
+    // Reopening must not stack a second active session (blocks clock-in / indeterminate clock-out).
+    if (resolved.becomesOpen && currentEntry.clock_out) {
+      const existingOpen = await db.getAsync(
+        'SELECT id FROM time_entries WHERE user_id = ? AND clock_out IS NULL AND id != ?',
+        [currentEntry.user_id, id]
+      );
+      if (existingOpen) {
+        return res.status(400).json({ error: 'User already has an open time entry' });
+      }
+    }
+
     await db.runAsync(
       `UPDATE time_entries 
-       SET clock_in = ?, clock_out = ?, break_minutes = ?, notes = ?
+       SET clock_in = ?, clock_out = ?, break_minutes = ?, notes = ?, week_ending_date = ?
        WHERE id = ?`,
       [
-        clock_in || currentEntry.clock_in,
-        clock_out !== undefined ? clock_out : currentEntry.clock_out,
-        break_minutes !== undefined ? break_minutes : currentEntry.break_minutes,
-        notes !== undefined ? notes : currentEntry.notes,
+        resolved.nextClockIn,
+        resolved.nextClockOut,
+        resolved.nextBreak,
+        resolved.nextNotes,
+        resolved.weekEnding,
         id
       ]
     );
