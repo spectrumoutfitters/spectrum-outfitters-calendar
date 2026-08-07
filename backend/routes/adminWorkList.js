@@ -2,6 +2,10 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { getTodayInHouston } from '../utils/appTimezone.js';
+import {
+  getHoustonDayOfWeek,
+  getHoustonDayOfMonth,
+} from '../utils/houstonCalendarParts.js';
 
 const router = express.Router();
 
@@ -13,23 +17,12 @@ function getTodayInCentral() {
   return getTodayInHouston();
 }
 
-// Helper to get day of week (0=Sunday, 1=Monday, etc.)
 function getDayOfWeek() {
-  const now = new Date();
-  const options = { timeZone: 'America/Chicago', weekday: 'short' };
-  const dayStr = new Intl.DateTimeFormat('en-US', options).format(now);
-  const days = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
-  return days[dayStr];
+  return getHoustonDayOfWeek();
 }
 
-// Helper to get day of month
 function getDayOfMonth() {
-  const now = new Date();
-  const dayStr = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Chicago',
-    day: 'numeric'
-  }).format(now);
-  return parseInt(dayStr, 10);
+  return getHoustonDayOfMonth();
 }
 
 // Generate smart items based on system data
