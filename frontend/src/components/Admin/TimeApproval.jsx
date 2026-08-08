@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { formatDate } from '../../utils/helpers';
+import { calculateDays } from '../../utils/timeOffDays';
 
 const TimeApproval = () => {
   const [requests, setRequests] = useState([]);
@@ -47,14 +48,6 @@ const TimeApproval = () => {
     } catch (error) {
       alert(error.response?.data?.error || `Failed to ${approved ? 'approve' : 'reject'} request`);
     }
-  };
-
-  const calculateDays = (startDate, endDate) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days
-    return diffDays;
   };
 
   if (loading) {
