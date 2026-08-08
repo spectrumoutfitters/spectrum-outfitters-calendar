@@ -93,3 +93,42 @@ export function dedupePayRecordsList(records) {
     return da.localeCompare(db);
   });
 }
+
+/** Drop void/$0 history rows so they cannot inflate pay-period counts. */
+export function filterPositivePayRecords(records) {
+  return (records || []).filter((r) => normPayAmount(r?.amount) > 0);
+}
+
+/**
+ * Reimbursement owed from other business: count only positive-amount pay runs
+ * (weekly) or distinct YYYY-MM months of those runs (monthly).
+ */
+export function estimateReimbursementOwed(expectedAmount, expectedPeriod, payRecords, received) {
+  const exp = parseFloat(expectedAmount) || 0;
+  if (exp <= 0) return 0;
+  const positive = filterPositivePayRecords(payRecords);
+  if (positive.length === 0) return 0;
+  const recv = parseFloat(received) || 0;
+  if (expectedPeriod === 'monthly') {
+    const months = new Set(
+      positive.map((r) => normalizePayRecordDate(r.pay_date).slice(0, 7)).filter(Boolean)
+    );
+    return Math.max(0, months.size * exp - recv);
+  }
+  return Math.max(0, positive.length * exp - recv);
+}
+
+/** Cumulative expected share from other business (before subtracting received). */
+export function cumulativeExpectedFromPayRecords(expectedAmount, expectedPeriod, payRecords) {
+  const exp = parseFloat(expectedAmount) || 0;
+  if (exp <= 0) return null;
+  const positive = filterPositivePayRecords(payRecords);
+  if (positive.length === 0) return null;
+  if (expectedPeriod === 'monthly') {
+    const months = new Set(
+      positive.map((r) => normalizePayRecordDate(r.pay_date).slice(0, 7)).filter(Boolean)
+    );
+    return months.size * exp;
+  }
+  return positive.length * exp;
+}

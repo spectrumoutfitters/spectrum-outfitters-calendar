@@ -15,8 +15,10 @@ import {
 import {
   normalizePayrollDisplayName,
   normalizedNamesWithWeeklySalary,
-  normalizePayRecordDate,
   dedupePayRecordsList,
+  filterPositivePayRecords,
+  estimateReimbursementOwed,
+  cumulativeExpectedFromPayRecords,
 } from '../utils/payrollDedupe.js';
 
 const router = express.Router();
@@ -479,45 +481,36 @@ router.get('/reimbursements', async (req, res) => {
     const payRecordsBySource = {};
     for (const src of sources) {
       const records = payrollHistory.filter((rec) => sourceMatchesRecord(rec, src));
-      const payrollFileRecords = records.map((r) => {
-        const payDate = r.payDate || r.date || r.processedDate || '';
-        const amount = payRecordAmount(r);
-        return { pay_date: payDate, amount };
-      });
-      const splitRuns = splitRunsBySource[`${src.source_type}:${src.source_id}`] || [];
-      const payRecords = dedupePayRecordsList([...payrollFileRecords, ...splitRuns]);
+      // Omit void/$0 history rows before dedupe — payRecordAmount already returns 0 for
+      // non-positive gross, but length * expected_amount still counted those placeholders.
+      const payrollFileRecords = filterPositivePayRecords(
+        records.map((r) => {
+          const payDate = r.payDate || r.date || r.processedDate || '';
+          const amount = payRecordAmount(r);
+          return { pay_date: payDate, amount };
+        })
+      );
+      const splitRuns = filterPositivePayRecords(
+        splitRunsBySource[`${src.source_type}:${src.source_id}`] || []
+      );
+      const payRecords = filterPositivePayRecords(
+        dedupePayRecordsList([...payrollFileRecords, ...splitRuns])
+      );
       const totalPaidFromPayroll = payRecords.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
-      let amountOwedEstimate = 0;
-      if (src.expected_amount > 0 && payRecords.length > 0) {
-        const received = totalReceivedBySource[`${src.source_type}:${src.source_id}`] || 0;
-        if (src.expected_period === 'monthly') {
-          const months = new Set(
-            payRecords.map((r) => normalizePayRecordDate(r.pay_date).slice(0, 7)).filter(Boolean)
-          );
-          amountOwedEstimate = Math.max(0, months.size * src.expected_amount - received);
-        } else {
-          amountOwedEstimate = Math.max(0, payRecords.length * src.expected_amount - received);
-        }
-      }
+      const received = totalReceivedBySource[`${src.source_type}:${src.source_id}`] || 0;
+      const amountOwedEstimate = estimateReimbursementOwed(
+        src.expected_amount,
+        src.expected_period,
+        payRecords,
+        received
+      );
       payRecordsBySource[`${src.source_type}:${src.source_id}`] = { pay_records: payRecords, total_paid_from_payroll: totalPaidFromPayroll, amount_owed_estimate: amountOwedEstimate };
     }
 
-    const mergePayRecordsDedupe = (listA, listB) => dedupePayRecordsList([...(listA || []), ...(listB || [])]);
-    const recomputeOwed = (src, payRecords, totalReceived) => {
-      let amountOwedEstimate = 0;
-      if (src.expected_amount > 0 && payRecords.length > 0) {
-        const received = totalReceived || 0;
-        if (src.expected_period === 'monthly') {
-          const months = new Set(
-            payRecords.map((r) => normalizePayRecordDate(r.pay_date).slice(0, 7)).filter(Boolean)
-          );
-          amountOwedEstimate = Math.max(0, months.size * src.expected_amount - received);
-        } else {
-          amountOwedEstimate = Math.max(0, payRecords.length * src.expected_amount - received);
-        }
-      }
-      return amountOwedEstimate;
-    };
+    const mergePayRecordsDedupe = (listA, listB) =>
+      filterPositivePayRecords(dedupePayRecordsList([...(listA || []), ...(listB || [])]));
+    const recomputeOwed = (src, payRecords, totalReceived) =>
+      estimateReimbursementOwed(src.expected_amount, src.expected_period, payRecords, totalReceived);
 
     // Same person as Calendar user + payroll-only row → one card; merge pay rows and recorded reimbursements.
     const userSourceByNorm = new Map();
@@ -591,17 +584,8 @@ router.get('/reimbursements', async (req, res) => {
       totalReceivedBySource[key] = sum;
     }
 
-    const cumulativeExpectedFromOther = (src, payRecords) => {
-      const exp = parseFloat(src.expected_amount) || 0;
-      if (exp <= 0 || !payRecords?.length) return null;
-      if (src.expected_period === 'monthly') {
-        const months = new Set(
-          payRecords.map((r) => normalizePayRecordDate(r.pay_date).slice(0, 7)).filter(Boolean)
-        );
-        return months.size * exp;
-      }
-      return payRecords.length * exp;
-    };
+    const cumulativeExpectedFromOther = (src, payRecords) =>
+      cumulativeExpectedFromPayRecords(src.expected_amount, src.expected_period, payRecords);
 
     sources.forEach((s) => {
       const key = `${s.source_type}:${s.source_id}`;
