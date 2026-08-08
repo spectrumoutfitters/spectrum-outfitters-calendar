@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import crypto from 'crypto';
 import db from '../database/db.js';
+import { sanitizeEmailHeaderValue } from './emailHeaderSafe.js';
 
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
@@ -867,6 +868,9 @@ export async function sendMailViaGoogle({ to, subject, text, html }) {
     .filter(Boolean);
   if (!recipients.length) throw new Error('No recipients');
   if (!subject || typeof subject !== 'string') throw new Error('subject is required');
+  // Defense in depth: never allow CR/LF into raw MIME header lines.
+  const safeSubject = sanitizeEmailHeaderValue(subject, { maxLen: 500 });
+  if (!safeSubject) throw new Error('subject is required');
 
   const { oauth2Client } = await createAuthedOAuth2Client();
 
@@ -917,7 +921,7 @@ export async function sendMailViaGoogle({ to, subject, text, html }) {
     ].join('\r\n');
   }
 
-  const rawMail = [`From: ${fromAddr}`, `To: ${recipients.join(', ')}`, `Subject: ${subject}`, '', bodyMime].join('\r\n');
+  const rawMail = [`From: ${fromAddr}`, `To: ${recipients.join(', ')}`, `Subject: ${safeSubject}`, '', bodyMime].join('\r\n');
 
   const encoded = Buffer.from(rawMail, 'utf8')
     .toString('base64')

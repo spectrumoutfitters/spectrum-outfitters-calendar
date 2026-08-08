@@ -8,6 +8,7 @@ import {
   isGoogleCalendarConnected,
   hasBookingOutboundMailScopes
 } from './googleCalendarService.js';
+import { sanitizeEmailHeaderValue } from './emailHeaderSafe.js';
 
 const SETTINGS_DEFAULTS = {
   booking_enabled: '0',
@@ -395,9 +396,8 @@ export async function submitCustomerBooking(payload) {
     throw err;
   }
 
-  const name = String(payload.customer_name ?? '')
-    .trim()
-    .slice(0, 200);
+  // Strip CR/LF/controls — name is interpolated into the Gmail Subject header.
+  const name = sanitizeEmailHeaderValue(payload.customer_name, { maxLen: 200 });
   const phone = String(payload.customer_phone ?? '')
     .replace(/[^\d+()\-\s]/g, '')
     .trim()

@@ -1,15 +1,15 @@
 import Stripe from 'stripe';
 import db from '../../database/db.js';
+import {
+  cents,
+  paymentAmountCentsFromStripeIntent,
+  shouldInsertMissingPaymentRow,
+} from '../../utils/stripeInvoicePaymentLedger.js';
 
 function getStripe() {
   const key = (process.env.STRIPE_SECRET_KEY || '').trim().replace(/^["']|["']$/g, '');
   if (!key || !key.startsWith('sk_')) return null;
   return new Stripe(key, { apiVersion: '2024-06-20' });
-}
-
-function cents(n) {
-  const x = Number(n);
-  return Number.isFinite(x) ? Math.round(x) : null;
 }
 
 export async function getOrCreateStripeCustomerForCrmCustomer(crmCustomerId) {
@@ -203,12 +203,19 @@ export async function createStripePaymentIntentForInvoice(crmInvoiceId) {
     },
   });
 
-  await db.runAsync(
-    `INSERT INTO crm_invoice_payments
-      (crm_invoice_id, provider, amount_cents, payment_method_type, provider_payment_intent_id, status, raw_json)
-     VALUES (?, 'stripe', ?, 'card', ?, ?, ?)`,
-    [crmInvoiceId, amountDue, intent.id, intent.status || 'created', JSON.stringify(intent)]
-  ).catch(() => {});
+  try {
+    await db.runAsync(
+      `INSERT INTO crm_invoice_payments
+        (crm_invoice_id, provider, amount_cents, payment_method_type, provider_payment_intent_id, status, raw_json)
+       VALUES (?, 'stripe', ?, 'card', ?, ?, ?)`,
+      [crmInvoiceId, amountDue, intent.id, intent.status || 'created', JSON.stringify(intent)]
+    );
+  } catch (e) {
+    // Never hand out a client_secret for an intent we failed to ledger — that yields
+    // charged-but-untracked payments and a second create-intent overcharge.
+    await stripe.paymentIntents.cancel(intent.id).catch(() => {});
+    return { error: 'Failed to record payment intent' };
+  }
 
   return { clientSecret: intent.client_secret, amountDueCents: amountDue };
 }
@@ -224,12 +231,33 @@ export async function handleStripeEvent(event) {
     if (!crmInvoiceId || !Number.isFinite(crmInvoiceId)) return { ok: true };
 
     const chargeId = obj.latest_charge || null;
-    await db.runAsync(
-      `UPDATE crm_invoice_payments
-       SET status = ?, provider_charge_id = COALESCE(provider_charge_id, ?), raw_json = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE provider = 'stripe' AND provider_payment_intent_id = ?`,
-      [status, chargeId, JSON.stringify(obj), intentId]
-    ).catch(() => {});
+    let updateChanges = 0;
+    try {
+      const updated = await db.runAsync(
+        `UPDATE crm_invoice_payments
+         SET status = ?, provider_charge_id = COALESCE(provider_charge_id, ?), raw_json = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE provider = 'stripe' AND provider_payment_intent_id = ?`,
+        [status, chargeId, JSON.stringify(obj), intentId]
+      );
+      updateChanges = updated?.changes || 0;
+    } catch {
+      updateChanges = 0;
+    }
+
+    // If create-intent's INSERT was lost but Stripe still charged, ledger the success now.
+    if (shouldInsertMissingPaymentRow({ updateChanges, status })) {
+      const amountCents = paymentAmountCentsFromStripeIntent(obj);
+      if (amountCents != null) {
+        await db
+          .runAsync(
+            `INSERT INTO crm_invoice_payments
+              (crm_invoice_id, provider, amount_cents, payment_method_type, provider_payment_intent_id, provider_charge_id, status, raw_json)
+             VALUES (?, 'stripe', ?, 'card', ?, ?, ?, ?)`,
+            [crmInvoiceId, amountCents, intentId, chargeId, status, JSON.stringify(obj)]
+          )
+          .catch(() => {});
+      }
+    }
 
     // Update invoice payment_status (simple: paid if any succeeded payments cover total)
     const invoice = await db.getAsync('SELECT total_cents FROM crm_invoices WHERE id = ?', [crmInvoiceId]);
