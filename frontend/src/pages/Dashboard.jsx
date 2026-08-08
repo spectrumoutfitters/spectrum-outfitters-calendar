@@ -5,6 +5,7 @@ import ClockInOut from '../components/TimeClock/ClockInOut';
 import QuickClockButton from '../components/TimeEntry/QuickClockButton';
 import api from '../utils/api';
 import { formatDate, getUpcomingDayLabel, getTodayCentralTime, getLastCompletedWeekFridayHouston } from '../utils/helpers';
+import { getTaskUrgency } from '../utils/taskUrgency';
 import TaskModal from '../components/Tasks/TaskModal';
 import EmployeeTaskModal from '../components/Tasks/EmployeeTaskModal';
 import EmployeeDashboard from '../components/Employee/EmployeeDashboard';
@@ -12,22 +13,6 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 
 // ─── Helpers ────────────────────────────────────────────────
 
-const getTaskUrgency = (task) => {
-  if (task.status === 'completed') return 'none';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = task.due_date ? new Date(task.due_date) : null;
-  due?.setHours(0, 0, 0, 0);
-  const priority = (task.priority || '').toLowerCase();
-  if (due && due < today) return 'critical';
-  if (priority === 'critical') return 'critical';
-  if (due && due.getTime() === today.getTime()) return 'high';
-  if (priority === 'high') return 'high';
-  const daysUntilDue = due ? Math.ceil((due - today) / (1000 * 60 * 60 * 24)) : 999;
-  if (daysUntilDue <= 2) return 'high';
-  if (daysUntilDue <= 7 || priority === 'medium') return 'medium';
-  return 'low';
-};
 
 const urgencyStyles = {
   critical: 'border-l-4 border-l-red-500 bg-red-50/90 dark:bg-red-950/40 dark:border-l-red-400',

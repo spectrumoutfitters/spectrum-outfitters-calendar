@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { getDaysUntil } from '../../utils/complianceDaysUntil';
 import ProfitAndLoss from './ProfitAndLoss';
 
 const ComplianceCenter = () => {
@@ -262,14 +263,6 @@ const ComplianceCenter = () => {
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  const getDaysUntil = (dateStr) => {
-    const due = new Date(dateStr);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diff = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
-    return diff;
   };
 
   if (loading) {

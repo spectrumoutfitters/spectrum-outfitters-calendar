@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import { jobRisk, fmtElapsed } from '../utils/dispatchJobRisk';
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -23,25 +24,9 @@ const COL_ACCENT = {
   green: { header: 'border-b-2 border-green-500', dot: 'bg-green-500', count: 'bg-green-100 dark:bg-green-950/60 text-green-700 dark:text-green-300' },
 };
 
-function fmtElapsed(mins) {
-  if (mins == null) return null;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
 function fmtClockIn(isoStr) {
   if (!isoStr) return null;
   return new Date(isoStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-function jobRisk(job) {
-  if (!job.estimated_hours || job.elapsed_minutes == null) return 'ok';
-  const elapsedH = job.elapsed_minutes / 60;
-  const ratio = elapsedH / job.estimated_hours;
-  if (ratio >= 1) return 'overdue';
-  if (ratio >= 0.8) return 'warning';
-  return 'ok';
 }
 
 const RISK_BORDER = {
