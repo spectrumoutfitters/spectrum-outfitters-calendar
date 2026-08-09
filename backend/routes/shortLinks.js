@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { decideLegacyPaySlugResponse } from '../utils/legacyPaySlugDecision.js';
 
 const router = express.Router();
 
@@ -285,19 +286,22 @@ router.get('/secure/:slug', async (req, res) => {
 
 /**
  * Legacy GET /pay/:slug
- * Keep existing links working; fast 302 redirect with no interstitial.
+ * Keep existing short_links working with a fast 302.
+ * Misses must fall through: CRM invoice PayInvoice uses the same /pay/:token path
+ * (see routes/crm.js payment-link), and a hard 404 here shadows the production SPA.
  */
-router.get('/pay/:slug', async (req, res) => {
+router.get('/pay/:slug', async (req, res, next) => {
   const { slug } = req.params;
   try {
     const row = await db.getAsync(
       'SELECT target_url FROM short_links WHERE slug = ?',
       [slug]
     );
-    if (!row) {
-      return res.status(404).send('Link not found');
+    const decision = decideLegacyPaySlugResponse(row);
+    if (decision.type === 'redirect') {
+      return res.redirect(decision.targetUrl);
     }
-    res.redirect(row.target_url);
+    return next();
   } catch (err) {
     console.error('shortLinks legacy redirect error:', err?.message || err);
     res.status(500).send('Failed to redirect');
