@@ -276,8 +276,11 @@ export function buildPreparedPaystubPages(months, contractor, prior, ytdOpts) {
     }
 
     const otherAmt = Math.max(0, numUsdField(m.otherAmount));
+    // Contractors may still have after-tax "Other" amounts (UI leaves those fields editable).
+    // Do not blank the label — PDF used to hide the Other line while still subtracting from net.
     const otherLbl =
-      contractor ? '' : `${m.otherLabel || ''}`.trim() || 'Other after-tax deduction';
+      `${m.otherLabel || ''}`.trim() ||
+      (contractor ? 'Other' : 'Other after-tax deduction');
 
     const hrs =
       contractor ? '' : Number(m.regularHours) > 0 ? String(Number(m.regularHours)) : '';
@@ -781,14 +784,15 @@ export function generatePayStubsPdf(data) {
       dedBody.push(['Social Security', moneyUsd(ssAmt), moneyUsd(cumSs)]);
       dedBody.push(['Medicare', moneyUsd(medDedAmt), moneyUsd(cumMedClassic + cumMedAdd)]);
       dedBody.push([`State withholding (${data.workerState || '—'})`, moneyUsd(stateInc), moneyUsd(cumState)]);
-      if (otherAmt > 1e-4) {
-        dedBody.push([`${otherLbl || 'Other'}`, moneyUsd(otherAmt), moneyUsd(cumOther)]);
-      }
     } else {
       dedBody.push(['Employee withholdings shown on payer records', '—', '—']);
     }
+    if (otherAmt > 1e-4) {
+      dedBody.push([`${otherLbl || 'Other'}`, moneyUsd(otherAmt), moneyUsd(cumOther)]);
+    }
     const dedTotalIx = dedBody.length;
-    dedBody.push(['Total deductions', moneyUsd(contractor ? 0 : totalDedCurr), moneyUsd(contractor ? 0 : totalDedYtd)]);
+    // Use real totals for both W-2 and 1099 so Net = Gross − Total deductions (Other included).
+    dedBody.push(['Total deductions', moneyUsd(totalDedCurr), moneyUsd(totalDedYtd)]);
 
     autoTable(doc, {
       head: [['Description', 'Amount', 'YTD']],
