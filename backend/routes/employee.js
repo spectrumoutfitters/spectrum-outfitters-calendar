@@ -2,6 +2,11 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { sendPushToAdmins } from '../utils/pushNotifications.js';
+import {
+  buildRecentlyReturnedResult,
+  buildUpcomingDaysOffResult,
+  daysOffWindowBounds,
+} from '../utils/upcomingDaysOffMath.js';
 
 const router = express.Router();
 
@@ -21,13 +26,7 @@ const TIME_OFF_TYPES = [
 router.get('/upcoming-days-off', async (req, res) => {
   try {
     const userId = req.user.id;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0];
-
-    const in14 = new Date(today);
-    in14.setDate(today.getDate() + 14);
-    const in14Str = in14.toISOString().split('T')[0];
+    const { today, todayStr, in14Str, threeDaysAgoStr } = daysOffWindowBounds();
 
     const types = TIME_OFF_TYPES.map(() => '?').join(', ');
 
@@ -45,10 +44,6 @@ router.get('/upcoming-days-off', async (req, res) => {
     );
 
     // Recently returned: end_date was in the last 3 days (before today)
-    const threeDaysAgo = new Date(today);
-    threeDaysAgo.setDate(today.getDate() - 3);
-    const threeDaysAgoStr = threeDaysAgo.toISOString().split('T')[0];
-
     const returned = await db.getAsync(
       `SELECT start_date, end_date FROM schedule_entries
        WHERE user_id = ?
@@ -61,31 +56,10 @@ router.get('/upcoming-days-off', async (req, res) => {
       [userId, ...TIME_OFF_TYPES, threeDaysAgoStr, todayStr]
     );
 
-    let upcomingResult = null;
-    if (upcoming) {
-      const startDate = new Date(upcoming.start_date);
-      startDate.setHours(0, 0, 0, 0);
-      const daysRemaining = Math.round((startDate - today) / 86400000);
-      upcomingResult = {
-        start_date: upcoming.start_date,
-        end_date: upcoming.end_date,
-        days_remaining: daysRemaining,
-      };
-    }
-
-    let returnedResult = null;
-    if (returned) {
-      const endDate = new Date(returned.end_date);
-      endDate.setHours(0, 0, 0, 0);
-      const daysSince = Math.round((today - endDate) / 86400000);
-      returnedResult = {
-        start_date: returned.start_date,
-        end_date: returned.end_date,
-        days_since: daysSince,
-      };
-    }
-
-    res.json({ upcoming: upcomingResult, recently_returned: returnedResult });
+    res.json({
+      upcoming: buildUpcomingDaysOffResult(upcoming, today),
+      recently_returned: buildRecentlyReturnedResult(returned, today),
+    });
   } catch (err) {
     console.error('upcoming-days-off error:', err);
     res.status(500).json({ error: 'Server error' });
