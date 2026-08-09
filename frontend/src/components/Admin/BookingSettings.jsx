@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../utils/api';
 import { withBase } from '../../utils/basePath';
+import {
+  hydrateWeekly,
+  uniqCalendarIdsArray,
+  weeklyFromForms,
+} from '../../utils/bookingWeeklyHours';
 
 const GOLD = '#D4A017';
 
@@ -11,35 +16,6 @@ const TZ_PRESETS = [
   'America/Phoenix',
   'America/Los_Angeles'
 ];
-
-function weeklyFromForms({ monOpen, monClose, satOn, sunOn, satOpen, satClose, sunOpen, sunClose }) {
-  const weekdays = [{ start: monOpen, end: monClose }];
-  return {
-    '1': weekdays,
-    '2': weekdays,
-    '3': weekdays,
-    '4': weekdays,
-    '5': weekdays,
-    '6': satOn ? [{ start: satOpen, end: satClose }] : [],
-    '7': sunOn ? [{ start: sunOpen, end: sunClose }] : []
-  };
-}
-
-function hydrateWeekly(weekly) {
-  const m = weekly?.['1']?.[0] || { start: '08:00', end: '17:00' };
-  const sat = weekly?.['6']?.[0] || null;
-  const sun = weekly?.['7']?.[0] || null;
-  return {
-    monOpen: m.start || '08:00',
-    monClose: m.end || '17:00',
-    satOn: !!sat,
-    satOpen: sat?.start || '09:00',
-    satClose: sat?.end || '13:00',
-    sunOn: !!sun,
-    sunOpen: sun?.start || '09:00',
-    sunClose: sun?.end || '13:00'
-  };
-}
 
 export default function BookingSettings() {
   const [loading, setLoading] = useState(true);
@@ -169,18 +145,6 @@ export default function BookingSettings() {
       setWorking(false);
     }
   };
-
-  function uniqCalendarIdsArray(ids) {
-    const out = [];
-    const seen = new Set();
-    for (const raw of ids) {
-      const id = String(raw || '').trim();
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      out.push(id);
-    }
-    return out;
-  }
 
   const testEmail = async () => {
     setWorking(true);
