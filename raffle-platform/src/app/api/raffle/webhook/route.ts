@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
+import { classifyPaidApplyUpstream } from "@/lib/paidApplyUpstream";
 import { getStripeClient } from "@/lib/stripe";
 import { signPaidPurchasePayload } from "@/lib/paidPurchaseSign";
 
@@ -103,7 +104,74 @@ export async function POST(request: Request) {
     if (!res.ok) {
       return NextResponse.json({ ok: false, error: "apps_script_error", upstream: data }, { status: 502 });
     }
-    return NextResponse.json({ ok: true, applied: data });
+
+    // Apps Script ContentService always returns HTTP 200; trust JSON `ok`.
+    const classified = classifyPaidApplyUpstream(data);
+    if (classified.kind === "applied") {
+      return NextResponse.json({ ok: true, applied: data });
+    }
+
+    // Payment completed after destination pool entered T−10m lock / post-draw freeze.
+    // Tickets must not enter the pool; refund and ack Stripe so webhooks stop retrying.
+    if (classified.kind === "draw_locked") {
+      const piId =
+        typeof session.payment_intent === "string"
+          ? session.payment_intent
+          : session.payment_intent?.id || "";
+      let refunded = false;
+      let alreadyRefunded = false;
+      let refundId: string | null = null;
+      if (piId) {
+        try {
+          const refund = await stripe.refunds.create({
+            payment_intent: piId,
+            reason: "requested_by_customer",
+            metadata: {
+              raffle_slug: slug,
+              raffle_session: session.id,
+              source: "webhook_draw_locked",
+            },
+          });
+          refunded = true;
+          refundId = refund.id || null;
+        } catch (e) {
+          const stripeErr = e as { code?: string };
+          if (stripeErr?.code === "charge_already_refunded") {
+            alreadyRefunded = true;
+          } else {
+            // Ack Stripe anyway — retrying cannot unlock the pool; leave refund for admin.
+            return NextResponse.json(
+              {
+                ok: true,
+                applied: false,
+                reason: "draw_locked",
+                refunded: false,
+                refundError: e instanceof Error ? e.message : "refund_failed",
+                upstream: data,
+              },
+              { status: 200 },
+            );
+          }
+        }
+      }
+      return NextResponse.json(
+        {
+          ok: true,
+          applied: false,
+          reason: "draw_locked",
+          refunded: refunded || alreadyRefunded,
+          alreadyRefunded,
+          refundId,
+          upstream: data,
+        },
+        { status: 200 },
+      );
+    }
+
+    return NextResponse.json(
+      { ok: false, error: classified.error || "apps_script_logical_failure", upstream: data },
+      { status: 502 },
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : "upstream_unreachable";
     return NextResponse.json({ ok: false, error: msg }, { status: 502 });
