@@ -18,6 +18,11 @@ import {
   normalizePayRecordDate,
   dedupePayRecordsList,
 } from '../utils/payrollDedupe.js';
+import { mergeDailyRevenueByPrecedence } from '../utils/dailyRevenueMerge.js';
+import {
+  recomputeReimbursementOwed,
+  cumulativeExpectedFromOther,
+} from '../utils/reimbursementOwedMath.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -68,17 +73,7 @@ async function getDailyRevenue(startDate, endDate) {
   const manualByDate = {};
   for (const r of manualRows) manualByDate[r.sale_date] = parseFloat(r.total) || 0;
 
-  const allDates = [...new Set([...Object.keys(smByDate), ...Object.keys(procByDate), ...Object.keys(manualByDate)])].sort();
-  let total = 0;
-  const daily = allDates.map(date => {
-    const rev = smByDate[date] !== undefined
-      ? smByDate[date]
-      : (procByDate[date] !== undefined ? procByDate[date] : (manualByDate[date] || 0));
-    total += rev;
-    const source = smByDate[date] !== undefined ? 'shopmonkey' : (procByDate[date] !== undefined ? 'processor' : 'manual');
-    return { date, revenue: rev, source };
-  });
-  return { daily, total };
+  return mergeDailyRevenueByPrecedence(smByDate, procByDate, manualByDate);
 }
 
 /**
@@ -487,37 +482,13 @@ router.get('/reimbursements', async (req, res) => {
       const splitRuns = splitRunsBySource[`${src.source_type}:${src.source_id}`] || [];
       const payRecords = dedupePayRecordsList([...payrollFileRecords, ...splitRuns]);
       const totalPaidFromPayroll = payRecords.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
-      let amountOwedEstimate = 0;
-      if (src.expected_amount > 0 && payRecords.length > 0) {
-        const received = totalReceivedBySource[`${src.source_type}:${src.source_id}`] || 0;
-        if (src.expected_period === 'monthly') {
-          const months = new Set(
-            payRecords.map((r) => normalizePayRecordDate(r.pay_date).slice(0, 7)).filter(Boolean)
-          );
-          amountOwedEstimate = Math.max(0, months.size * src.expected_amount - received);
-        } else {
-          amountOwedEstimate = Math.max(0, payRecords.length * src.expected_amount - received);
-        }
-      }
+      const received = totalReceivedBySource[`${src.source_type}:${src.source_id}`] || 0;
+      const amountOwedEstimate = recomputeReimbursementOwed(src, payRecords, received);
       payRecordsBySource[`${src.source_type}:${src.source_id}`] = { pay_records: payRecords, total_paid_from_payroll: totalPaidFromPayroll, amount_owed_estimate: amountOwedEstimate };
     }
 
     const mergePayRecordsDedupe = (listA, listB) => dedupePayRecordsList([...(listA || []), ...(listB || [])]);
-    const recomputeOwed = (src, payRecords, totalReceived) => {
-      let amountOwedEstimate = 0;
-      if (src.expected_amount > 0 && payRecords.length > 0) {
-        const received = totalReceived || 0;
-        if (src.expected_period === 'monthly') {
-          const months = new Set(
-            payRecords.map((r) => normalizePayRecordDate(r.pay_date).slice(0, 7)).filter(Boolean)
-          );
-          amountOwedEstimate = Math.max(0, months.size * src.expected_amount - received);
-        } else {
-          amountOwedEstimate = Math.max(0, payRecords.length * src.expected_amount - received);
-        }
-      }
-      return amountOwedEstimate;
-    };
+    const recomputeOwed = recomputeReimbursementOwed;
 
     // Same person as Calendar user + payroll-only row → one card; merge pay rows and recorded reimbursements.
     const userSourceByNorm = new Map();
@@ -590,18 +561,6 @@ router.get('/reimbursements', async (req, res) => {
       }
       totalReceivedBySource[key] = sum;
     }
-
-    const cumulativeExpectedFromOther = (src, payRecords) => {
-      const exp = parseFloat(src.expected_amount) || 0;
-      if (exp <= 0 || !payRecords?.length) return null;
-      if (src.expected_period === 'monthly') {
-        const months = new Set(
-          payRecords.map((r) => normalizePayRecordDate(r.pay_date).slice(0, 7)).filter(Boolean)
-        );
-        return months.size * exp;
-      }
-      return payRecords.length * exp;
-    };
 
     sources.forEach((s) => {
       const key = `${s.source_type}:${s.source_id}`;

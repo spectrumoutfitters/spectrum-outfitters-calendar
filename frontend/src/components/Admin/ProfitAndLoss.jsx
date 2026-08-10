@@ -1,29 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
+import { snapToWeekEndingFriday, pnlNetOfReimbursementDisplay } from '../../utils/pnlWeekMath';
 
 const ProfitAndLoss = () => {
   const [loading, setLoading] = useState(true);
   const [pnlData, setPnlData] = useState(null);
-  const [weekEndingDate, setWeekEndingDate] = useState(() => {
-    // Default to most recent Friday (business week ends Friday)
-    const today = new Date();
-    const day = today.getDay(); // 0 = Sunday, 5 = Friday
-    let friday;
-    if (day === 5) {
-      friday = new Date(today);
-    } else if (day < 5) {
-      // If before Friday, go to this week's Friday
-      const daysToFriday = 5 - day;
-      friday = new Date(today);
-      friday.setDate(today.getDate() + daysToFriday);
-    } else {
-      // If Saturday or Sunday, go to last Friday
-      const daysToLastFriday = day - 5;
-      friday = new Date(today);
-      friday.setDate(today.getDate() - daysToLastFriday);
-    }
-    return friday.toISOString().split('T')[0];
-  });
+  const [weekEndingDate, setWeekEndingDate] = useState(() => snapToWeekEndingFriday(new Date()));
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [expenseForm, setExpenseForm] = useState({
@@ -149,23 +131,7 @@ const ProfitAndLoss = () => {
   };
 
   const handleWeekChange = (date) => {
-    // Ensure it's a Friday - find the Friday of the week containing this date (business week ends Friday)
-    const selectedDate = new Date(date);
-    const day = selectedDate.getDay(); // 0 = Sunday, 5 = Friday
-    if (day === 5) {
-      // Already Friday
-      setWeekEndingDate(selectedDate.toISOString().split('T')[0]);
-    } else if (day < 5) {
-      // Before Friday, go to this week's Friday
-      const daysToFriday = 5 - day;
-      selectedDate.setDate(selectedDate.getDate() + daysToFriday);
-      setWeekEndingDate(selectedDate.toISOString().split('T')[0]);
-    } else {
-      // Saturday or Sunday, go to last Friday
-      const daysToLastFriday = day - 5;
-      selectedDate.setDate(selectedDate.getDate() - daysToLastFriday);
-      setWeekEndingDate(selectedDate.toISOString().split('T')[0]);
-    }
+    setWeekEndingDate(snapToWeekEndingFriday(date));
   };
 
   const handleAddExpense = () => {
@@ -420,11 +386,20 @@ const ProfitAndLoss = () => {
 
   const { revenue, payroll, expenses, summary, comparison } = pnlData;
   const expectedReimb = payroll?.expected_reimbursement_this_week ?? summary?.expected_reimbursement_this_week ?? 0;
-  const displayPayrollTotal = showNetOfReimbursement ? (payroll?.total ?? 0) - expectedReimb : (payroll?.total ?? 0);
-  const displayTotalExpenses = showNetOfReimbursement ? (summary?.total_expenses ?? 0) - expectedReimb : (summary?.total_expenses ?? 0);
-  const displayNetProfitLoss = showNetOfReimbursement ? (summary?.net_profit_loss ?? 0) + expectedReimb : (summary?.net_profit_loss ?? 0);
-  const displayProfitMargin = summary?.total_revenue > 0 ? (displayNetProfitLoss / summary.total_revenue) * 100 : 0;
-  const displayIsProfitable = displayNetProfitLoss > 0;
+  const {
+    displayPayrollTotal,
+    displayTotalExpenses,
+    displayNetProfitLoss,
+    displayProfitMargin,
+    displayIsProfitable,
+  } = pnlNetOfReimbursementDisplay({
+    showNetOfReimbursement,
+    payrollTotal: payroll?.total ?? 0,
+    expectedReimb,
+    summaryTotalExpenses: summary?.total_expenses ?? 0,
+    summaryNetProfitLoss: summary?.net_profit_loss ?? 0,
+    totalRevenue: summary?.total_revenue ?? 0,
+  });
 
   return (
     <div className="space-y-6">
