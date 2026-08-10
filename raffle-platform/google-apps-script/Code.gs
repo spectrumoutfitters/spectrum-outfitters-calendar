@@ -2001,6 +2001,24 @@ function handleApplyPaidTickets_(data) {
     allocations.push({ raffleId: firstId, tickets: totalPaid });
   }
 
+  // Enforce T−10m draw lock on *destination* pools at fulfillment time.
+  // Checkout may have started before lock; payment can complete after lock/draw.
+  // Without this gate, Stripe webhook would appendPaidEntryRow_ into locked pools.
+  var destLockIds = [];
+  for (var di = 0; di < allocations.length; di++) {
+    destLockIds.push(allocations[di].raffleId);
+  }
+  if (entryUpdateLockedForRaffleIds_(slug, destLockIds)) {
+    return jsonResponse(
+      {
+        ok: false,
+        error: 'Paid tickets cannot be applied within 10 minutes of a scheduled draw for that prize pool.',
+        code: 'locked',
+      },
+      409
+    );
+  }
+
   var paidMeta = {
     stripeSessionId: stripeSessionId,
     paidAt: String(p.paidAt || ''),
