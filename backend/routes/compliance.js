@@ -11,6 +11,14 @@ import {
   addDaysInHouston,
 } from '../utils/appTimezone.js';
 import { normalizePayrollDisplayName } from '../utils/payrollDedupe.js';
+import {
+  mergeDailyRevenueByPrecedence,
+  resolveDailyRevenueSource,
+  expectedSplitReimbursementThisWeek,
+  pnlOperatingNet,
+  pnlNetIncludingBank,
+  pnlWeekOverWeekChangePercent,
+} from '../utils/dailyRevenueMerge.js';
 
 const router = express.Router();
 
@@ -1221,13 +1229,7 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
   }
 
   // Expected reimbursement this week (other business's share) — for optional "net" view
-  let expectedReimbursementThisWeek = 0;
-  for (const entry of payroll) {
-    const amt = parseFloat(entry.split_reimbursable_amount) || 0;
-    if (amt <= 0) continue;
-    const period = entry.split_reimbursable_period || 'weekly';
-    expectedReimbursementThisWeek += period === 'monthly' ? amt / 4.33 : amt;
-  }
+  const expectedReimbursementThisWeek = expectedSplitReimbursementThisWeek(payroll);
 
   return { payroll, totalPayroll, expectedReimbursementThisWeek };
 }
@@ -1357,15 +1359,25 @@ router.get('/pnl/weekly', async (req, res) => {
     }
 
     const allDates = [...new Set([...Object.keys(smByDate), ...Object.keys(procByDate), ...Object.keys(manualByDate)])].sort();
-    const dailySales = allDates.map(date => {
-      if (smByDate[date] !== undefined) {
+    const dailySales = allDates.map((date) => {
+      const source = resolveDailyRevenueSource(date, smByDate, procByDate, manualByDate);
+      if (source === 'shopmonkey') {
         return { date, revenue: smByDate[date], source: 'shopmonkey' };
       }
-      if (procByDate[date] !== undefined) {
+      if (source === 'processor') {
         return { date, revenue: procByDate[date], source: 'processor' };
       }
       const m = manualByDate[date];
-      return { date, revenue: m.revenue, source: 'manual', credit_cards: m.credit_cards, checks: m.checks, cash: m.cash, zelle_ach: m.zelle_ach, net_deposit: m.net_deposit };
+      return {
+        date,
+        revenue: m.revenue,
+        source: 'manual',
+        credit_cards: m.credit_cards,
+        checks: m.checks,
+        cash: m.cash,
+        zelle_ach: m.zelle_ach,
+        net_deposit: m.net_deposit,
+      };
     });
 
     const totalRevenue = dailySales.reduce((sum, d) => sum + (Number(d.revenue) || 0), 0);
@@ -1376,8 +1388,8 @@ router.get('/pnl/weekly', async (req, res) => {
     // Calculate Expenses
     const { expenses, byCategory, totalExpenses } = await calculateWeeklyExpenses(weekStart, weekEndDate, weekEndDate);
 
-    // Calculate Net Profit/Loss
-    const netProfitLoss = totalRevenue - totalPayroll - totalExpenses;
+    // Calculate Net Profit/Loss (operating net excludes bank; summary includes bank below)
+    const netProfitLoss = pnlOperatingNet(totalRevenue, totalPayroll, totalExpenses);
     const profitMargin = totalRevenue > 0 ? (netProfitLoss / totalRevenue) * 100 : 0;
 
     // Get previous week for comparison (previous Friday) in Houston
@@ -1404,12 +1416,7 @@ router.get('/pnl/weekly', async (req, res) => {
     for (const r of (prevProcRevenue || [])) { prevProcByDate[r.date] = parseFloat(r.revenue) || 0; }
     const prevManualByDate = {};
     for (const s of prevManualSales) { prevManualByDate[s.sale_date] = parseFloat(s.total) || 0; }
-    const prevAllDates = [...new Set([...Object.keys(prevSmByDate), ...Object.keys(prevProcByDate), ...Object.keys(prevManualByDate)])];
-    let prevRevenue = 0;
-    for (const date of prevAllDates) {
-      const rev = prevSmByDate[date] !== undefined ? prevSmByDate[date] : (prevProcByDate[date] !== undefined ? prevProcByDate[date] : (prevManualByDate[date] || 0));
-      prevRevenue += rev;
-    }
+    const prevRevenue = mergeDailyRevenueByPrecedence(prevSmByDate, prevProcByDate, prevManualByDate).total;
 
     // Bank-sourced business expenses for this week
     const bankExpenses = await db.getAsync(
@@ -1421,8 +1428,14 @@ router.get('/pnl/weekly', async (req, res) => {
     const prevPayroll = await calculateWeeklyPayroll(prevWeekStart, prevWeekEnd);
     const prevExpenses = await calculateWeeklyExpenses(prevWeekStart, prevWeekEnd, prevWeekEnd);
     
-    const prevNet = prevRevenue - prevPayroll.totalPayroll - prevExpenses.totalExpenses;
-    const comparison = prevNet !== 0 ? ((netProfitLoss - prevNet) / Math.abs(prevNet)) * 100 : 0;
+    const prevNet = pnlOperatingNet(prevRevenue, prevPayroll.totalPayroll, prevExpenses.totalExpenses);
+    const comparison = pnlWeekOverWeekChangePercent(netProfitLoss, prevNet);
+    const netIncludingBank = pnlNetIncludingBank(
+      totalRevenue,
+      totalPayroll,
+      totalExpenses,
+      bankExpenseTotal
+    );
 
     const payload = {
       week_ending_date: weekEndDate,
@@ -1452,9 +1465,9 @@ router.get('/pnl/weekly', async (req, res) => {
         expected_reimbursement_this_week: expectedReimbursementThisWeek,
         other_expenses: totalExpenses,
         bank_expenses: bankExpenseTotal,
-        net_profit_loss: totalRevenue - totalPayroll - totalExpenses - bankExpenseTotal,
-        profit_margin: totalRevenue > 0 ? ((totalRevenue - totalPayroll - totalExpenses - bankExpenseTotal) / totalRevenue) * 100 : 0,
-        is_profitable: (totalRevenue - totalPayroll - totalExpenses - bankExpenseTotal) > 0
+        net_profit_loss: netIncludingBank,
+        profit_margin: totalRevenue > 0 ? (netIncludingBank / totalRevenue) * 100 : 0,
+        is_profitable: netIncludingBank > 0
       },
       comparison: {
         previous_week_net: prevNet,
