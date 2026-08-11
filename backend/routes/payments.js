@@ -10,6 +10,7 @@ import {
   syncStripePaymentMethodsToDb,
   verifyStripeWebhookEvent,
 } from '../services/payments/stripePayments.js';
+import { decideManualPaymentRecord } from '../utils/manualInvoicePayment.js';
 
 const router = express.Router();
 
@@ -133,32 +134,60 @@ router.post('/invoices/:id/record-manual', async (req, res) => {
 
     const ref = payment_reference != null && String(payment_reference).trim() ? String(payment_reference).trim() : null;
 
-    await db.runAsync(
-      `INSERT INTO crm_invoice_payments (crm_invoice_id, provider, amount_cents, payment_method_type, status, raw_json)
-       VALUES (?, 'manual', ?, ?, 'paid', ?)`,
-      [invoiceId, Math.round(amount), type, JSON.stringify({ ref })]
-    );
+    // Serialize balance check + insert so two tabs cannot both record a full settlement.
+    await db.runAsync('BEGIN IMMEDIATE');
+    try {
+      const invoice = await db.getAsync('SELECT id, total_cents FROM crm_invoices WHERE id = ?', [invoiceId]);
+      if (!invoice) {
+        await db.runAsync('ROLLBACK').catch(() => {});
+        return res.status(404).json({ error: 'Invoice not found' });
+      }
 
-    // Update invoice status
-    const invoice = await db.getAsync('SELECT total_cents FROM crm_invoices WHERE id = ?', [invoiceId]);
-    const total = Number(invoice?.total_cents) || 0;
-    const paidRow = await db.getAsync(
-      `SELECT SUM(amount_cents) AS paid
-       FROM crm_invoice_payments
-       WHERE crm_invoice_id = ? AND status IN ('succeeded', 'paid')`,
-      [invoiceId]
-    );
-    const paid = Number(paidRow?.paid) || 0;
-    const paymentStatus = paid >= total && total > 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
-    await db.runAsync(
-      `UPDATE crm_invoices
-       SET payment_status = ?, paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE paid_at END,
-           payment_method_type = ?, payment_reference = ?
-       WHERE id = ?`,
-      [paymentStatus, paymentStatus, type, ref, invoiceId]
-    ).catch(() => {});
+      const paidRow = await db.getAsync(
+        `SELECT SUM(amount_cents) AS paid
+         FROM crm_invoice_payments
+         WHERE crm_invoice_id = ? AND status IN ('succeeded', 'paid')`,
+        [invoiceId]
+      );
+      const decision = decideManualPaymentRecord({
+        invoiceTotalCents: invoice.total_cents,
+        alreadyPaidCents: paidRow?.paid,
+        amountCents: amount,
+      });
+      if (!decision.ok) {
+        await db.runAsync('ROLLBACK').catch(() => {});
+        const status = decision.code === 'not_found' ? 404 : 400;
+        return res.status(status).json({
+          error: decision.error,
+          code: decision.code,
+          amount_due_cents: decision.amountDueCents,
+        });
+      }
 
-    res.json({ ok: true, payment_status: paymentStatus });
+      await db.runAsync(
+        `INSERT INTO crm_invoice_payments (crm_invoice_id, provider, amount_cents, payment_method_type, status, raw_json)
+         VALUES (?, 'manual', ?, ?, 'paid', ?)`,
+        [invoiceId, decision.amountCents, type, JSON.stringify({ ref })]
+      );
+
+      await db.runAsync(
+        `UPDATE crm_invoices
+         SET payment_status = ?, paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE paid_at END,
+             payment_method_type = ?, payment_reference = ?
+         WHERE id = ?`,
+        [decision.paymentStatus, decision.paymentStatus, type, ref, invoiceId]
+      );
+
+      await db.runAsync('COMMIT');
+      res.json({
+        ok: true,
+        payment_status: decision.paymentStatus,
+        amount_due_cents: Math.max(0, decision.totalCents - decision.newPaidCents),
+      });
+    } catch (inner) {
+      await db.runAsync('ROLLBACK').catch(() => {});
+      throw inner;
+    }
   } catch (e) {
     console.error('Record manual payment error:', e);
     res.status(500).json({ error: 'Server error' });
