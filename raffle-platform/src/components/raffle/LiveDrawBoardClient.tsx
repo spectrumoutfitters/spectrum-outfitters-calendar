@@ -176,15 +176,19 @@ export function LiveDrawBoardClient({ slug, event }: Props) {
         }
         if (action.type === "noop" || !action.winner) return;
 
+        const nextWinner = action.winner as PublicWinnerRow;
+        const nextDrawId = action.drawId ?? nextWinner.drawId;
+        if (!nextDrawId) return;
+
         if (action.type === "seed_winner") {
-          lastSeenDrawIdRef.current = action.drawId ?? action.winner.drawId;
-          setHighlightWinner(action.winner as PublicWinnerRow);
+          lastSeenDrawIdRef.current = nextDrawId;
+          setHighlightWinner(nextWinner);
           setPhase("winner");
           return;
         }
 
         if (action.type === "reveal") {
-          runRevealSequence(action.winner as PublicWinnerRow);
+          runRevealSequence(nextWinner);
         }
       } catch {
         if (!cancelled) setFeedError("reconnecting");
