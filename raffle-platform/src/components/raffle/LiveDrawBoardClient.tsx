@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { decideLiveDrawPollAction } from "@/lib/liveDrawRevealDecision";
 import type { EventConfig, PublicWinnerRow, PublicWinnersFeedResponse } from "@/lib/types";
 
 type Phase = "waiting" | "revealing" | "winner";
@@ -163,27 +164,27 @@ export function LiveDrawBoardClient({ slug, event }: Props) {
         setFeedError(null);
         setWinners(data.winners);
 
-        if (data.winners.length === 0) {
+        const action = decideLiveDrawPollAction({
+          winners: data.winners,
+          lastSeenDrawId: lastSeenDrawIdRef.current,
+          hadEmptyWinners: hadEmptyWinnersRef.current,
+        });
+
+        if (action.type === "mark_empty") {
           hadEmptyWinnersRef.current = true;
           return;
         }
+        if (action.type === "noop" || !action.winner) return;
 
-        const newest = data.winners[0];
-        if (!newest?.drawId) return;
-
-        if (lastSeenDrawIdRef.current === null) {
-          if (hadEmptyWinnersRef.current) {
-            runRevealSequence(newest);
-          } else {
-            lastSeenDrawIdRef.current = newest.drawId;
-            setHighlightWinner(newest);
-            setPhase("winner");
-          }
+        if (action.type === "seed_winner") {
+          lastSeenDrawIdRef.current = action.drawId ?? action.winner.drawId;
+          setHighlightWinner(action.winner as PublicWinnerRow);
+          setPhase("winner");
           return;
         }
 
-        if (newest.drawId !== lastSeenDrawIdRef.current) {
-          runRevealSequence(newest);
+        if (action.type === "reveal") {
+          runRevealSequence(action.winner as PublicWinnerRow);
         }
       } catch {
         if (!cancelled) setFeedError("reconnecting");
