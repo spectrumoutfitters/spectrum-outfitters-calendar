@@ -64,3 +64,5 @@ anthropics-skills/
 
 # GeoIP database (downloaded at runtime)
 backend/node_modules/geoip-lite/data/
+backend/data/dashboard-config.json
+backend/data/dashboard-sync-state.json

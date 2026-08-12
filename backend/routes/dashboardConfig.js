@@ -12,6 +12,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import {
+  extractDashboardSyncToken,
+  dashboardSyncTokenMatches,
+} from '../utils/dashboardSyncAuth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +24,19 @@ const router = express.Router();
 const dataDir = path.join(__dirname, '..', 'data');
 const configPath = path.join(dataDir, 'dashboard-config.json');
 const syncStatePath = path.join(dataDir, 'dashboard-sync-state.json');
+
+/**
+ * Full config includes vendor usernames/passwords. Require either:
+ * - DASHBOARD_SYNC_TOKEN (Bearer / X-Dashboard-Sync-Token / ?token=), or
+ * - an authenticated admin JWT.
+ * /check and /sync-report stay unauthenticated (no secrets).
+ */
+function requireDashboardConfigAccess(req, res, next) {
+  if (dashboardSyncTokenMatches(extractDashboardSyncToken(req))) {
+    return next();
+  }
+  return authenticateToken(req, res, () => requireAdmin(req, res, next));
+}
 
 async function ensureDataDir() {
   try {
@@ -45,8 +62,8 @@ async function writeSyncState(state) {
   await fs.writeFile(syncStatePath, JSON.stringify(state, null, 2), 'utf8');
 }
 
-/** GET — return last pushed config (for Pull / auto-sync) */
-router.get('/', async (req, res) => {
+/** GET — return last pushed config (for Pull / auto-sync). Auth required — contains credentials. */
+router.get('/', requireDashboardConfigAccess, async (req, res) => {
   try {
     await ensureDataDir();
     const raw = await fs.readFile(configPath, 'utf8');
@@ -61,8 +78,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-/** POST — save config (master Push from Spectrum Outfitters Assistant) */
-router.post('/', express.json({ limit: '10mb' }), async (req, res) => {
+/** POST — save config (master Push from Spectrum Outfitters Assistant). Auth required. */
+router.post('/', requireDashboardConfigAccess, express.json({ limit: '10mb' }), async (req, res) => {
   try {
     const body = req.body;
     if (!body || typeof body !== 'object') {
