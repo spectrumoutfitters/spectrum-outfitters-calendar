@@ -5,17 +5,23 @@ The **Spectrum Outfitters Calendar** backend now hosts the Dashboard Assistant s
 ## API (already added)
 
 - **GET** `http://YOUR_SERVER:5000/api/dashboard-config` — returns the last pushed config (items, category order, Spectrum server). Used by the app on startup and when users click "Pull update".
-- **POST** `http://YOUR_SERVER:5000/api/dashboard-config` — saves the config (called when you click "Push update" in Dashboard Assistant). Stored in `backend/data/dashboard-config.json`.
+- **POST** `http://YOUR_SERVER:5000/api/dashboard-config` — saves the config (called when you click "Push update" in Dashboard Assistant). Stored in `backend/data/dashboard-config.json` (gitignored; see `dashboard-config.example.json`).
+
+**Auth required for GET and POST** — the payload can include vendor usernames/passwords. Set `DASHBOARD_SYNC_TOKEN` on the Calendar server, then pass it as:
+- query: `?token=YOUR_TOKEN` (easiest — append to the Sync server URL in Assistant settings), or
+- header: `Authorization: Bearer YOUR_TOKEN` / `X-Dashboard-Sync-Token: YOUR_TOKEN`
+
+Admin JWT also works. Unauthenticated callers get `401`. `/check` and `/sync-report` stay open (no secrets).
 
 Replace `YOUR_SERVER` with:
-- **Same machine:** `localhost` (e.g. `http://localhost:5000/api/dashboard-config`)
-- **Network (your PC as server):** your computer’s IP (e.g. `http://192.168.1.100:5000/api/dashboard-config`)
-- **Deployed site:** your domain (e.g. `https://spectrumoutfitters.com/api/dashboard-config` if the Calendar backend is deployed there)
+- **Same machine:** `localhost` (e.g. `http://localhost:5000/api/dashboard-config?token=YOUR_TOKEN`)
+- **Network (your PC as server):** your computer’s IP (e.g. `http://192.168.1.100:5000/api/dashboard-config?token=YOUR_TOKEN`)
+- **Deployed site:** your domain (e.g. `https://spectrumoutfitters.com/api/dashboard-config?token=YOUR_TOKEN` if the Calendar backend is deployed there)
 
 ## Sync URL in the app
 
-- **Your machine (admin):** In Dashboard Assistant → Settings → set **Sync server URL** to e.g. `http://localhost:5000/api/dashboard-config` (or your public URL if you’re not on the same PC). Save, then use **Push update** after you change items or credentials.
-- **Other users:** Set **Sync server URL** to the **same** URL (so it points to your Calendar server). Save. The app will **auto-pull on every startup**, so they’re always in sync with your last push until you push again.
+- **Your machine (admin):** In Dashboard Assistant → Settings → set **Sync server URL** to e.g. `http://localhost:5000/api/dashboard-config?token=YOUR_TOKEN` (or your public URL if you’re not on the same PC). Save, then use **Push update** after you change items or credentials.
+- **Other users:** Set **Sync server URL** to the **same** URL (including the token). Save. The app will **auto-pull on every startup**, so they’re always in sync with your last push until you push again.
 
 ## Download link on the calendar page
 
