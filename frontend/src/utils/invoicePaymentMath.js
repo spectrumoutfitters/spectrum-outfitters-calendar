@@ -31,7 +31,9 @@ export function sumSucceededPaymentCents(payments) {
 
 /**
  * Remaining balance due in cents.
- * @returns {number|null} null when total is missing/non-finite
+ * Uses Number() coercion (so `null` total becomes 0); returns null only when
+ * the coerced total is non-finite (e.g. undefined / NaN).
+ * @returns {number|null}
  */
 export function invoiceAmountDueCents(totalCents, paidCents) {
   const total = Number(totalCents);

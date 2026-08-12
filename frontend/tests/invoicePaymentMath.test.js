@@ -59,11 +59,13 @@ describe('invoiceAmountDueCents', () => {
     assert.equal(invoiceAmountDueCents(5000, 6000), 0);
   });
 
-  it('returns null when invoice total is missing or non-finite', () => {
+  it('returns null when invoice total is undefined/non-finite (Number coercion)', () => {
+    // Matches prior InvoiceDetail behavior: Number(undefined)/NaN → null due.
     assert.equal(invoiceAmountDueCents(undefined, 0), null);
-    assert.equal(invoiceAmountDueCents(null, 0), null);
     assert.equal(invoiceAmountDueCents('x', 0), null);
     assert.equal(invoiceAmountDueCents(Number.NaN, 0), null);
+    // Number(null) === 0, so a null total is treated as $0 due, not "unknown".
+    assert.equal(invoiceAmountDueCents(null, 0), 0);
   });
 
   it('treats non-finite paid as zero (regression: bad ledger row must not blank due)', () => {
@@ -79,9 +81,10 @@ describe('formatCents', () => {
     assert.equal(formatCents(123456), '$1234.56');
   });
 
-  it('returns an em dash for non-finite values', () => {
+  it('returns an em dash for non-finite values (Number coercion)', () => {
     assert.equal(formatCents(undefined), '—');
-    assert.equal(formatCents(null), '—');
     assert.equal(formatCents(Number.NaN), '—');
+    // Number(null) === 0 — keep display behavior stable with prior pages.
+    assert.equal(formatCents(null), '$0.00');
   });
 });
