@@ -1,15 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../utils/api';
+import { formatCents as fmtCents } from '../utils/invoicePaymentMath';
 import Logo from '../components/Logo';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
-
-const fmtCents = (cents) => {
-  const n = Number(cents);
-  if (!Number.isFinite(n)) return '—';
-  return `$${(n / 100).toFixed(2)}`;
-};
 
 const stripePk = (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim();
 const stripePromise = stripePk ? loadStripe(stripePk) : null;
