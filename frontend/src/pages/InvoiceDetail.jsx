@@ -1,14 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../utils/api';
+import {
+  formatCents as fmtCents,
+  invoiceAmountDueCents,
+  sumSucceededPaymentCents,
+} from '../utils/invoicePaymentMath';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
-
-const fmtCents = (cents) => {
-  const n = Number(cents);
-  if (!Number.isFinite(n)) return '—';
-  return `$${(n / 100).toFixed(2)}`;
-};
 
 const stripePk = (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim();
 const stripePromise = stripePk ? loadStripe(stripePk) : null;
@@ -220,22 +219,15 @@ const InvoiceDetail = () => {
     return [invoice.year, invoice.make, invoice.model].filter(Boolean).join(' ') || invoice.vin || invoice.license_plate || '—';
   }, [invoice]);
 
-  const amountPaidCents = useMemo(() => {
-    let sum = 0;
-    for (const p of payments || []) {
-      const status = String(p.status || '').toLowerCase();
-      if (status !== 'succeeded' && status !== 'paid') continue;
-      const a = Number(p.amount_cents);
-      if (Number.isFinite(a)) sum += a;
-    }
-    return sum;
-  }, [payments]);
+  const amountPaidCents = useMemo(
+    () => sumSucceededPaymentCents(payments),
+    [payments],
+  );
 
-  const amountDueCents = useMemo(() => {
-    const total = Number(invoice?.total_cents);
-    if (!Number.isFinite(total)) return null;
-    return Math.max(0, total - amountPaidCents);
-  }, [invoice?.total_cents, amountPaidCents]);
+  const amountDueCents = useMemo(
+    () => invoiceAmountDueCents(invoice?.total_cents, amountPaidCents),
+    [invoice?.total_cents, amountPaidCents],
+  );
 
   const reloadPayments = useCallback(async () => {
     if (!invoice?.id) return;
