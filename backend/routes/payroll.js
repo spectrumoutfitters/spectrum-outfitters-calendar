@@ -7,6 +7,19 @@ import { dirname } from 'path';
 import fs from 'fs';
 import { getPayrollDataPath } from '../utils/payrollDataPath.js';
 import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/payrollHistoryRecords.js';
+import {
+  payrollAccessFlags,
+  payrollAccessRevokeBlock,
+  isSafePayrollDataFilename,
+  payrollEmployeeLookupKey,
+  calendarEmployeeLookupKey,
+  mergeCalendarPayrollEmployee,
+  payrollWeekBoundsFromEndingDate,
+  mapPayrollTimeEntry,
+  groupPayrollTimeByUser,
+  payrollHistoryInDateRange,
+  sumPayrollHistoryTotals,
+} from '../utils/payrollSyncMath.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,15 +41,7 @@ router.get('/access', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const hasAccess = user.payroll_access === 1 || user.is_master_admin === 1;
-    const isMasterAdmin = user.is_master_admin === 1;
-
-    res.json({
-      hasAccess,
-      isMasterAdmin,
-      payrollAccess: user.payroll_access === 1,
-      isMaster: user.is_master_admin === 1
-    });
+    res.json(payrollAccessFlags(user));
   } catch (error) {
     console.error('Check payroll access error:', error);
     res.status(500).json({ error: 'Server error' });
@@ -66,15 +71,15 @@ router.put('/admins/:id/access', requireMasterAdmin, async (req, res) => {
     const { id } = req.params;
     const { payroll_access } = req.body;
 
-    // Prevent master admin from removing their own access
     const targetUser = await db.getAsync('SELECT is_master_admin FROM users WHERE id = ?', [id]);
-    if (targetUser && targetUser.is_master_admin === 1 && payroll_access === false) {
-      return res.status(400).json({ error: 'Cannot remove payroll access from master admin' });
-    }
-
-    // Prevent removing access from yourself
-    if (parseInt(id) === req.user.id && payroll_access === false) {
-      return res.status(400).json({ error: 'Cannot remove your own payroll access' });
+    const revokeBlock = payrollAccessRevokeBlock({
+      targetIsMasterAdmin: !!(targetUser && targetUser.is_master_admin === 1),
+      actorId: req.user.id,
+      targetId: id,
+      payroll_access,
+    });
+    if (revokeBlock.blocked) {
+      return res.status(400).json({ error: revokeBlock.error });
     }
 
     await db.runAsync(
@@ -123,14 +128,13 @@ router.get('/path', requirePayrollAccess, (req, res) => {
 router.get('/data/:filename', requirePayrollAccess, (req, res) => {
   try {
     const { filename } = req.params;
-    // Sanitize filename to prevent directory traversal
-    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    if (!isSafePayrollDataFilename(filename)) {
       return res.status(400).json({ error: 'Invalid filename' });
     }
-    
+
     const dataPath = getPayrollDataPath();
     const filePath = path.join(dataPath, filename);
-    
+
     if (fs.existsSync(filePath)) {
       const data = fs.readFileSync(filePath, 'utf8');
       res.json({ success: true, data });
@@ -149,11 +153,10 @@ router.post('/data/:filename', requirePayrollAccess, (req, res) => {
     const { filename } = req.params;
     const { data } = req.body;
     
-    // Sanitize filename to prevent directory traversal
-    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    if (!isSafePayrollDataFilename(filename)) {
       return res.status(400).json({ error: 'Invalid filename' });
     }
-    
+
     if (data === undefined || data === null) {
       return res.status(400).json({ error: 'Data is required' });
     }
@@ -245,29 +248,14 @@ router.get('/sync/employees', requirePayrollAccess, async (req, res) => {
     // Create a map of existing payroll employees by name/username
     const payrollMap = new Map();
     payrollEmployees.forEach(emp => {
-      const key = emp.name?.toLowerCase() || emp.username?.toLowerCase() || '';
+      const key = payrollEmployeeLookupKey(emp);
       payrollMap.set(key, emp);
     });
 
-    // Merge Calendar employees with payroll data
     const syncedEmployees = calendarEmployees.map(calEmp => {
-      const key = calEmp.full_name?.toLowerCase() || calEmp.username?.toLowerCase() || '';
+      const key = calendarEmployeeLookupKey(calEmp);
       const existingPayroll = payrollMap.get(key);
-      
-      return {
-        id: calEmp.id, // Calendar system ID for reference
-        name: calEmp.full_name,
-        username: calEmp.username,
-        email: calEmp.email || '',
-        hourlyRate: calEmp.hourly_rate || existingPayroll?.hourlyRate || 0,
-        weeklySalary: calEmp.weekly_salary || existingPayroll?.weeklySalary || 0,
-        // Preserve existing payroll-specific fields
-        ...(existingPayroll && {
-          taxInfo: existingPayroll.taxInfo,
-          deductions: existingPayroll.deductions,
-          notes: existingPayroll.notes
-        })
-      };
+      return mergeCalendarPayrollEmployee(calEmp, existingPayroll);
     });
 
     res.json({ 
@@ -291,16 +279,7 @@ router.get('/sync/time-entries', requirePayrollAccess, async (req, res) => {
       return res.status(400).json({ error: 'week_ending_date is required' });
     }
 
-    // Calculate week start (Monday) and end (Sunday) from week_ending_date
-    const weekEnd = new Date(week_ending_date);
-    const dayOfWeek = weekEnd.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Days to get to Monday
-    const weekStart = new Date(weekEnd);
-    weekStart.setDate(weekEnd.getDate() - daysToSubtract);
-    weekStart.setHours(0, 0, 0, 0);
-    
-    const weekEndDate = new Date(weekEnd);
-    weekEndDate.setHours(23, 59, 59, 999);
+    const { weekStart, weekEndDate } = payrollWeekBoundsFromEndingDate(week_ending_date);
 
     // Get time entries for the week (Monday to Sunday)
     let query = `
@@ -327,43 +306,8 @@ router.get('/sync/time-entries', requirePayrollAccess, async (req, res) => {
 
     const entries = await db.allAsync(query, params);
 
-    // Calculate hours for each entry
-    const timeData = entries.map(entry => {
-      const clockIn = new Date(entry.clock_in);
-      const clockOut = new Date(entry.clock_out);
-      const hours = (clockOut - clockIn) / (1000 * 60 * 60) - (entry.break_minutes || 0) / 60;
-      
-      return {
-        user_id: entry.user_id,
-        full_name: entry.full_name,
-        username: entry.username,
-        date: entry.clock_in.split('T')[0],
-        clock_in: entry.clock_in,
-        clock_out: entry.clock_out,
-        hours: Math.max(0, hours),
-        break_minutes: entry.break_minutes || 0,
-        hourly_rate: entry.hourly_rate || 0,
-        weekly_salary: entry.weekly_salary || 0
-      };
-    });
-
-    // Group by user and calculate totals
-    const groupedByUser = timeData.reduce((acc, entry) => {
-      if (!acc[entry.user_id]) {
-        acc[entry.user_id] = {
-          user_id: entry.user_id,
-          full_name: entry.full_name,
-          username: entry.username,
-          hourly_rate: entry.hourly_rate,
-          weekly_salary: entry.weekly_salary,
-          total_hours: 0,
-          entries: []
-        };
-      }
-      acc[entry.user_id].total_hours += entry.hours;
-      acc[entry.user_id].entries.push(entry);
-      return acc;
-    }, {});
+    const timeData = entries.map(mapPayrollTimeEntry);
+    const groupedByUser = groupPayrollTimeByUser(timeData);
 
     res.json({ 
       success: true,
@@ -386,16 +330,7 @@ router.post('/sync/import-hours', requirePayrollAccess, async (req, res) => {
       return res.status(400).json({ error: 'week_ending_date is required' });
     }
 
-    // Calculate week start (Monday) and end (Sunday) from week_ending_date
-    const weekEnd = new Date(week_ending_date);
-    const dayOfWeek = weekEnd.getDay();
-    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const weekStart = new Date(weekEnd);
-    weekStart.setDate(weekEnd.getDate() - daysToSubtract);
-    weekStart.setHours(0, 0, 0, 0);
-    
-    const weekEndDate = new Date(weekEnd);
-    weekEndDate.setHours(23, 59, 59, 999);
+    const { weekStart, weekEndDate } = payrollWeekBoundsFromEndingDate(week_ending_date);
 
     // Reuse the time-entries query logic
     let query = `
@@ -422,43 +357,8 @@ router.post('/sync/import-hours', requirePayrollAccess, async (req, res) => {
 
     const entries = await db.allAsync(query, params);
 
-    // Calculate hours for each entry
-    const timeData = entries.map(entry => {
-      const clockIn = new Date(entry.clock_in);
-      const clockOut = new Date(entry.clock_out);
-      const hours = (clockOut - clockIn) / (1000 * 60 * 60) - (entry.break_minutes || 0) / 60;
-      
-      return {
-        user_id: entry.user_id,
-        full_name: entry.full_name,
-        username: entry.username,
-        date: entry.clock_in.split('T')[0],
-        clock_in: entry.clock_in,
-        clock_out: entry.clock_out,
-        hours: Math.max(0, hours),
-        break_minutes: entry.break_minutes || 0,
-        hourly_rate: entry.hourly_rate || 0,
-        weekly_salary: entry.weekly_salary || 0
-      };
-    });
-
-    // Group by user and calculate totals
-    const groupedByUser = timeData.reduce((acc, entry) => {
-      if (!acc[entry.user_id]) {
-        acc[entry.user_id] = {
-          user_id: entry.user_id,
-          full_name: entry.full_name,
-          username: entry.username,
-          hourly_rate: entry.hourly_rate,
-          weekly_salary: entry.weekly_salary,
-          total_hours: 0,
-          entries: []
-        };
-      }
-      acc[entry.user_id].total_hours += entry.hours;
-      acc[entry.user_id].entries.push(entry);
-      return acc;
-    }, {});
+    const timeData = entries.map(mapPayrollTimeEntry);
+    const groupedByUser = groupPayrollTimeByUser(timeData);
 
     res.json({ 
       success: true,
@@ -482,25 +382,8 @@ router.get('/sync/payroll-summary', requirePayrollAccess, async (req, res) => {
     
     const { records: payrollHistory } = await loadMergedPayrollHistory();
 
-    // Filter by date range if provided
-    let filteredHistory = payrollHistory;
-    if (start_date || end_date) {
-      filteredHistory = payrollHistory.filter(record => {
-        const recordDate = record.payDate || record.date || record.processedDate || '';
-        if (start_date && recordDate < start_date) return false;
-        if (end_date && recordDate > end_date) return false;
-        return true;
-      });
-    }
-
-    // Calculate totals
-    const totals = filteredHistory.reduce((acc, record) => {
-      acc.total_gross += parseFloat(record.grossPay || 0);
-      acc.total_taxes += parseFloat(record.totalTaxes || 0);
-      acc.total_net += parseFloat(record.netPay || 0);
-      acc.record_count += 1;
-      return acc;
-    }, { total_gross: 0, total_taxes: 0, total_net: 0, record_count: 0 });
+    const filteredHistory = payrollHistoryInDateRange(payrollHistory, start_date, end_date);
+    const totals = sumPayrollHistoryTotals(filteredHistory);
 
     res.json({
       success: true,
