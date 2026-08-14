@@ -2,6 +2,10 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { findDealsForInventoryItem } from '../services/deals/dealFinder.js';
+import {
+  currentInventoryQuantity,
+  parseInventoryReturnQuantity,
+} from '../utils/inventoryReturnQuantity.js';
 
 const router = express.Router();
 
@@ -726,22 +730,12 @@ router.post('/items/:id/request-return', async (req, res) => {
     const row = await db.getAsync('SELECT id, name, quantity FROM inventory_items WHERE id = ?', [id]);
     if (!row) return res.status(404).json({ error: 'Item not found' });
 
-    const currentQty = row.quantity != null ? Number(row.quantity) : 0;
-    let returnQty = null;
-    if (returnQtyRaw !== undefined && returnQtyRaw !== null && returnQtyRaw !== '') {
-      const parsed = Number.parseFloat(returnQtyRaw);
-      if (!Number.isFinite(parsed) || parsed < 1) {
-        return res.status(400).json({ error: 'Return quantity must be at least 1.' });
-      }
-      if (currentQty > 1 && parsed > currentQty) {
-        return res.status(400).json({ error: `Return quantity cannot exceed current quantity (${currentQty}).` });
-      }
-      returnQty = Math.floor(parsed);
+    const currentQty = currentInventoryQuantity(row.quantity);
+    const parsedQty = parseInventoryReturnQuantity(returnQtyRaw, currentQty);
+    if (parsedQty.error) {
+      return res.status(400).json({ error: parsedQty.error });
     }
-    if (currentQty > 1 && (returnQty == null || returnQty < 1)) {
-      return res.status(400).json({ error: 'Please specify how many need to be returned.' });
-    }
-    const effectiveReturnQty = returnQty != null ? returnQty : (currentQty >= 1 ? 1 : 1);
+    const { returnQty, effectiveReturnQty } = parsedQty;
 
     await db.runAsync(
       `UPDATE inventory_items SET needs_return = 1, returned_at = NULL, return_supplier = ?, return_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
