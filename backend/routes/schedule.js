@@ -9,6 +9,13 @@ import {
   listCalendars,
   getGoogleCalendarConfig
 } from '../utils/googleCalendarService.js';
+import {
+  parseEmployeesSeeAllSetting,
+  employeesSeeAllToStoredValue,
+  parseScheduleDateRange,
+  resolveScheduleCreateTarget,
+  resolveScheduleCreateTypeStatus,
+} from '../utils/scheduleEntryMath.js';
 
 const router = express.Router();
 
@@ -19,7 +26,7 @@ router.use(authenticateToken);
 router.get('/visibility', async (req, res) => {
   try {
     const row = await db.getAsync("SELECT value FROM app_settings WHERE key = 'schedule_employees_see_all'");
-    const employeesSeeAll = row?.value === '1' || row?.value === 'true';
+    const employeesSeeAll = parseEmployeesSeeAllSetting(row?.value);
     res.json({ employeesSeeAll: !!employeesSeeAll });
   } catch (error) {
     console.error('Get schedule visibility error:', error);
@@ -31,7 +38,7 @@ router.get('/visibility', async (req, res) => {
 router.put('/visibility', requireAdmin, async (req, res) => {
   try {
     const { employeesSeeAll } = req.body ?? {};
-    const value = employeesSeeAll === true || employeesSeeAll === 'true' ? '1' : '0';
+    const value = employeesSeeAllToStoredValue(employeesSeeAll);
     await db.runAsync(
       `INSERT INTO app_settings (key, value, updated_at) VALUES ('schedule_employees_see_all', ?, CURRENT_TIMESTAMP)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
@@ -88,7 +95,7 @@ router.get('/', async (req, res) => {
       let employeesSeeAll = false;
       try {
         const row = await db.getAsync("SELECT value FROM app_settings WHERE key = 'schedule_employees_see_all'");
-        employeesSeeAll = row?.value === '1' || row?.value === 'true';
+        employeesSeeAll = parseEmployeesSeeAllSetting(row?.value);
       } catch (_) {}
       if (!employeesSeeAll) {
         query += ' AND (se.user_id = ? OR se.is_shop_wide = 1)';
@@ -188,7 +195,7 @@ router.get('/entry/:id', async (req, res) => {
       let employeesSeeAll = false;
       try {
         const row = await db.getAsync("SELECT value FROM app_settings WHERE key = 'schedule_employees_see_all'");
-        employeesSeeAll = row?.value === '1' || row?.value === 'true';
+        employeesSeeAll = parseEmployeesSeeAllSetting(row?.value);
       } catch (_) {}
       if (!employeesSeeAll) {
         query += ' AND (se.user_id = ? OR se.is_shop_wide = 1)';
@@ -225,36 +232,20 @@ router.post('/', async (req, res) => {
       }
     } catch (_) {}
 
-    // Determine which user this is for
-    let targetUserId;
-    let shopWide = is_shop_wide === true || is_shop_wide === 1;
-    
-    if (shopWide) {
-      // Shop-wide closed days - only admins can create these
-      if (!isAdmin) {
-        return res.status(403).json({ error: 'Only admins can create shop-wide closed days' });
-      }
-      targetUserId = null; // Use NULL for shop-wide entries (no foreign key constraint)
-    } else if (isAdmin) {
-      // Admin can create for any user, or for themselves if user_id is not provided
-      targetUserId = user_id || req.user.id;
-    } else {
-      // Employees can only create requests for themselves
-      targetUserId = req.user.id;
+    const target = resolveScheduleCreateTarget({
+      isAdmin,
+      actorUserId: req.user.id,
+      user_id,
+      is_shop_wide,
+    });
+    if (target.error) {
+      return res.status(target.status).json({ error: target.error });
     }
+    const { shopWide, targetUserId } = target;
 
-    if (!start_date || !end_date) {
-      return res.status(400).json({ error: 'start_date and end_date are required' });
-    }
-
-    // Validate dates
-    const start = new Date(start_date);
-    const end = new Date(end_date);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      return res.status(400).json({ error: 'Invalid date format' });
-    }
-    if (end < start) {
-      return res.status(400).json({ error: 'end_date must be after start_date' });
+    const dates = parseScheduleDateRange(start_date, end_date);
+    if (dates.error) {
+      return res.status(400).json({ error: dates.error });
     }
 
     // Check for overlapping entries
@@ -302,17 +293,11 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Determine type and status based on who's creating it
-    const isEvent = is_event === true || is_event === 'true' || is_event === 1;
-    const eventTypes = ['meeting', 'training', 'other', 'appointment', 'workshop', 'conference'];
-    let entryType = type || (isAdmin ? 'day_off' : 'time_off_request');
-    let entryStatus = isAdmin ? 'scheduled' : 'pending'; // Employee requests need approval
-
-    // Employees can add "events" (meeting/training/other) that go on the calendar immediately
-    if (!isAdmin && isEvent) {
-      entryType = eventTypes.includes(entryType) ? entryType : 'meeting';
-      entryStatus = 'scheduled';
-    }
+    const { entryType, entryStatus } = resolveScheduleCreateTypeStatus({
+      isAdmin,
+      type,
+      is_event,
+    });
 
     const pushCalendarId = isAdmin && google_calendar_id && typeof google_calendar_id === 'string' && google_calendar_id.trim()
       ? google_calendar_id.trim()
@@ -462,15 +447,11 @@ router.put('/:id', requireAdmin, async (req, res) => {
     }
 
     // Validate dates if provided
-    if (start_date && end_date) {
-      const start = new Date(start_date);
-      const end = new Date(end_date);
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        return res.status(400).json({ error: 'Invalid date format' });
-      }
-      if (end < start) {
-        return res.status(400).json({ error: 'end_date must be after start_date' });
-      }
+    const dates = parseScheduleDateRange(start_date, end_date, { required: false });
+    if (dates.error) {
+      return res.status(400).json({ error: dates.error });
+    }
+    if (!dates.skip) {
 
       // Check for overlapping entries (excluding current entry)
       const overlapping = await db.allAsync(`
