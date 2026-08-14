@@ -2,6 +2,7 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { findDealsForInventoryItem } from '../services/deals/dealFinder.js';
+import { decideMarkReturned } from '../utils/inventoryMarkReturned.js';
 
 const router = express.Router();
 
@@ -680,18 +681,42 @@ router.put('/items/:id', requireAdmin, async (req, res) => {
 router.post('/items/:id/mark-returned', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const row = await db.getAsync('SELECT id FROM inventory_items WHERE id = ?', [id]);
-    if (!row) return res.status(404).json({ error: 'Item not found' });
-
-    await db.runAsync(
-      `UPDATE inventory_items SET returned_at = CURRENT_TIMESTAMP, needs_return = 0, return_quantity = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    const row = await db.getAsync(
+      'SELECT id, quantity, return_quantity FROM inventory_items WHERE id = ?',
       [id]
     );
+    if (!row) return res.status(404).json({ error: 'Item not found' });
 
-    // Auto-remove from task parts list when returned
-    try {
-      await db.runAsync(`DELETE FROM inventory_task_usage WHERE item_id = ?`, [id]);
-    } catch (_) { /* table may not exist yet */ }
+    const decision = decideMarkReturned({
+      quantity: row.quantity,
+      returnQuantity: row.return_quantity
+    });
+
+    await db.runAsync(
+      `UPDATE inventory_items
+       SET quantity = ?,
+           returned_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END,
+           needs_return = 0,
+           return_quantity = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [decision.quantityAfter, decision.setReturnedAt ? 1 : 0, id]
+    );
+
+    if (decision.qtyToRemove > 0) {
+      await db.runAsync(
+        `INSERT INTO inventory_quantity_log (item_id, quantity_before, quantity_after, changed_by, reason) VALUES (?, ?, ?, ?, 'returned')`,
+        [id, row.quantity ?? 0, decision.quantityAfter, req.user.id]
+      ).catch(() => {});
+    }
+
+    // Only unlink task parts when the SKU is fully returned. A partial return
+    // must not wipe remaining units off jobs that still have this item.
+    if (decision.unlinkTaskUsage) {
+      try {
+        await db.runAsync(`DELETE FROM inventory_task_usage WHERE item_id = ?`, [id]);
+      } catch (_) { /* table may not exist yet */ }
+    }
 
     const fields = [
       'i.id', 'i.barcode', 'i.name', 'i.category_id', 'c.name AS category_name', 'i.unit', 'i.price', 'i.quantity',
