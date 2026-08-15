@@ -2,6 +2,12 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { sendPushToAdmins } from '../utils/pushNotifications.js';
+import {
+  validateQuickNotificationFields,
+  canSendQuickNotification,
+  buildQuickNotificationMessage,
+  applyQuickNotificationTypeFields,
+} from '../utils/quickNotificationMath.js';
 
 const router = express.Router();
 
@@ -15,23 +21,18 @@ router.post('/quick', async (req, res) => {
     const userId = req.user.id;
     const userName = req.user.full_name || req.user.username;
 
-    // Validate required fields based on type
-    if (type === 'parts_arrived') {
-      // Accept either taskId (for backward compatibility) or taskTitle (new way)
-      if (!taskTitle && !taskId) {
-        return res.status(400).json({ error: 'Missing required field: taskTitle or taskId' });
-      }
-      if (!distributor) {
-        return res.status(400).json({ error: 'Missing required field: distributor' });
-      }
-    } else if (type === 'need_assistance') {
-      if (!req.body.urgency) {
-        return res.status(400).json({ error: 'Missing required field: urgency' });
-      }
+    const fieldCheck = validateQuickNotificationFields({
+      type,
+      taskId,
+      taskTitle,
+      distributor,
+      urgency: req.body.urgency,
+    });
+    if (fieldCheck.error) {
+      return res.status(400).json({ error: fieldCheck.error });
     }
 
-    // Only allow employees to send quick notifications
-    if (req.user.role === 'admin') {
+    if (!canSendQuickNotification(req.user.role)) {
       return res.status(403).json({ error: 'Admins cannot send quick notifications' });
     }
 
@@ -45,21 +46,14 @@ router.post('/quick', async (req, res) => {
       return res.status(404).json({ error: 'No admins found' });
     }
 
-    // Create notification message based on type
-    let notificationMessage = '';
-    if (type === 'parts_arrived') {
-      // Use vehicle if provided, otherwise use taskTitle for backward compatibility
-      const vehicleInfo = req.body.vehicle || taskTitle || 'Unknown Vehicle';
-      notificationMessage = `📦 Parts Arrived: ${userName} reports that parts have arrived for ${vehicleInfo} from ${distributor}.`;
-    } else if (type === 'need_assistance') {
-      const urgency = req.body.urgency || 'convenience';
-      const urgencyText = urgency === 'immediate' ? '🚨 IMMEDIATE' : '⏰ At First Convenience';
-      notificationMessage = `${urgencyText} Assistance Needed: ${userName} needs assistance (${urgency === 'immediate' ? 'urgent' : 'when convenient'}).`;
-    } else if (type === 'customer_arrived') {
-      notificationMessage = `👋 Customer Arrived: ${userName} reports that a customer has arrived at the shop.`;
-    } else {
-      notificationMessage = `🔔 Quick Notification: ${userName} sent a notification.`;
-    }
+    const notificationMessage = buildQuickNotificationMessage({
+      type,
+      userName,
+      vehicle: req.body.vehicle,
+      taskTitle,
+      distributor,
+      urgency: req.body.urgency,
+    });
 
     // Get Socket.io instance
     const io = req.app.get('io');
@@ -106,17 +100,13 @@ router.post('/quick', async (req, res) => {
       timestamp: new Date().toISOString()
     };
 
-    // Add type-specific fields
-    if (type === 'parts_arrived') {
-      // Include taskId if provided (for backward compatibility), otherwise just use taskTitle
-      if (taskId) {
-        notificationData.taskId = taskId;
-      }
-      notificationData.taskTitle = taskTitle || 'Unknown Task';
-      notificationData.distributor = distributor;
-    } else if (type === 'need_assistance') {
-      notificationData.urgency = req.body.urgency;
-    }
+    applyQuickNotificationTypeFields(notificationData, {
+      type,
+      taskId,
+      taskTitle,
+      distributor,
+      urgency: req.body.urgency,
+    });
 
     io.to('admin').emit('admin_notification', notificationData);
 
