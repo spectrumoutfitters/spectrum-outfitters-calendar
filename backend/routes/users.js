@@ -3,6 +3,14 @@ import bcrypt from 'bcryptjs';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { sanitizeInput, validateEmail, toTitleCase } from '../utils/helpers.js';
+import {
+  coerceUserRole,
+  coercePayRate,
+  coerceSplitAmount,
+  coerceSplitNotes,
+  coerceSplitPeriod,
+  isSelfDeactivation,
+} from '../utils/userAccountMath.js';
 
 const router = express.Router();
 
@@ -99,9 +107,9 @@ router.post('/', requireAdmin, async (req, res) => {
         passwordHash,
         email ? sanitizeInput(email) : null,
         toTitleCase(sanitizeInput(full_name)),
-        role === 'admin' ? 'admin' : 'employee',
-        hourly_rate || 0,
-        weekly_salary || 0
+        coerceUserRole(role),
+        coercePayRate(hourly_rate),
+        coercePayRate(weekly_salary)
       ]
     );
 
@@ -171,15 +179,15 @@ router.put('/:id', requireAdmin, async (req, res) => {
     }
     if (role) {
       updateFields.push('role = ?');
-      updateValues.push(role === 'admin' ? 'admin' : 'employee');
+      updateValues.push(coerceUserRole(role));
     }
     if (hourly_rate !== undefined) {
       updateFields.push('hourly_rate = ?');
-      updateValues.push(hourly_rate || 0);
+      updateValues.push(coercePayRate(hourly_rate));
     }
     if (weekly_salary !== undefined) {
       updateFields.push('weekly_salary = ?');
-      updateValues.push(weekly_salary || 0);
+      updateValues.push(coercePayRate(weekly_salary));
     }
     if (is_active !== undefined) {
       updateFields.push('is_active = ?');
@@ -187,16 +195,15 @@ router.put('/:id', requireAdmin, async (req, res) => {
     }
     if (split_reimbursable_amount !== undefined) {
       updateFields.push('split_reimbursable_amount = ?');
-      updateValues.push(parseFloat(split_reimbursable_amount) || 0);
+      updateValues.push(coerceSplitAmount(split_reimbursable_amount));
     }
     if (split_reimbursable_notes !== undefined) {
       updateFields.push('split_reimbursable_notes = ?');
-      updateValues.push((split_reimbursable_notes || '').trim() || null);
+      updateValues.push(coerceSplitNotes(split_reimbursable_notes));
     }
     if (split_reimbursable_period !== undefined) {
-      const period = split_reimbursable_period === 'monthly' ? 'monthly' : 'weekly';
       updateFields.push('split_reimbursable_period = ?');
-      updateValues.push(period);
+      updateValues.push(coerceSplitPeriod(split_reimbursable_period));
     }
 
     if (updateFields.length === 0) {
@@ -301,7 +308,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (parseInt(id) === req.user.id) {
+    if (isSelfDeactivation(req.user.id, id)) {
       return res.status(400).json({ error: 'Cannot deactivate your own account' });
     }
 
