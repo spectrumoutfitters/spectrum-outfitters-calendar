@@ -752,7 +752,12 @@ function handleSaveEventConfig_(data) {
 }
 
 function normalizePhone_(phone) {
-  return String(phone || '').replace(/\D/g, '');
+  // Keep in sync with backend/utils/raffleCanonicalPhone.js canonicalizePhone.
+  // Digit-only is not enough: +1 (555) 123-4567 and (555) 123-4567 must be the
+  // same identity or "one submission per phone" is bypassed.
+  var digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length === 11 && digits.charAt(0) === '1') return digits.slice(1);
+  return digits;
 }
 
 function rateLimitOk_(ip) {
@@ -2445,7 +2450,7 @@ function handleDrawWinner_(data) {
     var isTest = String(row[10]).toUpperCase() === 'TRUE';
     if (testModeOnly && !isTest) continue;
     if (!testModeOnly && isTest) continue;
-    var phone = String(row[3] || '');
+    var phone = normalizePhone_(row[3]);
     if (excludePhones.indexOf(phone) >= 0) continue;
     var w = Number(row[9]) || 0;
     if (w <= 0) continue;
