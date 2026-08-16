@@ -1,6 +1,15 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import {
+  coerceIsActive,
+  coerceShowOnLogin,
+  coerceUpdatePriority,
+  coerceUpdateType,
+  coerceUpdateVersion,
+  countLoginUnread,
+  resolveCreatePending,
+} from '../utils/systemUpdateMath.js';
 
 const router = express.Router();
 
@@ -38,7 +47,7 @@ router.get('/', async (req, res) => {
     }));
 
     // Count unread updates
-    const unreadCount = updatesWithStatus.filter(u => !u.is_read && u.show_on_login === 1).length;
+    const unreadCount = countLoginUnread(updatesWithStatus);
 
     res.json({
       updates: updatesWithStatus,
@@ -181,7 +190,7 @@ router.post('/admin', requireAdmin, async (req, res) => {
     }
 
     // New updates start as pending unless auto_approve is true
-    const isPending = auto_approve ? 0 : 1;
+    const isPending = resolveCreatePending(auto_approve);
     const approvedBy = auto_approve ? req.user.id : null;
     const approvedAt = auto_approve ? new Date().toISOString() : null;
 
@@ -191,10 +200,10 @@ router.post('/admin', requireAdmin, async (req, res) => {
     `, [
       title.trim(),
       content.trim(),
-      version || null,
-      update_type || 'feature',
-      priority || 'medium',
-      show_on_login !== undefined ? (show_on_login ? 1 : 0) : 1,
+      coerceUpdateVersion(version),
+      coerceUpdateType(update_type),
+      coerceUpdatePriority(priority),
+      coerceShowOnLogin(show_on_login),
       isPending,
       approvedBy,
       approvedAt,
@@ -303,11 +312,11 @@ router.put('/admin/:id', requireAdmin, async (req, res) => {
     `, [
       title?.trim() || update.title,
       content?.trim() || update.content,
-      version || null,
-      update_type || 'feature',
-      priority || 'medium',
-      is_active !== undefined ? (is_active ? 1 : 0) : 1,
-      show_on_login !== undefined ? (show_on_login ? 1 : 0) : 1,
+      coerceUpdateVersion(version),
+      coerceUpdateType(update_type),
+      coerceUpdatePriority(priority),
+      coerceIsActive(is_active),
+      coerceShowOnLogin(show_on_login),
       id
     ]);
 
