@@ -2,6 +2,15 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { getTodayInHouston } from '../utils/appTimezone.js';
+import {
+  coerceCreatePriority,
+  coerceWorklistTitleUpdate,
+  isArchivedQuery,
+  isValidWorklistPriority,
+  nextWorklistToggle,
+  toTitleCase,
+  worklistProgress,
+} from '../utils/worklistItemMath.js';
 
 const router = express.Router();
 
@@ -9,11 +18,6 @@ router.use(authenticateToken);
 
 function getTodayInCentral() {
   return getTodayInHouston();
-}
-
-function toTitleCase(str) {
-  if (!str || typeof str !== 'string') return str;
-  return str.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 async function ensureTable() {
@@ -73,7 +77,7 @@ router.get('/today', async (req, res) => {
     await ensureTable();
     const today = getTodayInCentral();
     const userId = req.user.id;
-    const showArchived = req.query.archived === '1' || req.query.archived === 'true';
+    const showArchived = isArchivedQuery(req.query.archived);
 
     if (!showArchived) {
       // Archive items that have been completed for 24+ hours
@@ -109,18 +113,10 @@ router.get('/today', async (req, res) => {
       [userId]
     );
 
-    const total = items.length;
-    const completed = items.filter(i => i.is_completed === 1).length;
-
     res.json({
       date: today,
       items,
-      summary: {
-        total,
-        completed,
-        remaining: total - completed,
-        progress: total > 0 ? Math.round((completed / total) * 100) : 100
-      }
+      summary: worklistProgress(items)
     });
   } catch (error) {
     console.error('Get my worklist error:', error);
@@ -136,7 +132,7 @@ router.post('/items', async (req, res) => {
     if (!title) return res.status(400).json({ error: 'Title is required' });
 
     title = toTitleCase(String(title));
-    if (!['high', 'medium', 'low'].includes(priority)) priority = 'medium';
+    priority = coerceCreatePriority(priority);
 
     const today = getTodayInCentral();
     const userId = req.user.id;
@@ -174,13 +170,12 @@ router.post('/items/:id/toggle', async (req, res) => {
     );
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
-    const newCompleted = item.is_completed === 1 ? 0 : 1;
-    const completedAt = newCompleted ? new Date().toISOString() : null;
-    const archivedAt = newCompleted ? item.archived_at : null;
+    const next = nextWorklistToggle(item);
+    const completedAt = next.is_completed ? new Date().toISOString() : null;
 
     await db.runAsync(
       'UPDATE user_worklist_items SET is_completed = ?, completed_at = ?, archived_at = ? WHERE id = ?',
-      [newCompleted, completedAt, archivedAt, id]
+      [next.is_completed, completedAt, next.archived_at, id]
     );
 
     const updated = await db.getAsync('SELECT * FROM user_worklist_items WHERE id = ?', [id]);
@@ -239,13 +234,14 @@ router.put('/items/:id', async (req, res) => {
 
     const updates = [];
     const values = [];
-    if (priority !== undefined && ['high', 'medium', 'low'].includes(priority)) {
+    if (priority !== undefined && isValidWorklistPriority(priority)) {
       updates.push('priority = ?');
       values.push(priority);
     }
-    if (title !== undefined && String(title).trim()) {
+    const nextTitle = coerceWorklistTitleUpdate(title);
+    if (nextTitle !== null) {
       updates.push('title = ?');
-      values.push(toTitleCase(String(title).trim()));
+      values.push(nextTitle);
     }
     if (updates.length === 0) return res.json({ item });
 
