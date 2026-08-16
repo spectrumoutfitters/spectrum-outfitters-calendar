@@ -1,6 +1,13 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import {
+  canAccessAdminBoard,
+  canDeleteMessages,
+  isAdminRole,
+  shouldIncludeAdminBoard,
+  resolveMessageDeleteNotify,
+} from '../utils/messageBoardMath.js';
 
 const router = express.Router();
 
@@ -47,7 +54,7 @@ router.get('/team-board', async (req, res) => {
 router.get('/admin-board', async (req, res) => {
   try {
     // Only admins can access admin board
-    if (req.user.role !== 'admin') {
+    if (!canAccessAdminBoard(req.user.role)) {
       return res.status(403).json({ error: 'Only admins can access admin board' });
     }
 
@@ -99,7 +106,7 @@ router.get('/admin-board', async (req, res) => {
 router.get('/team', async (req, res) => {
   try {
     // For backward compatibility, redirect to appropriate board
-    if (req.user.role === 'admin') {
+    if (isAdminRole(req.user.role)) {
       // Redirect to admin board
       const messages = await db.allAsync(`
         SELECT m.*, u.full_name as sender_name, u.username as sender_username
@@ -259,7 +266,7 @@ router.get('/conversations', async (req, res) => {
     });
 
     // Admin Board conversation - only for admins
-    if (req.user.role === 'admin') {
+    if (shouldIncludeAdminBoard(req.user.role)) {
       const adminBoardLastMessage = await db.getAsync(`
         SELECT m.*, u.full_name as sender_name
         FROM messages m
@@ -371,7 +378,7 @@ router.get('/unread-count', async (req, res) => {
 
     // Admin board unread count (only for admins)
     let adminBoardUnread = { count: 0 };
-    if (req.user.role === 'admin') {
+    if (shouldIncludeAdminBoard(req.user.role)) {
       adminBoardUnread = await db.getAsync(`
         SELECT COUNT(*) as count
         FROM messages m
@@ -411,7 +418,7 @@ router.get('/unread-count', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     // Only admins can delete messages
-    if (req.user.role !== 'admin') {
+    if (!canDeleteMessages(req.user.role)) {
       return res.status(403).json({ error: 'Only admins can delete messages' });
     }
 
@@ -434,26 +441,18 @@ router.delete('/:id', async (req, res) => {
     const connectedUsers = req.app.get('connectedUsers');
     
     if (io) {
-      // Determine which room to notify based on message type
-      if (message.is_team_message === 1) {
-        const boardType = message.board_type || 'team_board';
-        if (boardType === 'admin_board') {
-          // Notify admin room
-          io.to('admin').emit('message_deleted', { messageId: parseInt(id), boardType: 'admin_board' });
-        } else {
-          // Notify team room
-          io.to('team').emit('message_deleted', { messageId: parseInt(id), boardType: 'team_board' });
-        }
-      } else {
-        // Private message - notify both sender and recipient
-        if (message.sender_id && connectedUsers) {
-          const senderUser = connectedUsers.get(message.sender_id);
+      const notify = resolveMessageDeleteNotify(message);
+      if (notify.kind === 'board') {
+        io.to(notify.room).emit('message_deleted', { messageId: parseInt(id), boardType: notify.boardType });
+      } else if (notify.kind === 'private') {
+        if (notify.senderId && connectedUsers) {
+          const senderUser = connectedUsers.get(notify.senderId);
           if (senderUser) {
             io.to(senderUser.socketId).emit('message_deleted', { messageId: parseInt(id) });
           }
         }
-        if (message.recipient_id && connectedUsers) {
-          const recipientUser = connectedUsers.get(message.recipient_id);
+        if (notify.recipientId && connectedUsers) {
+          const recipientUser = connectedUsers.get(notify.recipientId);
           if (recipientUser) {
             io.to(recipientUser.socketId).emit('message_deleted', { messageId: parseInt(id) });
           }
