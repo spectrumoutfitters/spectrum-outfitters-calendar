@@ -1770,6 +1770,33 @@ function handleUpdateEntryByToken_(data) {
     }
   }
 
+  // Validate the rewrite plan BEFORE deleting editable rows. Otherwise a split
+  // mismatch (manage UI historically omitted newsletter bonus tickets from
+  // ticketSplit while this function adds them back into totalEntries) drops
+  // the free/newsletter rows and leaves only paid rows — phone uniqueness then
+  // blocks re-entry.
+  if (ticketMode === 'split') {
+    var planCheck;
+    try {
+      planCheck = buildTicketSplitPlan_(p, raffles, totalEntries);
+    } catch (planErr) {
+      return jsonResponse(
+        { ok: false, error: String(planErr && planErr.message ? planErr.message : planErr), code: 'split' },
+        400
+      );
+    }
+    if (!planCheck || !planCheck.rows.length) {
+      return jsonResponse({ ok: false, error: 'Could not build ticket split.', code: 'split' }, 400);
+    }
+    var planHasWeight = false;
+    for (var pwi = 0; pwi < planCheck.rows.length; pwi++) {
+      if (planCheck.rows[pwi].weight > 0) planHasWeight = true;
+    }
+    if (!planHasWeight) {
+      return jsonResponse({ ok: false, error: 'No ticket weight in split — check pools.', code: 'split' }, 400);
+    }
+  }
+
   var editableRowNums = [];
   for (var pr = 0; pr < rows.length; pr++) {
     var rrr = rows[pr];

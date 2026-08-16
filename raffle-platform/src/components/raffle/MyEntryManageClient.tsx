@@ -126,10 +126,17 @@ export function MyEntryManageClient({ event, slug, initialToken = "" }: Props) {
     };
   }, [slug, token, applyEntryToForm]);
 
-  const previewTickets = useMemo(
-    () => computeTicketsFromBonuses(bonusById, bonusRules, baseTickets),
-    [bonusById, bonusRules, baseTickets],
-  );
+  const newsletterBonusTickets = Math.max(0, Math.floor(Number(entry?.newsletterBonusTickets) || 0));
+  const previewTickets = useMemo(() => {
+    const bonusTotal = computeTicketsFromBonuses(bonusById, bonusRules, baseTickets);
+    // Server rewrite totalEntries = bonuses + preserved newsletter. Pool splits
+    // must sum to that number or Apps Script rejects the update (after historically
+    // deleting the free rows).
+    if (entry?.newsletterOptIn && newsletterBonusTickets > 0) {
+      return bonusTotal + newsletterBonusTickets;
+    }
+    return bonusTotal;
+  }, [bonusById, bonusRules, baseTickets, entry?.newsletterOptIn, newsletterBonusTickets]);
 
   useEffect(() => {
     if (!entry) return;
