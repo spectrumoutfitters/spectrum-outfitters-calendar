@@ -1,6 +1,16 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import {
+  getDefaultAnalyticsWeekRange,
+  getWeeklyComparisonWeekRange,
+  coerceAnalyticsWeekCount,
+  formatTasksPerHour,
+  formatCompletionRate,
+  formatTaskHoursRatio,
+  formatSubtaskCompletionRate,
+  weekComparisonLabel,
+} from '../utils/analyticsPerformanceMath.js';
 
 const router = express.Router();
 
@@ -27,16 +37,9 @@ router.get('/employee-performance', async (req, res) => {
     let endDate = end_date;
     
     if (!startDate || !endDate) {
-      const today = new Date();
-      const dayOfWeek = today.getDay();
-      const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-      const monday = new Date(today.setDate(diff));
-      monday.setHours(0, 0, 0, 0);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
-      startDate = monday.toISOString().split('T')[0];
-      endDate = sunday.toISOString().split('T')[0];
+      const range = getDefaultAnalyticsWeekRange();
+      startDate = range.startDate;
+      endDate = range.endDate;
     }
 
     let query = `
@@ -132,17 +135,9 @@ router.get('/employee-performance', async (req, res) => {
       emp.total_hours_worked = timeEntries[0]?.total_hours_worked || 0;
       
       // Calculate efficiency metrics
-      emp.tasks_per_hour = emp.total_hours_worked > 0 
-        ? (emp.tasks_completed / emp.total_hours_worked).toFixed(2) 
-        : '0.00';
-      
-      emp.completion_rate = emp.total_tasks_assigned > 0
-        ? ((emp.tasks_completed / emp.total_tasks_assigned) * 100).toFixed(1)
-        : '0.0';
-      
-      emp.task_hours_ratio = emp.total_hours_worked > 0
-        ? ((emp.total_task_hours / emp.total_hours_worked) * 100).toFixed(1)
-        : '0.0';
+      emp.tasks_per_hour = formatTasksPerHour(emp.tasks_completed, emp.total_hours_worked);
+      emp.completion_rate = formatCompletionRate(emp.tasks_completed, emp.total_tasks_assigned);
+      emp.task_hours_ratio = formatTaskHoursRatio(emp.total_task_hours, emp.total_hours_worked);
     }
 
     res.json({ 
@@ -223,9 +218,7 @@ router.get('/task-efficiency', async (req, res) => {
 
     // Calculate subtask completion rate
     for (let task of tasks) {
-      task.subtask_completion_rate = task.total_subtasks > 0
-        ? ((task.completed_subtasks / task.total_subtasks) * 100).toFixed(1)
-        : '100.0';
+      task.subtask_completion_rate = formatSubtaskCompletionRate(task.completed_subtasks, task.total_subtasks);
     }
 
     res.json({ tasks });
@@ -239,22 +232,13 @@ router.get('/task-efficiency', async (req, res) => {
 router.get('/weekly-comparison', async (req, res) => {
   try {
     const { user_id, weeks = 4 } = req.query;
-    const numWeeks = parseInt(weeks) || 4;
+    const numWeeks = coerceAnalyticsWeekCount(weeks);
     
     const weeksData = [];
     const today = new Date();
     
     for (let i = 0; i < numWeeks; i++) {
-      const weekStart = new Date(today);
-      weekStart.setDate(today.getDate() - (today.getDay() + 6 + (i * 7)));
-      weekStart.setHours(0, 0, 0, 0);
-      
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      weekEnd.setHours(23, 59, 59, 999);
-      
-      const startDate = weekStart.toISOString().split('T')[0];
-      const endDate = weekEnd.toISOString().split('T')[0];
+      const { startDate, endDate } = getWeeklyComparisonWeekRange(today, i);
       
       let query = `
         SELECT 
@@ -291,15 +275,13 @@ router.get('/weekly-comparison', async (req, res) => {
       
       // Calculate efficiency for each employee
       for (let emp of weekData) {
-        emp.tasks_per_hour = emp.hours_worked > 0
-          ? (emp.tasks_completed / emp.hours_worked).toFixed(2)
-          : '0.00';
+        emp.tasks_per_hour = formatTasksPerHour(emp.tasks_completed, emp.hours_worked);
       }
       
       weeksData.push({
         week_start: startDate,
         week_end: endDate,
-        week_label: `Week ${numWeeks - i} (${startDate} to ${endDate})`,
+        week_label: weekComparisonLabel(numWeeks, i, startDate, endDate),
         employees: weekData
       });
     }
@@ -358,9 +340,7 @@ router.get('/category-breakdown', async (req, res) => {
     const categories = await db.allAsync(query, params);
     
     for (let cat of categories) {
-      cat.completion_rate = cat.total_tasks > 0
-        ? ((cat.completed_tasks / cat.total_tasks) * 100).toFixed(1)
-        : '0.0';
+      cat.completion_rate = formatCompletionRate(cat.completed_tasks, cat.total_tasks);
     }
 
     res.json({ categories });
@@ -391,16 +371,9 @@ router.get('/employee-detail/:id', async (req, res) => {
     let endDate = end_date;
     
     if (!startDate || !endDate) {
-      const today = new Date();
-      const dayOfWeek = today.getDay();
-      const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-      const monday = new Date(today.setDate(diff));
-      monday.setHours(0, 0, 0, 0);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
-      startDate = monday.toISOString().split('T')[0];
-      endDate = sunday.toISOString().split('T')[0];
+      const range = getDefaultAnalyticsWeekRange();
+      startDate = range.startDate;
+      endDate = range.endDate;
     }
     
     // Get task statistics
@@ -523,16 +496,10 @@ router.get('/employee-detail/:id', async (req, res) => {
     const totalTaskHours = taskStats?.total_task_hours || 0;
     
     const efficiency = {
-      tasks_per_hour: totalHoursWorked > 0 ? (tasksCompleted / totalHoursWorked).toFixed(2) : '0.00',
-      completion_rate: taskStats?.total_tasks > 0 
-        ? ((tasksCompleted / taskStats.total_tasks) * 100).toFixed(1) 
-        : '0.0',
-      task_hours_ratio: totalHoursWorked > 0
-        ? ((totalTaskHours / totalHoursWorked) * 100).toFixed(1)
-        : '0.0',
-      utilization_rate: totalHoursWorked > 0
-        ? ((totalTaskHours / totalHoursWorked) * 100).toFixed(1)
-        : '0.0'
+      tasks_per_hour: formatTasksPerHour(tasksCompleted, totalHoursWorked),
+      completion_rate: formatCompletionRate(tasksCompleted, taskStats?.total_tasks),
+      task_hours_ratio: formatTaskHoursRatio(totalTaskHours, totalHoursWorked),
+      utilization_rate: formatTaskHoursRatio(totalTaskHours, totalHoursWorked)
     };
     
     res.json({
