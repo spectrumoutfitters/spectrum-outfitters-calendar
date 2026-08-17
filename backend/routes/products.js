@@ -1,6 +1,16 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import {
+  canSeeInactiveProducts,
+  isProductCreateMissing,
+  coerceCreateIsActive,
+  coerceUpdateIsActive,
+  coerceProductPrice,
+  coerceCreateDescription,
+  coerceUpdateDescription,
+  coerceUpdateName,
+} from '../utils/productActiveFlags.js';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -50,7 +60,7 @@ router.use(authenticateToken);
 // GET /api/products - Get all active products (for employees) or all products (for admins)
 router.get('/', async (req, res) => {
   try {
-    const isAdmin = req.user.role === 'admin';
+    const isAdmin = canSeeInactiveProducts(req.user.role);
     const query = isAdmin 
       ? 'SELECT * FROM products ORDER BY created_at DESC'
       : 'SELECT * FROM products WHERE is_active = 1 ORDER BY name ASC';
@@ -82,7 +92,7 @@ router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
   try {
     const { name, description, price, is_active } = req.body;
     
-    if (!name || !price) {
+    if (isProductCreateMissing(name, price)) {
       return res.status(400).json({ error: 'Name and price are required' });
     }
 
@@ -90,7 +100,7 @@ router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
 
     const result = await db.runAsync(
       'INSERT INTO products (name, description, price, image_url, is_active) VALUES (?, ?, ?, ?, ?)',
-      [name, description || null, parseFloat(price), imageUrl, is_active !== 'false' ? 1 : 0]
+      [name, coerceCreateDescription(description), parseFloat(price), imageUrl, coerceCreateIsActive(is_active)]
     );
 
     const product = await db.getAsync('SELECT * FROM products WHERE id = ?', [result.lastID]);
@@ -117,11 +127,11 @@ router.put('/:id', requireAdmin, upload.single('image'), async (req, res) => {
     await db.runAsync(
       'UPDATE products SET name = ?, description = ?, price = ?, image_url = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [
-        name || currentProduct.name,
-        description !== undefined ? description : currentProduct.description,
-        price !== undefined ? parseFloat(price) : currentProduct.price,
+        coerceUpdateName(name, currentProduct.name),
+        coerceUpdateDescription(description, currentProduct.description),
+        coerceProductPrice(price, currentProduct.price),
         imageUrl,
-        is_active !== undefined ? (is_active === 'true' || is_active === true ? 1 : 0) : currentProduct.is_active,
+        coerceUpdateIsActive(is_active, currentProduct.is_active),
         id
       ]
     );

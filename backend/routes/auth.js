@@ -6,6 +6,7 @@ import { ensureUserColumns } from '../database/startup.js';
 import { authenticateToken } from '../middleware/auth.js';
 import rateLimit from 'express-rate-limit';
 import { getClientIP, lookupIPGeo, computeOnPremScore, recordLoginEvent, recordLogoutEvent, checkVPNAndNotify } from '../utils/security.js';
+import { jwtAuthClaims, loginUserPayload, meUserPayload } from '../utils/authSessionFlags.js';
 
 const router = express.Router();
 
@@ -86,13 +87,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        username: user.username, 
-        role: user.role,
-        payroll_access: user.payroll_access === 1,
-        is_master_admin: user.is_master_admin === 1
-      },
+      jwtAuthClaims(user),
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -114,18 +109,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     });
 
     res.json({
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role,
-        hourly_rate: user.hourly_rate,
-        weekly_salary: user.weekly_salary ?? 0,
-        show_clock_in_header: (user.show_clock_in_header !== 0 && user.show_clock_in_header != null),
-        payroll_access: user.payroll_access === 1,
-        is_master_admin: user.is_master_admin === 1
-      },
+      user: loginUserPayload(user),
       token
     });
 
@@ -174,12 +158,7 @@ router.get('/me', authenticateToken, async (req, res) => {
     }
 
     res.json({
-      user: {
-        ...user,
-        show_clock_in_header: user.show_clock_in_header !== 0 && user.show_clock_in_header != null,
-        payroll_access: user.payroll_access === 1,
-        is_master_admin: user.is_master_admin === 1
-      }
+      user: meUserPayload(user)
     });
   } catch (error) {
     console.error('Get user error:', error);
