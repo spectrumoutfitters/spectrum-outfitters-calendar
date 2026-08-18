@@ -2,6 +2,13 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { sendPushToUser, sendPushToAdmins, sendPushToAll } from '../utils/pushNotifications.js';
+import {
+  resolvePushBroadcastTarget,
+  isBroadcastPayloadMissing,
+  hasPushSubscriptionFields,
+  hasUnsubscribeEndpoint,
+  EMPLOYEE_BROADCAST_SQL,
+} from '../utils/pushBroadcastTarget.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -17,7 +24,7 @@ router.get('/vapid-public-key', (req, res) => {
 router.post('/subscribe', async (req, res) => {
   try {
     const { endpoint, keys } = req.body;
-    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    if (!hasPushSubscriptionFields(req.body)) {
       return res.status(400).json({ error: 'Missing subscription fields' });
     }
     await db.runAsync(
@@ -37,7 +44,7 @@ router.post('/subscribe', async (req, res) => {
 router.delete('/unsubscribe', async (req, res) => {
   try {
     const { endpoint } = req.body;
-    if (!endpoint) return res.status(400).json({ error: 'Missing endpoint' });
+    if (!hasUnsubscribeEndpoint(endpoint)) return res.status(400).json({ error: 'Missing endpoint' });
     await db.runAsync(
       'DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?',
       [endpoint, req.user.id]
@@ -66,16 +73,15 @@ router.post('/test', async (req, res) => {
 router.post('/broadcast', requireAdmin, async (req, res) => {
   try {
     const { title, body, target } = req.body;
-    if (!title || !body) return res.status(400).json({ error: 'Missing title or body' });
+    if (isBroadcastPayloadMissing(title, body)) return res.status(400).json({ error: 'Missing title or body' });
 
     const payload = { title, body };
+    const audience = resolvePushBroadcastTarget(target);
 
-    if (target === 'admins') {
+    if (audience === 'admins') {
       await sendPushToAdmins(payload);
-    } else if (target === 'employees') {
-      const employees = await db.allAsync(
-        "SELECT id FROM users WHERE role = 'employee' AND is_active = 1"
-      );
+    } else if (audience === 'employees') {
+      const employees = await db.allAsync(EMPLOYEE_BROADCAST_SQL);
       for (const emp of (employees || [])) {
         await sendPushToUser(emp.id, payload);
       }

@@ -5,6 +5,14 @@
  */
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
+import {
+  isGeocodeAddressTooShort,
+  isSuggestQueryTooShort,
+  parseNominatimLocation,
+  mapNominatimSuggestions,
+  parseStreetViewCoords,
+  isStreetViewJsonContentType,
+} from '../utils/geocodeQueryParse.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -28,7 +36,7 @@ async function throttledNominatimFetch(url) {
 router.get('/', async (req, res) => {
   try {
     const address = (req.query.address || '').trim();
-    if (!address || address.length < 5) {
+    if (isGeocodeAddressTooShort(address)) {
       return res.status(400).json({ valid: false, error: 'Enter an address to validate.' });
     }
     const url = `${NOMINATIM_BASE}?format=json&q=${encodeURIComponent(address)}&limit=1`;
@@ -41,17 +49,15 @@ router.get('/', async (req, res) => {
     if (!Array.isArray(data) || data.length === 0) {
       return res.json({ valid: false, error: 'Address not found. Check spelling or try a different format.' });
     }
-    const first = data[0];
-    const lat = parseFloat(first.lat);
-    const lng = parseFloat(first.lon);
-    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+    const location = parseNominatimLocation(data[0]);
+    if (!location) {
       return res.json({ valid: false, error: 'Invalid coordinates returned.' });
     }
     res.json({
       valid: true,
-      lat,
-      lng,
-      display_name: first.display_name || ''
+      lat: location.lat,
+      lng: location.lng,
+      display_name: location.display_name
     });
   } catch (e) {
     console.error('Geocode error:', e?.message || e);
@@ -63,7 +69,7 @@ router.get('/', async (req, res) => {
 router.get('/suggest', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
-    if (!q || q.length < 2) {
+    if (isSuggestQueryTooShort(q)) {
       return res.json({ suggestions: [] });
     }
     const url = `${NOMINATIM_BASE}?format=json&q=${encodeURIComponent(q)}&addressdetails=1&limit=6`;
@@ -73,11 +79,7 @@ router.get('/suggest', async (req, res) => {
       return res.json({ suggestions: [], error: 'Address search temporarily unavailable.' });
     }
     const data = await resp.json();
-    const suggestions = (Array.isArray(data) ? data : []).map((item) => ({
-      display_name: item.display_name || '',
-      lat: parseFloat(item.lat),
-      lon: parseFloat(item.lon)
-    })).filter((s) => s.display_name && !Number.isNaN(s.lat) && !Number.isNaN(s.lon));
+    const suggestions = mapNominatimSuggestions(data);
     res.json({ suggestions });
   } catch (e) {
     console.error('Geocode suggest error:', e?.message || e);
@@ -88,11 +90,11 @@ router.get('/suggest', async (req, res) => {
 // GET /streetview?lat=&lng= — proxy Street View image (requires GOOGLE_MAPS_API_KEY). Mounted at /api/geocode
 router.get('/streetview', async (req, res) => {
   try {
-    const lat = parseFloat(req.query.lat);
-    const lng = parseFloat(req.query.lng);
-    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+    const coords = parseStreetViewCoords(req.query.lat, req.query.lng);
+    if (!coords) {
       return res.status(400).json({ error: 'lat and lng required' });
     }
+    const { lat, lng } = coords;
     const key = (process.env.GOOGLE_MAPS_API_KEY || '').trim();
     if (!key) {
       return res.status(404).json({ error: 'Street View not configured. Add GOOGLE_MAPS_API_KEY to backend/.env and restart the backend.' });
@@ -103,7 +105,7 @@ router.get('/streetview', async (req, res) => {
     const contentType = (imgResp.headers.get('content-type') || '').toLowerCase();
 
     // Google often returns 200 with JSON body on error (e.g. REQUEST_DENIED, ZERO_RESULTS)
-    if (contentType.includes('application/json')) {
+    if (isStreetViewJsonContentType(contentType)) {
       const json = await imgResp.json();
       const status = json.status || '';
       const errMsg = json.error_message || 'Street View unavailable.';

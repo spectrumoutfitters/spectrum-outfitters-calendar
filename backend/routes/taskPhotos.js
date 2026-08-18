@@ -5,6 +5,13 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import db from '../database/db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import {
+  coercePhotoType,
+  coercePhotoCaption,
+  parsePhotoRouteId,
+  isInvalidTaskPhotoReadId,
+  isInvalidTaskPhotoDeleteIds,
+} from '../utils/taskPhotoUploadMath.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,17 +41,15 @@ const upload = multer({
 // POST /api/tasks/:id/photos
 router.post('/:id/photos', upload.single('photo'), async (req, res) => {
   try {
-    const taskId = Number(req.params.id);
-    if (!taskId || !Number.isFinite(taskId)) return res.status(400).json({ error: 'Task id required' });
+    const taskId = parsePhotoRouteId(req.params.id);
+    if (isInvalidTaskPhotoReadId(taskId)) return res.status(400).json({ error: 'Task id required' });
     if (!req.file) return res.status(400).json({ error: 'No photo uploaded' });
 
     const task = await db.getAsync('SELECT id FROM tasks WHERE id = ?', [taskId]);
     if (!task) return res.status(404).json({ error: 'Task not found' });
 
-    const photoType = ['before', 'after', 'progress', 'other'].includes(req.body.photo_type)
-      ? req.body.photo_type
-      : 'other';
-    const caption = req.body.caption ? String(req.body.caption).trim().slice(0, 500) : null;
+    const photoType = coercePhotoType(req.body.photo_type);
+    const caption = coercePhotoCaption(req.body.caption);
 
     const relativePath = path.join('uploads', 'tasks', req.file.filename);
     const result = await db.runAsync(
@@ -66,8 +71,8 @@ router.post('/:id/photos', upload.single('photo'), async (req, res) => {
 // GET /api/tasks/:id/photos
 router.get('/:id/photos', async (req, res) => {
   try {
-    const taskId = Number(req.params.id);
-    if (!taskId || !Number.isFinite(taskId)) return res.status(400).json({ error: 'Task id required' });
+    const taskId = parsePhotoRouteId(req.params.id);
+    if (isInvalidTaskPhotoReadId(taskId)) return res.status(400).json({ error: 'Task id required' });
     const photos = await db.allAsync(
       `SELECT p.*, u.full_name AS uploaded_by_name FROM task_photos p
        LEFT JOIN users u ON u.id = p.uploaded_by
@@ -84,9 +89,9 @@ router.get('/:id/photos', async (req, res) => {
 // DELETE /api/tasks/:taskId/photos/:photoId
 router.delete('/:taskId/photos/:photoId', async (req, res) => {
   try {
-    const taskId = Number(req.params.taskId);
-    const photoId = Number(req.params.photoId);
-    if (!taskId || !photoId) return res.status(400).json({ error: 'IDs required' });
+    const taskId = parsePhotoRouteId(req.params.taskId);
+    const photoId = parsePhotoRouteId(req.params.photoId);
+    if (isInvalidTaskPhotoDeleteIds(taskId, photoId)) return res.status(400).json({ error: 'IDs required' });
 
     const photo = await db.getAsync('SELECT * FROM task_photos WHERE id = ? AND task_id = ?', [photoId, taskId]);
     if (!photo) return res.status(404).json({ error: 'Photo not found' });
