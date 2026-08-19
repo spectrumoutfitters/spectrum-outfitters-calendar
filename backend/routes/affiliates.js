@@ -2,6 +2,16 @@ import express from 'express';
 import crypto from 'crypto';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import {
+  parseAffiliateTrackToken,
+  isAffiliateTrackTokenMissing,
+  normalizeShopmonkeyTrackIds,
+  buildTrackDedupeClause,
+  serializeTrackRawJson,
+  parseOptionalPositiveId,
+  parseRequiredPositiveId,
+  shouldSettleAffiliateCommission,
+} from '../utils/affiliateTrackMath.js';
 
 const router = express.Router();
 
@@ -32,11 +42,11 @@ function customerPathPrefix() {
 router.post('/links', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const label = typeof req.body?.label === 'string' ? req.body.label.trim() : null;
-    const assigned_user_id = req.body?.assigned_user_id != null ? Number(req.body.assigned_user_id) : null;
-
-    if (assigned_user_id != null && (!Number.isFinite(assigned_user_id) || assigned_user_id <= 0)) {
+    const assignedUser = parseOptionalPositiveId(req.body?.assigned_user_id);
+    if (assignedUser.invalid) {
       return res.status(400).json({ error: 'assigned_user_id must be a valid number' });
     }
+    const assigned_user_id = assignedUser.value;
 
     const token = makeToken(10);
 
@@ -116,36 +126,25 @@ router.get('/links', authenticateToken, requireAdmin, async (req, res) => {
 // Public: optional tracking endpoint (works if we can capture postMessage from the iframe)
 router.post('/public/track', async (req, res) => {
   try {
-    const token = String(req.body?.affiliate_token || req.body?.token || '').trim();
-    if (!token) return res.status(400).json({ error: 'affiliate_token is required' });
+    const token = parseAffiliateTrackToken(req.body);
+    if (isAffiliateTrackTokenMissing(token)) return res.status(400).json({ error: 'affiliate_token is required' });
 
     const link = await db.getAsync('SELECT id FROM quote_affiliate_links WHERE token = ?', [token]);
     if (!link) return res.status(404).json({ error: 'Affiliate token not found' });
 
-    const workRequestId = req.body?.shopmonkey_work_request_id != null ? String(req.body.shopmonkey_work_request_id) : null;
-    const orderId = req.body?.shopmonkey_order_id != null ? String(req.body.shopmonkey_order_id) : null;
-    const customerId = req.body?.shopmonkey_customer_id != null ? String(req.body.shopmonkey_customer_id) : null;
+    const { workRequestId, orderId, customerId } = normalizeShopmonkeyTrackIds(req.body);
+    const raw_json = serializeTrackRawJson(req.body);
 
-    const raw_json = req.body?.raw_json ? JSON.stringify(req.body.raw_json) : JSON.stringify(req.body || {});
-
-    // If we have any stable ids, try to find an existing record.
-    const whereParts = [];
-    const params = [link.id];
-    if (workRequestId) {
-      whereParts.push('shopmonkey_work_request_id = ?');
-      params.push(workRequestId);
-    }
-    if (orderId) {
-      whereParts.push('shopmonkey_order_id = ?');
-      params.push(orderId);
-    }
-    if (customerId) {
-      whereParts.push('shopmonkey_customer_id = ?');
-      params.push(customerId);
-    }
+    // If we have any stable ids, try to find an existing record (OR-match).
+    const { whereParts, extraParams, canDedupe } = buildTrackDedupeClause({
+      workRequestId,
+      orderId,
+      customerId,
+    });
+    const params = [link.id, ...extraParams];
 
     let existing = null;
-    if (whereParts.length > 0) {
+    if (canDedupe) {
       existing = await db.getAsync(
         `SELECT id FROM quote_affiliate_submissions
          WHERE affiliate_link_id = ? AND (${whereParts.join(' OR ')})
@@ -254,7 +253,7 @@ router.post('/admin/reconcile', authenticateToken, requireAdmin, async (req, res
         [String(customerId)]
       );
 
-      if (!earliestSubmission?.id) continue;
+      if (!shouldSettleAffiliateCommission({ customerId, firstPaidInvoice, earliestSubmission })) continue;
 
       await db.runAsync(
         `
@@ -281,14 +280,15 @@ router.post('/admin/reconcile', authenticateToken, requireAdmin, async (req, res
 // Admin: manually mark a submission as commission-paid (for when auto-reconcile can't match yet)
 router.post('/admin/submissions/:id/mark-paid', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Invalid submission id' });
+    const submissionId = parseRequiredPositiveId(req.params.id);
+    if (submissionId.invalid) return res.status(400).json({ error: 'Invalid submission id' });
+    const id = submissionId.value;
 
-    const crm_invoice_id =
-      req.body?.crm_invoice_id != null ? Number(req.body.crm_invoice_id) : null;
-    if (crm_invoice_id != null && (!Number.isFinite(crm_invoice_id) || crm_invoice_id <= 0)) {
+    const invoiceId = parseOptionalPositiveId(req.body?.crm_invoice_id);
+    if (invoiceId.invalid) {
       return res.status(400).json({ error: 'crm_invoice_id must be a valid number' });
     }
+    const crm_invoice_id = invoiceId.value;
 
     await db.runAsync(
       `
