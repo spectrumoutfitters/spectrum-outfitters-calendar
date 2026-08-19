@@ -1,6 +1,18 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import {
+  clampAuthHistoryLimit,
+  parseAuthHistoryOffset,
+  parseAuthHistorySuccess,
+  parseAuthHistoryUserId,
+  combineAuthHistoryEvents,
+  filterAuthHistoryEventType,
+  pageAuthHistoryEvents,
+  isAllowedIPsInvalid,
+  isGeofencePayloadInvalid,
+  parsePurgeOlderThanDays,
+} from '../utils/securityAdminMath.js';
 
 const router = express.Router();
 
@@ -73,15 +85,17 @@ router.get('/active-sessions', authenticateToken, requireAdmin, async (req, res)
 router.get('/auth-history', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { from, to, user_id, event_type, success, limit = 100, offset = 0 } = req.query;
-    const limitNum = Math.min(parseInt(limit, 10) || 100, 500);
-    const offsetNum = parseInt(offset, 10) || 0;
+    const limitNum = clampAuthHistoryLimit(limit);
+    const offsetNum = parseAuthHistoryOffset(offset);
 
     const loginConds = [];
     const loginParams = [];
     if (from) { loginConds.push('le.occurred_at >= ?'); loginParams.push(from); }
     if (to) { loginConds.push('le.occurred_at <= ?'); loginParams.push(to); }
-    if (user_id) { loginConds.push('le.user_id = ?'); loginParams.push(parseInt(user_id, 10)); }
-    if (success !== undefined && success !== '') { loginConds.push('le.success = ?'); loginParams.push(parseInt(success, 10)); }
+    const userIdFilter = parseAuthHistoryUserId(user_id);
+    if (userIdFilter.apply) { loginConds.push('le.user_id = ?'); loginParams.push(userIdFilter.value); }
+    const successFilter = parseAuthHistorySuccess(success);
+    if (successFilter.apply) { loginConds.push('le.success = ?'); loginParams.push(successFilter.value); }
     const loginWhere = loginConds.length ? `WHERE ${loginConds.join(' AND ')}` : '';
 
     let logins = [];
@@ -104,7 +118,7 @@ router.get('/auth-history', authenticateToken, requireAdmin, async (req, res) =>
       const outParams = [];
       if (from) { outConds.push('lo.occurred_at >= ?'); outParams.push(from); }
       if (to) { outConds.push('lo.occurred_at <= ?'); outParams.push(to); }
-      if (user_id) { outConds.push('lo.user_id = ?'); outParams.push(parseInt(user_id, 10)); }
+      if (userIdFilter.apply) { outConds.push('lo.user_id = ?'); outParams.push(userIdFilter.value); }
       const outWhere = outConds.length ? `WHERE ${outConds.join(' AND ')}` : '';
       logouts = await db.allAsync(`
         SELECT lo.id, lo.user_id, lo.username, lo.occurred_at, lo.ip, lo.user_agent, u.full_name
@@ -116,19 +130,9 @@ router.get('/auth-history', authenticateToken, requireAdmin, async (req, res) =>
       `, [...outParams, limitNum + offsetNum]);
     } catch (e) { /* logout_events may not exist yet */ }
 
-    const loginRows = logins.map(r => ({ ...r, event_type: 'login' }));
-    const logoutRows = logouts.map(r => ({ ...r, event_type: 'logout', success: 1 }));
-    let combined = [...loginRows, ...logoutRows].sort((a, b) => {
-      const tA = new Date(a.occurred_at).getTime();
-      const tB = new Date(b.occurred_at).getTime();
-      return tB - tA;
-    });
-
-    if (event_type === 'login') combined = combined.filter(e => e.event_type === 'login');
-    else if (event_type === 'logout') combined = combined.filter(e => e.event_type === 'logout');
-
-    const total = combined.length;
-    combined = combined.slice(offsetNum, offsetNum + limitNum);
+    const combinedUnfiltered = combineAuthHistoryEvents(logins, logouts);
+    const combinedFiltered = filterAuthHistoryEventType(combinedUnfiltered, event_type);
+    const { events: combined, total } = pageAuthHistoryEvents(combinedFiltered, offsetNum, limitNum);
     res.json({ events: combined, total });
   } catch (error) {
     console.error('Error fetching auth history:', error);
@@ -151,13 +155,15 @@ router.get('/login-events', authenticateToken, requireAdmin, async (req, res) =>
       conditions.push('le.occurred_at <= ?');
       params.push(to);
     }
-    if (user_id) {
+    const userIdFilter = parseAuthHistoryUserId(user_id);
+    if (userIdFilter.apply) {
       conditions.push('le.user_id = ?');
-      params.push(parseInt(user_id, 10));
+      params.push(userIdFilter.value);
     }
-    if (success !== undefined && success !== '') {
+    const successFilter = parseAuthHistorySuccess(success);
+    if (successFilter.apply) {
       conditions.push('le.success = ?');
-      params.push(parseInt(success, 10));
+      params.push(successFilter.value);
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -166,7 +172,8 @@ router.get('/login-events', authenticateToken, requireAdmin, async (req, res) =>
       `SELECT COUNT(*) as total FROM login_events le ${where}`, params
     );
 
-    const events = await db.allAsync(`
+    const events = await db.allAsync(
+      `
       SELECT
         le.*,
         u.full_name, u.role
@@ -238,7 +245,7 @@ router.put('/on-prem-config', authenticateToken, requireAdmin, async (req, res) 
     const { allowedIPs, geofence } = req.body;
 
     if (allowedIPs !== undefined) {
-      if (!Array.isArray(allowedIPs)) {
+      if (isAllowedIPsInvalid(allowedIPs)) {
         return res.status(400).json({ error: 'allowedIPs must be an array of IP strings or CIDRs' });
       }
       await db.runAsync(
@@ -249,10 +256,8 @@ router.put('/on-prem-config', authenticateToken, requireAdmin, async (req, res) 
     }
 
     if (geofence !== undefined) {
-      if (geofence !== null) {
-        if (typeof geofence !== 'object' || geofence.lat == null || geofence.lng == null || geofence.radiusMeters == null) {
-          return res.status(400).json({ error: 'geofence must be { lat, lng, radiusMeters } or null' });
-        }
+      if (isGeofencePayloadInvalid(geofence)) {
+        return res.status(400).json({ error: 'geofence must be { lat, lng, radiusMeters } or null' });
       }
       await db.runAsync(
         `INSERT INTO app_settings (key, value, updated_at) VALUES ('on_prem_geofence', ?, CURRENT_TIMESTAMP)
@@ -280,7 +285,7 @@ router.delete('/login-events', authenticateToken, requireAdmin, async (req, res)
     const { olderThanDays = 90 } = req.query;
     const result = await db.runAsync(
       `DELETE FROM login_events WHERE occurred_at < datetime('now', '-' || ? || ' days')`,
-      [parseInt(olderThanDays, 10)]
+      [parsePurgeOlderThanDays(olderThanDays)]
     );
     res.json({ deleted: result.changes });
   } catch (error) {

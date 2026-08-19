@@ -4,6 +4,15 @@ import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { calculateHours, getWeekEndingDate } from '../utils/helpers.js';
 import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { sendPushToAdmins } from '../utils/pushNotifications.js';
+import {
+  lunchDurationMinutes,
+  computeLunchOvertimeMinutes,
+  formatLunchOvertimeDuration,
+  isLunchBreakNotes,
+  isCleanupReminderEnabled,
+  parseClockOutCentralHour,
+  shouldShowCleanupReminder,
+} from '../utils/lunchClockGates.js';
 
 const router = express.Router();
 
@@ -112,16 +121,13 @@ router.post('/clock-in', async (req, res) => {
 
     let lunchOvertimeMinutes = null;
     if (previousLunchEntry) {
-      const lunchOutTime = new Date(previousLunchEntry.clock_out);
-      const lunchInTime = new Date(clockInTime);
-      const lunchDurationMs = lunchInTime - lunchOutTime;
-      const lunchDurationMinutes = Math.floor(lunchDurationMs / (1000 * 60));
+      const durationMinutes = lunchDurationMinutes(previousLunchEntry.clock_out, clockInTime);
       
       // Only check overtime if this is a reasonable lunch duration (within 24 hours)
       // This prevents false alerts when clocking in after weekends/holidays
       // 10-minute buffer: standard is 60 minutes, alert only after 70 minutes
-      if (lunchDurationMinutes > 70 && lunchDurationMinutes < 24 * 60) {
-        lunchOvertimeMinutes = lunchDurationMinutes - 70;
+      lunchOvertimeMinutes = computeLunchOvertimeMinutes(durationMinutes);
+      if (lunchOvertimeMinutes != null) {
         
         // Get user info for notification
         const user = await db.getAsync(
@@ -137,11 +143,7 @@ router.post('/clock-in', async (req, res) => {
         
         // Send notification to all admins via Socket.io
         if (io && admins.length > 0) {
-          const hours = Math.floor(lunchOvertimeMinutes / 60);
-          const minutes = lunchOvertimeMinutes % 60;
-          const timeString = hours > 0 
-            ? `${hours} hour${hours > 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`
-            : `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+          const timeString = formatLunchOvertimeDuration(lunchOvertimeMinutes);
           
           const notificationMessage = `⚠️ Lunch Break Alert: ${user.full_name || user.username} took ${timeString} longer than the allowed lunch break (1 hour + 10 minute buffer).`;
           
@@ -225,7 +227,7 @@ router.post('/clock-out', async (req, res) => {
 
     const clockOutTime = new Date().toISOString();
     // Lunch breaks don't subtract time - only regular breaks do
-    const isLunchBreak = notes && notes.toLowerCase().includes('lunch break');
+    const isLunchBreak = isLunchBreakNotes(notes);
     const breakMinutesForCalc = isLunchBreak ? 0 : (break_minutes || 0);
     const hours = calculateHours(activeEntry.clock_in, clockOutTime, breakMinutesForCalc);
 
@@ -244,7 +246,7 @@ router.post('/clock-out', async (req, res) => {
           'SELECT * FROM cleanup_reminder_settings ORDER BY id DESC LIMIT 1'
         );
         
-        if (reminderSettings && reminderSettings.enabled === 1) {
+        if (isCleanupReminderEnabled(reminderSettings)) {
           // Check if this is the final clock-out of the day (no more clock-ins after this)
           // Get Central Time date for today
           const now = new Date();
@@ -272,19 +274,13 @@ router.post('/clock-out', async (req, res) => {
           );
           
           // Check if this clock-out is after 12 PM Central Time (noon - more lenient)
-          const clockOutDate = new Date(clockOutTime);
-          const clockOutCentral = new Intl.DateTimeFormat('en-US', {
-            timeZone: 'America/Chicago',
-            hour: '2-digit',
-            hour12: false
-          }).formatToParts(clockOutDate);
-          const hour = parseInt(clockOutCentral.find(p => p.type === 'hour').value);
+          const hour = parseClockOutCentralHour(clockOutTime);
           
           // Show reminder if:
           // 1. It's after 12 PM (noon) Central Time (more lenient than 2 PM)
           // 2. There are no active entries (user is fully clocked out)
           // This ensures it shows for end-of-day clock-outs, not lunch breaks
-          showCleanupReminder = hour >= 12 && activeEntries.count === 0;
+          showCleanupReminder = shouldShowCleanupReminder(hour, activeEntries.count);
           
           // Log for debugging
           if (showCleanupReminder) {
