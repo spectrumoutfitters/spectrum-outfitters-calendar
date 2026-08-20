@@ -1,13 +1,13 @@
 import express from 'express';
 import db from '../database/db.js';
 import { createStripePaymentIntentForInvoice } from '../services/payments/stripePayments.js';
+import {
+  parsePublicInvoiceToken,
+  isPublicInvoiceTokenMissing,
+  publicInvoiceAmountDueCents,
+} from '../utils/publicInvoiceMath.js';
 
 const router = express.Router();
-
-function cents(n) {
-  const x = Number(n);
-  return Number.isFinite(x) ? Math.round(x) : 0;
-}
 
 async function getInvoiceByToken(token) {
   const row = await db.getAsync(
@@ -46,22 +46,20 @@ async function getInvoiceByToken(token) {
 async function amountDueCents(invoiceId) {
   const invoice = await db.getAsync('SELECT total_cents FROM crm_invoices WHERE id = ?', [invoiceId]);
   if (!invoice) return null;
-  const total = cents(invoice.total_cents);
   const paidRow = await db.getAsync(
     `SELECT SUM(amount_cents) AS paid
      FROM crm_invoice_payments
      WHERE crm_invoice_id = ? AND status IN ('succeeded', 'paid')`,
     [invoiceId]
   );
-  const paid = cents(paidRow?.paid);
-  return Math.max(0, total - paid);
+  return publicInvoiceAmountDueCents(invoice.total_cents, paidRow?.paid);
 }
 
 // GET /api/public/invoices/:token — public invoice summary for payment page
 router.get('/api/public/invoices/:token', async (req, res) => {
   try {
-    const token = String(req.params.token || '').trim();
-    if (!token) return res.status(400).json({ error: 'token is required' });
+    const token = parsePublicInvoiceToken(req.params.token);
+    if (isPublicInvoiceTokenMissing(token)) return res.status(400).json({ error: 'token is required' });
     const invoice = await getInvoiceByToken(token);
     if (!invoice) return res.status(404).json({ error: 'Invoice link not found' });
     const due = await amountDueCents(invoice.id);
@@ -75,8 +73,8 @@ router.get('/api/public/invoices/:token', async (req, res) => {
 // POST /api/public/invoices/:token/create-intent — create Stripe PaymentIntent for amount due
 router.post('/api/public/invoices/:token/create-intent', async (req, res) => {
   try {
-    const token = String(req.params.token || '').trim();
-    if (!token) return res.status(400).json({ error: 'token is required' });
+    const token = parsePublicInvoiceToken(req.params.token);
+    if (isPublicInvoiceTokenMissing(token)) return res.status(400).json({ error: 'token is required' });
     const invoice = await getInvoiceByToken(token);
     if (!invoice) return res.status(404).json({ error: 'Invoice link not found' });
 

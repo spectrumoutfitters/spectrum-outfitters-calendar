@@ -3,6 +3,12 @@ import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { getPlaidClient, encryptToken, decryptToken, isPlaidConfigured } from '../utils/plaidClient.js';
 import { Products, CountryCode } from 'plaid';
 import db from '../database/db.js';
+import {
+  mapPlaidTxnPersistFields,
+  parsePlaidSyncItemId,
+  parsePlaidBusinessExpenseQuery,
+  plaidCategorizeUpdateValues,
+} from '../utils/plaidTxnMap.js';
 
 const router = express.Router();
 
@@ -55,6 +61,7 @@ export async function runPlaidTransactionsSync(itemId = null) {
       const { added, modified, removed, next_cursor, has_more } = syncResponse.data;
 
       for (const txn of added) {
+        const mapped = mapPlaidTxnPersistFields(txn);
         await db.runAsync(
           `INSERT INTO bank_transactions
             (plaid_item_id, plaid_transaction_id, date, amount, name, merchant_name, category, pending, iso_currency_code)
@@ -69,15 +76,16 @@ export async function runPlaidTransactionsSync(itemId = null) {
             txn.date,
             txn.amount,
             txn.name,
-            txn.merchant_name || null,
-            txn.personal_finance_category?.primary || (txn.category ? txn.category.join(' > ') : null),
-            txn.pending ? 1 : 0,
-            txn.iso_currency_code || 'USD',
+            mapped.merchant_name,
+            mapped.category,
+            mapped.pending,
+            mapped.iso_currency_code,
           ]
         );
       }
 
       for (const txn of modified) {
+        const mapped = mapPlaidTxnPersistFields(txn);
         await db.runAsync(
           `UPDATE bank_transactions SET
             date = ?, amount = ?, name = ?, merchant_name = ?, category = ?, pending = ?
@@ -86,9 +94,9 @@ export async function runPlaidTransactionsSync(itemId = null) {
             txn.date,
             txn.amount,
             txn.name,
-            txn.merchant_name || null,
-            txn.personal_finance_category?.primary || (txn.category ? txn.category.join(' > ') : null),
-            txn.pending ? 1 : 0,
+            mapped.merchant_name,
+            mapped.category,
+            mapped.pending,
             item.id,
             txn.transaction_id,
           ]
@@ -184,7 +192,7 @@ router.post('/exchange', async (req, res) => {
 router.post('/transactions/sync', async (req, res) => {
   try {
     const { item_id } = req.body;
-    const result = await runPlaidTransactionsSync(item_id || null);
+    const result = await runPlaidTransactionsSync(parsePlaidSyncItemId(item_id));
     if (result.synced_count === 0 && !item_id) {
       const items = await db.allAsync('SELECT 1 FROM plaid_items LIMIT 1');
       if (!items || items.length === 0) {
@@ -228,9 +236,10 @@ router.get('/transactions', async (req, res) => {
 
     if (start_date) { query += ' AND bt.date >= ?'; params.push(start_date); }
     if (end_date) { query += ' AND bt.date <= ?'; params.push(end_date); }
-    if (is_business_expense !== undefined) {
+    const expenseFilter = parsePlaidBusinessExpenseQuery(is_business_expense);
+    if (expenseFilter.apply) {
       query += ' AND bt.is_business_expense = ?';
-      params.push(is_business_expense === 'true' ? 1 : 0);
+      params.push(expenseFilter.value);
     }
     query += ' ORDER BY bt.date DESC LIMIT 500';
 
@@ -246,9 +255,10 @@ router.get('/transactions', async (req, res) => {
 router.put('/transactions/:id/categorize', async (req, res) => {
   try {
     const { is_business_expense, expense_category } = req.body;
+    const flags = plaidCategorizeUpdateValues({ is_business_expense, expense_category });
     await db.runAsync(
       'UPDATE bank_transactions SET is_business_expense = ?, expense_category = ? WHERE id = ?',
-      [is_business_expense ? 1 : 0, expense_category || null, req.params.id]
+      [flags.is_business_expense, flags.expense_category, req.params.id]
     );
     res.json({ success: true });
   } catch (error) {
