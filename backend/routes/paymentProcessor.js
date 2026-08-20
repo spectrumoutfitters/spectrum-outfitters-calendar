@@ -18,6 +18,7 @@ import {
   PROCESSOR_NAME as VALOR_PROCESSOR,
   isConfigured as isValorConfigured,
 } from '../utils/valorPayRevenue.js';
+import { getActiveProcessor } from '../utils/paymentProcessorGate.js';
 
 const router = express.Router();
 
@@ -71,11 +72,6 @@ export async function syncValorPayRevenue(startDate, endDate) {
   }
 
   return { days_synced: daily.length, start_date: start, end_date: end };
-}
-
-/** Which processor is configured for sync (Valor Pay takes precedence). */
-function getActiveProcessor() {
-  return isValorConfigured() ? VALOR_PROCESSOR : STRIPE_PROCESSOR;
 }
 
 // ─── Which processor is configured (for UI label before status loads) ─────────
