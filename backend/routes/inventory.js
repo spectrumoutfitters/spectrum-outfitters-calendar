@@ -2,6 +2,7 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { findDealsForInventoryItem } from '../services/deals/dealFinder.js';
+import { parseCountQuantity, normalizeCountViscosity } from '../utils/inventoryCountQuantity.js';
 
 const router = express.Router();
 
@@ -1152,19 +1153,17 @@ router.post('/items/:id/quantity', async (req, res) => {
     const { id } = req.params;
     const { quantity, viscosity } = req.body || {};
 
-    const parsedQuantity = Number.parseFloat(quantity);
-    if (!Number.isFinite(parsedQuantity)) {
-      return res.status(400).json({ error: 'Quantity must be a number' });
+    const parsed = parseCountQuantity(quantity);
+    if (!parsed.ok) {
+      return res.status(400).json({ error: parsed.error });
     }
-    if (parsedQuantity < 0) {
-      return res.status(400).json({ error: 'Quantity cannot be negative' });
-    }
+    const parsedQuantity = parsed.quantity;
 
     const row = await db.getAsync('SELECT id, quantity FROM inventory_items WHERE id = ?', [id]);
     if (!row) return res.status(404).json({ error: 'Item not found' });
     const quantityBefore = row.quantity ?? 0;
 
-    const normViscosity = (viscosity !== undefined && viscosity !== null && String(viscosity).trim()) ? String(viscosity).trim() : null;
+    const normViscosity = normalizeCountViscosity(viscosity);
 
     await db.runAsync(
       `

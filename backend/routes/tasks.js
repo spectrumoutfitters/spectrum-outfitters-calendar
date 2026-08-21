@@ -18,6 +18,12 @@ import {
   getCurrentElapsedTime
 } from '../utils/taskTimeTracking.js';
 import { sendPushToUser } from '../utils/pushNotifications.js';
+import {
+  canPutUpdateTask,
+  isAdminRole,
+  isAssignmentTableAssociate,
+  isLegacyTaskAssociate,
+} from '../utils/taskAssociatePermission.js';
 
 /**
  * Helper function to add time tracking data to a task object
@@ -60,6 +66,20 @@ async function addTimeTrackingToTask(task, db) {
   task.totalDuration = calculateTaskTotalDuration(task);
   
   return task;
+}
+
+async function employeeMayAssociateWithTask(user, task, taskId) {
+  if (isAdminRole(user.role)) return true;
+  if (isLegacyTaskAssociate(user.id, task)) return true;
+  try {
+    const assignments = await db.allAsync(
+      'SELECT user_id FROM task_assignments WHERE task_id = ?',
+      [taskId]
+    );
+    return isAssignmentTableAssociate(user.id, (assignments || []).map((a) => a.user_id));
+  } catch (_) {
+    return false;
+  }
 }
 
 const router = express.Router();
@@ -507,7 +527,7 @@ router.put('/:id', async (req, res) => {
 
     // Employees can only update their own tasks, admins can update any
     // Check if user is assigned to this task (via new assignments table)
-    if (req.user.role !== 'admin' && !currentUserIds.includes(req.user.id)) {
+    if (!canPutUpdateTask(req.user.role, req.user.id, currentUserIds)) {
       return res.status(403).json({ error: 'You can only update tasks assigned to you' });
     }
 
@@ -820,23 +840,8 @@ router.post('/:id/start', async (req, res) => {
 
     // Employees can only start tasks they are associated with
     // (assigned via legacy assigned_to, new task_assignments, or created_by)
-    if (req.user.role !== 'admin') {
-      let isAssigned = task.assigned_to === req.user.id || task.created_by === req.user.id;
-      if (!isAssigned) {
-        try {
-          const assignments = await db.allAsync(
-            'SELECT user_id FROM task_assignments WHERE task_id = ?',
-            [id]
-          );
-          isAssigned = (assignments || []).some(a => a.user_id === req.user.id);
-        } catch (_) {
-          // If assignments table doesn't exist, fall back to legacy check above
-        }
-      }
-
-      if (!isAssigned) {
-        return res.status(403).json({ error: 'You can only start tasks assigned to you' });
-      }
+    if (!(await employeeMayAssociateWithTask(req.user, task, id))) {
+      return res.status(403).json({ error: 'You can only start tasks assigned to you' });
     }
 
     // Check if task is already started
@@ -920,23 +925,8 @@ router.put('/:id/status', async (req, res) => {
 
     // Employees can only update status on tasks they are associated with
     // (assigned via legacy assigned_to, new task_assignments, or created_by)
-    if (req.user.role !== 'admin') {
-      let isAssigned = currentTask.assigned_to === req.user.id || currentTask.created_by === req.user.id;
-      if (!isAssigned) {
-        try {
-          const assignments = await db.allAsync(
-            'SELECT user_id FROM task_assignments WHERE task_id = ?',
-            [id]
-          );
-          isAssigned = (assignments || []).some(a => a.user_id === req.user.id);
-        } catch (_) {
-          // If assignments table doesn't exist, fall back to legacy check above
-        }
-      }
-
-      if (!isAssigned) {
-        return res.status(403).json({ error: 'You can only update tasks assigned to you' });
-      }
+    if (!(await employeeMayAssociateWithTask(req.user, currentTask, id))) {
+      return res.status(403).json({ error: 'You can only update tasks assigned to you' });
     }
 
     // Track completion time when status changes to 'completed'
@@ -1084,23 +1074,8 @@ router.put('/:id/subtasks/:subtaskId', async (req, res) => {
 
     // Employees can only update checklist items on tasks they are associated with
     // (assigned via legacy assigned_to, new task_assignments, or created_by)
-    if (req.user.role !== 'admin') {
-      let isAssigned = task.assigned_to === req.user.id || task.created_by === req.user.id;
-      if (!isAssigned) {
-        try {
-          const assignments = await db.allAsync(
-            'SELECT user_id FROM task_assignments WHERE task_id = ?',
-            [id]
-          );
-          isAssigned = (assignments || []).some(a => a.user_id === req.user.id);
-        } catch (_) {
-          // If assignments table doesn't exist, fall back to legacy check above
-        }
-      }
-
-      if (!isAssigned) {
-        return res.status(403).json({ error: 'You can only update tasks assigned to you' });
-      }
+    if (!(await employeeMayAssociateWithTask(req.user, task, id))) {
+      return res.status(403).json({ error: 'You can only update tasks assigned to you' });
     }
 
     const completed = is_completed ? 1 : 0;
@@ -1248,23 +1223,8 @@ router.post('/:id/submit-for-review', async (req, res) => {
 
     // Only employees associated with the task can submit
     // (assigned via legacy assigned_to, new task_assignments, or created_by)
-    if (req.user.role !== 'admin') {
-      let isAssigned = task.assigned_to === req.user.id || task.created_by === req.user.id;
-      if (!isAssigned) {
-        try {
-          const assignments = await db.allAsync(
-            'SELECT user_id FROM task_assignments WHERE task_id = ?',
-            [id]
-          );
-          isAssigned = (assignments || []).some(a => a.user_id === req.user.id);
-        } catch (_) {
-          // If assignments table doesn't exist, fall back to legacy check above
-        }
-      }
-
-      if (!isAssigned) {
-        return res.status(403).json({ error: 'You can only submit tasks assigned to you' });
-      }
+    if (!(await employeeMayAssociateWithTask(req.user, task, id))) {
+      return res.status(403).json({ error: 'You can only submit tasks assigned to you' });
     }
 
     // Check if all subtasks are completed
@@ -1509,23 +1469,8 @@ router.post('/:id/break/start', async (req, res) => {
 
     // Employees can only start pauses on tasks they are associated with
     // (assigned via legacy assigned_to, new task_assignments, or created_by)
-    if (req.user.role !== 'admin') {
-      let isAssigned = task.assigned_to === req.user.id || task.created_by === req.user.id;
-      if (!isAssigned) {
-        try {
-          const assignments = await db.allAsync(
-            'SELECT user_id FROM task_assignments WHERE task_id = ?',
-            [id]
-          );
-          isAssigned = (assignments || []).some(a => a.user_id === req.user.id);
-        } catch (_) {
-          // If assignments table doesn't exist, fall back to legacy check above
-        }
-      }
-
-      if (!isAssigned) {
-        return res.status(403).json({ error: 'You can only pause tasks assigned to you' });
-      }
+    if (!(await employeeMayAssociateWithTask(req.user, task, id))) {
+      return res.status(403).json({ error: 'You can only pause tasks assigned to you' });
     }
 
     // Check if task is started
@@ -1571,23 +1516,8 @@ router.post('/:id/break/end', async (req, res) => {
 
     // Employees can only end pauses on tasks they are associated with
     // (assigned via legacy assigned_to, new task_assignments, or created_by)
-    if (req.user.role !== 'admin') {
-      let isAssigned = task.assigned_to === req.user.id || task.created_by === req.user.id;
-      if (!isAssigned) {
-        try {
-          const assignments = await db.allAsync(
-            'SELECT user_id FROM task_assignments WHERE task_id = ?',
-            [id]
-          );
-          isAssigned = (assignments || []).some(a => a.user_id === req.user.id);
-        } catch (_) {
-          // If assignments table doesn't exist, fall back to legacy check above
-        }
-      }
-
-      if (!isAssigned) {
-        return res.status(403).json({ error: 'You can only resume tasks assigned to you' });
-      }
+    if (!(await employeeMayAssociateWithTask(req.user, task, id))) {
+      return res.status(403).json({ error: 'You can only resume tasks assigned to you' });
     }
 
     // Find active pause
