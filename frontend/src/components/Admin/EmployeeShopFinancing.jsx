@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import {
+  isActiveAssignableUser,
+  isEmployeePayee,
+  suggestedDeductionAmountInput,
+  upcomingFridayLocal,
+} from '../../utils/shopFinancingUiMath';
 
 const GOLD = '#D4A017';
 
@@ -40,17 +46,7 @@ export default function EmployeeShopFinancing() {
   const [deductForm, setDeductForm] = useState({ week_ending_date: '', amount: '', extra_note: '' });
   const [saving, setSaving] = useState(false);
 
-  const [weekEnding, setWeekEnding] = useState(() => {
-    const d = new Date();
-    const day = d.getDay();
-    const add = (5 - day + 7) % 7;
-    const fri = new Date(d);
-    fri.setDate(d.getDate() + add);
-    const y = fri.getFullYear();
-    const m = String(fri.getMonth() + 1).padStart(2, '0');
-    const dd = String(fri.getDate()).padStart(2, '0');
-    return `${y}-${m}-${dd}`;
-  });
+  const [weekEnding, setWeekEnding] = useState(() => upcomingFridayLocal());
   const [weekSummary, setWeekSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
 
@@ -60,7 +56,7 @@ export default function EmployeeShopFinancing() {
     const errs = [];
     try {
       const uRes = await api.get('/users');
-      setUsers((uRes.data.users || []).filter((u) => u.is_active === 1 || u.is_active === true));
+      setUsers((uRes.data.users || []).filter(isActiveAssignableUser));
     } catch (e) {
       setUsers([]);
       errs.push(
@@ -117,7 +113,7 @@ export default function EmployeeShopFinancing() {
 
   const openEdit = (p) => {
     setEditingId(p.id);
-    const isEmployee = p.user_id != null && p.user_id !== '';
+    const isEmployee = isEmployeePayee(p);
     setForm({
       payee_type: isEmployee ? 'employee' : 'external',
       user_id: isEmployee ? String(p.user_id) : '',
@@ -138,10 +134,9 @@ export default function EmployeeShopFinancing() {
 
   const openDeduct = (p) => {
     setEditingId(p.id);
-    const suggested = Math.min(Number(p.weekly_payment) || 0, Number(p.balance_due) || 0);
     setDeductForm({
       week_ending_date: weekEnding,
-      amount: suggested > 0 ? String(suggested) : '',
+      amount: suggestedDeductionAmountInput(p),
       extra_note: '',
     });
     setModal('deduct');

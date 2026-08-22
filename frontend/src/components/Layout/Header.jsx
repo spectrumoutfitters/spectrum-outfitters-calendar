@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { shouldShowClockInHeader } from '../../utils/authRoleFlags';
 import { useJumpPalette } from './JumpPalette';
 import Logo from '../Logo';
 import HeaderClockInOut from '../TimeClock/HeaderClockInOut';
@@ -18,7 +19,7 @@ const Header = ({ onMenuClick }) => {
     navigate('/login');
   };
 
-  const showClockInOut = user?.show_clock_in_header !== false;
+  const showClockInOut = shouldShowClockInHeader(user);
 
   return (
     <header className="bg-brand-black text-white sticky top-0 z-50 min-h-[3.25rem] flex items-center border-b border-white/10 shadow-sm">
