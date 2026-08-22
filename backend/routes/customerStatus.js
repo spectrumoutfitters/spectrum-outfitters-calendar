@@ -2,6 +2,13 @@ import express from 'express';
 import crypto from 'crypto';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import db from '../database/db.js';
+import {
+  buildCustomerStatusUrl,
+  isMissingStatusLink,
+  isMissingTaskId,
+  normalizeOptionalCustomerField,
+  toPublicCustomerStatus,
+} from '../utils/customerStatusMath.js';
 
 const router = express.Router();
 
@@ -13,7 +20,7 @@ const router = express.Router();
  */
 router.post('/generate', authenticateToken, requireAdmin, async (req, res) => {
   const { task_id, customer_name, customer_phone } = req.body;
-  if (!task_id) return res.status(400).json({ error: 'task_id required' });
+  if (isMissingTaskId(task_id)) return res.status(400).json({ error: 'task_id required' });
 
   try {
     const token = crypto.randomBytes(16).toString('hex');
@@ -28,17 +35,17 @@ router.post('/generate', authenticateToken, requireAdmin, async (req, res) => {
         `UPDATE customer_status_links
          SET token = ?, customer_name = ?, customer_phone = ?, created_by = ?, created_at = CURRENT_TIMESTAMP
          WHERE task_id = ?`,
-        [token, customer_name || null, customer_phone || null, req.user.id, task_id]
+        [token, normalizeOptionalCustomerField(customer_name), normalizeOptionalCustomerField(customer_phone), req.user.id, task_id]
       );
     } else {
       await db.runAsync(
         `INSERT INTO customer_status_links (task_id, token, customer_name, customer_phone, created_by)
          VALUES (?, ?, ?, ?, ?)`,
-        [task_id, token, customer_name || null, customer_phone || null, req.user.id]
+        [task_id, token, normalizeOptionalCustomerField(customer_name), normalizeOptionalCustomerField(customer_phone), req.user.id]
       );
     }
 
-    const url = `/status/${token}`;
+    const url = buildCustomerStatusUrl(token);
     res.json({ token, url });
   } catch (err) {
     console.error('customer-status generate error:', err.message);
@@ -63,16 +70,9 @@ router.get('/:token', async (req, res) => {
       [token]
     );
 
-    if (!link) return res.status(404).json({ error: 'Status link not found' });
+    if (isMissingStatusLink(link)) return res.status(404).json({ error: 'Status link not found' });
 
-    res.json({
-      customer_name: link.customer_name,
-      task_title: link.task_title,
-      status: link.status,
-      description: link.description,
-      due_date: link.due_date,
-      last_updated: link.last_updated,
-    });
+    res.json(toPublicCustomerStatus(link));
   } catch (err) {
     console.error('customer-status GET error:', err.message);
     res.status(500).json({ error: 'Failed to fetch status' });

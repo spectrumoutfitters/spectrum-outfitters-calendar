@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../utils/api';
+import {
+  hasPayrollAccessUser,
+  isAdminUser,
+  isMasterAdminUser,
+  shouldClearAuthToken,
+} from '../utils/authRoleFlags';
 
 const AuthContext = createContext();
 
@@ -28,7 +34,7 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       // Only clear token on 401 (unauthorized) errors, not network errors or other issues
-      if (error.response?.status === 401) {
+      if (shouldClearAuthToken(error)) {
         // Token is invalid or expired
         localStorage.removeItem('token');
         setUser(null);
@@ -84,9 +90,9 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     logout,
-    isAdmin: user?.role === 'admin' || user?.is_master_admin === true,
-    hasPayrollAccess: user?.payroll_access === true || user?.is_master_admin === true,
-    isMasterAdmin: user?.is_master_admin === true,
+    isAdmin: isAdminUser(user),
+    hasPayrollAccess: hasPayrollAccessUser(user),
+    isMasterAdmin: isMasterAdminUser(user),
     refreshUser
   };
 
