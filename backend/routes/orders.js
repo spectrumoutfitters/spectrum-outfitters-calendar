@@ -1,6 +1,11 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import {
+  isValidOrderStatus,
+  statusRouteTimestampFlags,
+  updateRouteTimestampFlags,
+} from '../utils/orderStatusStamp.js';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -209,18 +214,18 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const validStatuses = ['pending', 'paid', 'fulfilled', 'cancelled'];
-    if (!validStatuses.includes(status)) {
+    if (!isValidOrderStatus(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
 
     const updateFields = ['status = ?', 'updated_at = CURRENT_TIMESTAMP'];
     const updateParams = [status];
 
-    if (status === 'paid') {
+    const stamps = statusRouteTimestampFlags(status);
+    if (stamps.paidAt) {
       updateFields.push('paid_at = CURRENT_TIMESTAMP');
     }
-    if (status === 'fulfilled') {
+    if (stamps.fulfilledAt) {
       updateFields.push('fulfilled_at = CURRENT_TIMESTAMP');
     }
 
@@ -278,17 +283,17 @@ router.put('/:id', requireAdmin, async (req, res) => {
 
     // Update status if provided
     if (status !== undefined) {
-      const validStatuses = ['pending', 'paid', 'fulfilled', 'cancelled'];
-      if (!validStatuses.includes(status)) {
+      if (!isValidOrderStatus(status)) {
         return res.status(400).json({ error: 'Invalid status' });
       }
       updateFields.push('status = ?');
       updateParams.push(status);
 
-      if (status === 'paid' && existingOrder.status !== 'paid') {
+      const stamps = updateRouteTimestampFlags(status, existingOrder.status);
+      if (stamps.paidAt) {
         updateFields.push('paid_at = CURRENT_TIMESTAMP');
       }
-      if (status === 'fulfilled' && existingOrder.status !== 'fulfilled') {
+      if (stamps.fulfilledAt) {
         updateFields.push('fulfilled_at = CURRENT_TIMESTAMP');
       }
     }

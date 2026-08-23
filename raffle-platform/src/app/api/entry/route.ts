@@ -2,24 +2,16 @@ import { NextResponse } from "next/server";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getClientIpFromRequest } from "@/lib/clientIp";
+import { isHoneypotEntry, isTermsRejected, recordRateHit } from "@/lib/entrySubmitGate";
 import type { EntryPayload } from "@/lib/types";
 
-const RATE_WINDOW_MS = 60 * 60 * 1000;
-const RATE_MAX = 12;
 const ipHits = new Map<string, number[]>();
 
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
-  const windowStart = now - RATE_WINDOW_MS;
-  const prev = ipHits.get(ip) ?? [];
-  const kept = prev.filter((t) => t > windowStart);
-  if (kept.length >= RATE_MAX) {
-    ipHits.set(ip, kept);
-    return true;
-  }
-  kept.push(now);
-  ipHits.set(ip, kept);
-  return false;
+  const result = recordRateHit(ipHits.get(ip) ?? [], now);
+  ipHits.set(ip, result.hits);
+  return result.limited;
 }
 
 export async function POST(request: Request) {
@@ -38,11 +30,11 @@ export async function POST(request: Request) {
     );
   }
 
-  if (body.company) {
+  if (isHoneypotEntry(body)) {
     return NextResponse.json({ ok: true, totalEntries: 0, message: "ok" });
   }
 
-  if (!body.termsAccepted) {
+  if (isTermsRejected(body)) {
     return NextResponse.json(
       { ok: false, error: "You must accept the terms to enter.", code: "terms" },
       { status: 400 },
