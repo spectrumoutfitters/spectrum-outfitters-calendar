@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getClientIpFromRequest } from "@/lib/clientIp";
+import { evaluatePaidTicketPurchase, parseCheckoutRequest } from "@/lib/paidCheckoutSplit";
 import { getRaffleSiteOrigin, getStripeClient } from "@/lib/stripe";
 import type { MyEntrySnapshot, EventConfig } from "@/lib/types";
 
@@ -24,12 +25,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
 
-  const slug = String(body?.slug || "").trim();
-  const token = String(body?.token || "").trim();
-  const split = body?.ticketSplit && typeof body.ticketSplit === "object" ? body.ticketSplit : null;
-  if (!slug || !token || !split) {
-    return NextResponse.json({ ok: false, error: "missing_fields" }, { status: 400 });
+  const parsed = parseCheckoutRequest(body);
+  if (!parsed.ok) {
+    return NextResponse.json({ ok: false, error: parsed.error }, { status: 400 });
   }
+  const { slug, token, split } = parsed;
 
   const base = getAppsScriptUrl();
   if (!base) {
@@ -53,37 +53,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "event_load_failed" }, { status: 502 });
   }
 
-  if (!event.paidTicketsEnabled) {
-    return NextResponse.json({ ok: false, error: "paid_tickets_disabled" }, { status: 400 });
+  const purchase = evaluatePaidTicketPurchase(event, split);
+  if (!purchase.ok) {
+    const payload: { ok: false; error: string; maxPerPurchase?: number } = {
+      ok: false,
+      error: purchase.error,
+    };
+    if (purchase.maxPerPurchase != null) payload.maxPerPurchase = purchase.maxPerPurchase;
+    return NextResponse.json(payload, { status: 400 });
   }
-  const priceCents = Math.max(0, Math.floor(Number(event.ticketPriceCents) || 0));
-  if (priceCents <= 0) {
-    return NextResponse.json({ ok: false, error: "ticket_price_not_set" }, { status: 400 });
-  }
-  const currency = String(event.ticketCurrency || "usd").toLowerCase();
-  const maxPerPurchase = Math.max(1, Math.floor(Number(event.paidTicketsMaxPerPurchase) || 100));
-
-  const validPoolIds = new Set(event.raffles.map((r) => r.id));
-  const cleanSplit: Record<string, number> = {};
-  let totalTickets = 0;
-  for (const [poolId, raw] of Object.entries(split)) {
-    const id = String(poolId);
-    if (!validPoolIds.has(id)) continue;
-    const n = Math.max(0, Math.floor(Number(raw) || 0));
-    if (n > 0) {
-      cleanSplit[id] = n;
-      totalTickets += n;
-    }
-  }
-  if (totalTickets <= 0) {
-    return NextResponse.json({ ok: false, error: "must_buy_at_least_one" }, { status: 400 });
-  }
-  if (totalTickets > maxPerPurchase) {
-    return NextResponse.json(
-      { ok: false, error: `max_${maxPerPurchase}_per_purchase`, maxPerPurchase },
-      { status: 400 },
-    );
-  }
+  const { cleanSplit, totalTickets, priceCents, currency } = purchase;
 
   let snapshot: MyEntrySnapshot | null = null;
   try {
