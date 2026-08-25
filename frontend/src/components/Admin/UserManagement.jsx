@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { formatDate, toTitleCase } from '../../utils/helpers';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  canTogglePayrollAccess,
+  hasPayrollAccessRow,
+  payrollAccessButtonLabel,
+  sqliteFlagGranted,
+} from '../../utils/payrollAccessUiFlags';
 
 const UserManagement = () => {
   const { user: currentUser } = useAuth();
@@ -394,16 +400,16 @@ const UserManagement = () => {
                   <td className="py-3 px-4">
                     {user.role === 'admin' ? (
                       <button
-                        onClick={() => togglePayrollAccess(user.id, user.payroll_access === 1 || user.payroll_access === true)}
+                        onClick={() => togglePayrollAccess(user.id, sqliteFlagGranted(user.payroll_access))}
                         className={`px-3 py-1 rounded text-xs font-medium ${
-                          (user.payroll_access === 1 || user.payroll_access === true) || (user.is_master_admin === 1 || user.is_master_admin === true)
+                          hasPayrollAccessRow(user)
                             ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-800/50'
                             : 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-100 hover:bg-gray-200 dark:hover:bg-neutral-600'
                         }`}
-                        disabled={user.is_master_admin === 1 || user.is_master_admin === true}
-                        title={user.is_master_admin === 1 || user.is_master_admin === true ? 'Master admin always has access' : 'Toggle payroll access'}
+                        disabled={!canTogglePayrollAccess(user)}
+                        title={!canTogglePayrollAccess(user) ? 'Master admin always has access' : 'Toggle payroll access'}
                       >
-                        {(user.is_master_admin === 1 || user.is_master_admin === true) ? '🔑 Master' : (user.payroll_access === 1 || user.payroll_access === true) ? '✓ Granted' : '✗ Denied'}
+                        {payrollAccessButtonLabel(user)}
                       </button>
                     ) : (
                       <span className="text-gray-400 dark:text-neutral-500 text-xs">—</span>
