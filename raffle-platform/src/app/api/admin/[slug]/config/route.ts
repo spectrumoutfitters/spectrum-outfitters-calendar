@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
+import { coerceEventConfigSave, isMissingAdminKey } from "@/lib/adminEventConfigGate";
 
 async function forwardToScript(body: Record<string, unknown>) {
   const base = getAppsScriptUrl();
@@ -24,10 +25,11 @@ export async function GET(
   context: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await context.params;
-  const adminKey = _request.headers.get("x-admin-key")?.trim();
-  if (!adminKey) {
+  const rawKey = _request.headers.get("x-admin-key") ?? "";
+  if (isMissingAdminKey(rawKey)) {
     return NextResponse.json({ ok: false, error: "missing_admin_key" }, { status: 401 });
   }
+  const adminKey = rawKey.trim();
   try {
     return await forwardToScript({ action: "getAdminEventConfig", slug, adminKey });
   } catch (e: unknown) {
@@ -45,23 +47,25 @@ export async function PUT(
   context: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await context.params;
-  const adminKey = request.headers.get("x-admin-key")?.trim();
-  if (!adminKey) {
+  const rawKey = request.headers.get("x-admin-key") ?? "";
+  if (isMissingAdminKey(rawKey)) {
     return NextResponse.json({ ok: false, error: "missing_admin_key" }, { status: 401 });
   }
+  const adminKey = rawKey.trim();
   let payload: { event?: Record<string, unknown>; raffles?: unknown[] };
   try {
     payload = (await request.json()) as { event?: Record<string, unknown>; raffles?: unknown[] };
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
+  const coerced = coerceEventConfigSave(payload);
   try {
     return await forwardToScript({
       action: "saveEventConfig",
       slug,
       adminKey,
-      event: payload.event || {},
-      raffles: Array.isArray(payload.raffles) ? payload.raffles : [],
+      event: coerced.event,
+      raffles: coerced.raffles,
     });
   } catch (e: unknown) {
     const name = e instanceof Error ? e.name : "";

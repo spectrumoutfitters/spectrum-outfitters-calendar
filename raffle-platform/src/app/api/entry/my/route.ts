@@ -2,31 +2,28 @@ import { NextResponse } from "next/server";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getClientIpFromRequest } from "@/lib/clientIp";
+import {
+  isHoneypotManagePatch,
+  isMissingIdentity,
+  normalizeIdentityField,
+  recordRateHit,
+} from "@/lib/manageEntryApiGate";
 
-const RATE_WINDOW_MS = 60 * 60 * 1000;
-const RATE_MAX = 24;
 const ipHits = new Map<string, number[]>();
 
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
-  const windowStart = now - RATE_WINDOW_MS;
-  const prev = ipHits.get(ip) ?? [];
-  const kept = prev.filter((t) => t > windowStart);
-  if (kept.length >= RATE_MAX) {
-    ipHits.set(ip, kept);
-    return true;
-  }
-  kept.push(now);
-  ipHits.set(ip, kept);
-  return false;
+  const result = recordRateHit(ipHits.get(ip) ?? [], now);
+  ipHits.set(ip, result.hits);
+  return result.limited;
 }
 
 /** Load entry snapshot for “manage my entry” magic link. */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const slug = searchParams.get("slug")?.trim();
-  const token = searchParams.get("token")?.trim();
-  if (!slug || !token) {
+  const slug = normalizeIdentityField(searchParams.get("slug"));
+  const token = normalizeIdentityField(searchParams.get("token"));
+  if (isMissingIdentity(slug, token)) {
     return NextResponse.json({ ok: false, error: "missing_slug_or_token", code: "fields" }, { status: 400 });
   }
 
@@ -74,9 +71,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
 
-  const slug = String(body.slug || "").trim();
-  const token = String(body.token || "").trim();
-  if (!slug || !token) {
+  const slug = normalizeIdentityField(body.slug);
+  const token = normalizeIdentityField(body.token);
+  if (isMissingIdentity(slug, token)) {
     return NextResponse.json({ ok: false, error: "missing_slug_or_token", code: "fields" }, { status: 400 });
   }
 
@@ -88,7 +85,7 @@ export async function PATCH(request: Request) {
     );
   }
 
-  if (body.company) {
+  if (isHoneypotManagePatch(body)) {
     return NextResponse.json({ ok: true, totalEntries: 0, message: "ok" });
   }
 
