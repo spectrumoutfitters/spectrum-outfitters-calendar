@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { formatDateTime } from '../../utils/helpers';
+import { applyOrderItemEdit } from '../../utils/orderEditItemTotal';
 
 const OrderManagement = () => {
   const [orders, setOrders] = useState([]);
@@ -137,23 +138,8 @@ const OrderManagement = () => {
   };
 
   const updateOrderItem = (index, field, value) => {
-    const newItems = [...(editData.items || [])];
-    newItems[index] = { ...newItems[index], [field]: value };
-    
-    // If product_id changed, update price from product
-    if (field === 'product_id' && value) {
-      const product = products.find(p => p.id === parseInt(value));
-      if (product) {
-        newItems[index].price = product.price;
-      }
-    }
-    
-    // Recalculate total
-    const total = newItems.reduce((sum, item) => {
-      return sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 1));
-    }, 0);
-    
-    setEditData({ ...editData, items: newItems, total_amount: total });
+    const next = applyOrderItemEdit(editData.items, index, field, value, products);
+    setEditData({ ...editData, items: next.items, total_amount: next.total_amount });
   };
 
   const updateOrderStatus = async (orderId, newStatus) => {
