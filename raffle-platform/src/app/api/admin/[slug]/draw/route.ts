@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
+import { parseDrawBody } from "@/lib/raffleDrawGate";
 
 type DrawBody = {
   raffleId: string;
@@ -25,8 +26,9 @@ export async function POST(
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
-  if (!body.raffleId) {
-    return NextResponse.json({ ok: false, error: "missing_raffleId" }, { status: 400 });
+  const parsed = parseDrawBody(body);
+  if (!parsed.ok) {
+    return NextResponse.json({ ok: false, error: parsed.error }, { status: 400 });
   }
 
   const base = getAppsScriptUrl();
@@ -38,9 +40,9 @@ export async function POST(
       action: "drawWinner",
       slug,
       adminKey,
-      raffleId: body.raffleId,
-      excludePhones: body.excludePhones ?? [],
-      testModeOnly: Boolean(body.testModeOnly),
+      raffleId: parsed.raffleId,
+      excludePhones: parsed.excludePhones,
+      testModeOnly: parsed.testModeOnly,
     });
     const text = await res.text();
     let data: unknown;
