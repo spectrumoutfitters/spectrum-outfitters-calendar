@@ -2,13 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { DndContext, useDraggable, useDroppable, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import api from '../../utils/api';
 import { formatDate } from '../../utils/helpers';
+import { addDaysDateOnly, scheduleSpanDays } from '../../utils/scheduleSpanMath';
 import GoogleCalendarSettings from './GoogleCalendarSettings';
-
-function addDaysDateOnly(dateStr, days) {
-  const d = new Date(dateStr + 'T12:00:00');
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
-}
 
 function KanbanCard({ entry, colorClass, onView, isGoogleSourced, typeLabel }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: entry.id });
@@ -234,9 +229,7 @@ const ScheduleCalendar = () => {
     if (!over || typeof over.id !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(over.id)) return;
     const entry = scheduleEntries.find((e) => e.id === active.id);
     if (!entry || entry.start_date === over.id) return;
-    const start = new Date(entry.start_date);
-    const end = new Date(entry.end_date);
-    const spanDays = Math.max(1, Math.round((end - start) / 86400000) + 1);
+    const spanDays = scheduleSpanDays(entry.start_date, entry.end_date);
     const newStart = over.id;
     const newEnd = addDaysDateOnly(newStart, spanDays - 1);
     setReschedulingId(entry.id);
