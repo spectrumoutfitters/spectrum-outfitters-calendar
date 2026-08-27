@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppsScriptUrl } from "@/lib/env";
+import { isValidPublicEventSlug } from "@/lib/publicEventSlugGate";
 
 export const revalidate = 60;
 
@@ -19,7 +20,7 @@ export async function GET(
   context: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await context.params;
-  if (!slug || slug.length > 80) {
+  if (!isValidPublicEventSlug(slug)) {
     return NextResponse.json({ ok: false, error: "invalid_slug" }, { status: 400, headers: CORS_HEADERS });
   }
 

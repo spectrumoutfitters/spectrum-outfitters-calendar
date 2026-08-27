@@ -10,6 +10,13 @@ import {
   getOrderStatus,
   testConnection
 } from '../utils/turn14.js';
+import {
+  isTurn14ConfiguredForApi,
+  isTurn14ConfiguredForTest,
+  isTurn14EnvSet,
+  isTurn14SecretPresent,
+  turn14PricingQuantity,
+} from '../utils/turn14CredentialsGate.js';
 
 const router = express.Router();
 
@@ -21,12 +28,7 @@ router.use(authenticateToken);
  */
 router.get('/test', async (req, res) => {
   try {
-    // Check if credentials are configured
-    if (!process.env.TURN14_CLIENT_ID || !process.env.TURN14_CLIENT_SECRET ||
-        process.env.TURN14_CLIENT_ID.trim() === '' || 
-        process.env.TURN14_CLIENT_SECRET.trim() === '' ||
-        process.env.TURN14_CLIENT_ID === 'your_turn14_client_id_here' ||
-        process.env.TURN14_CLIENT_SECRET === 'your_turn14_client_secret_here') {
+    if (!isTurn14ConfiguredForTest(process.env.TURN14_CLIENT_ID, process.env.TURN14_CLIENT_SECRET)) {
       return res.status(400).json({ 
         success: false,
         error: 'Turn14 credentials not configured',
@@ -42,7 +44,7 @@ router.get('/test', async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: error.message || 'Failed to connect to Turn14 API',
-      credentialsConfigured: !!(process.env.TURN14_CLIENT_ID && process.env.TURN14_CLIENT_SECRET),
+      credentialsConfigured: isTurn14EnvSet(process.env.TURN14_CLIENT_ID, process.env.TURN14_CLIENT_SECRET),
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
@@ -53,8 +55,8 @@ router.get('/test', async (req, res) => {
  */
 router.get('/debug', async (req, res) => {
   const config = {
-    hasClientId: !!(process.env.TURN14_CLIENT_ID && process.env.TURN14_CLIENT_ID.trim() !== ''),
-    hasClientSecret: !!(process.env.TURN14_CLIENT_SECRET && process.env.TURN14_CLIENT_SECRET.trim() !== ''),
+    hasClientId: isTurn14SecretPresent(process.env.TURN14_CLIENT_ID),
+    hasClientSecret: isTurn14SecretPresent(process.env.TURN14_CLIENT_SECRET),
     apiBaseUrl: process.env.TURN14_API_BASE_URL || 'https://api.turn14.com/v1 (default)',
     tokenUrl: process.env.TURN14_TOKEN_URL || 'https://api.turn14.com/oauth/token (default)',
     authMethod: process.env.TURN14_AUTH_METHOD || 'auto (default)',
@@ -76,10 +78,7 @@ router.get('/debug', async (req, res) => {
  */
 router.get('/parts/search', async (req, res) => {
   try {
-    // Check if credentials are configured
-    if (!process.env.TURN14_CLIENT_ID || !process.env.TURN14_CLIENT_SECRET ||
-        process.env.TURN14_CLIENT_ID.trim() === '' || 
-        process.env.TURN14_CLIENT_SECRET.trim() === '') {
+    if (!isTurn14ConfiguredForApi(process.env.TURN14_CLIENT_ID, process.env.TURN14_CLIENT_SECRET)) {
       return res.status(400).json({ 
         error: 'Turn14 credentials not configured',
         message: 'Please add TURN14_CLIENT_ID and TURN14_CLIENT_SECRET to backend/.env file'
@@ -134,10 +133,7 @@ router.get('/parts/search', async (req, res) => {
  */
 router.get('/parts/:partNumber', async (req, res) => {
   try {
-    // Check if credentials are configured
-    if (!process.env.TURN14_CLIENT_ID || !process.env.TURN14_CLIENT_SECRET ||
-        process.env.TURN14_CLIENT_ID.trim() === '' || 
-        process.env.TURN14_CLIENT_SECRET.trim() === '') {
+    if (!isTurn14ConfiguredForApi(process.env.TURN14_CLIENT_ID, process.env.TURN14_CLIENT_SECRET)) {
       return res.status(400).json({ 
         error: 'Turn14 credentials not configured',
         message: 'Please add TURN14_CLIENT_ID and TURN14_CLIENT_SECRET to backend/.env file'
@@ -159,10 +155,7 @@ router.get('/parts/:partNumber', async (req, res) => {
  */
 router.get('/parts/:partNumber/pricing', async (req, res) => {
   try {
-    // Check if credentials are configured
-    if (!process.env.TURN14_CLIENT_ID || !process.env.TURN14_CLIENT_SECRET ||
-        process.env.TURN14_CLIENT_ID.trim() === '' || 
-        process.env.TURN14_CLIENT_SECRET.trim() === '') {
+    if (!isTurn14ConfiguredForApi(process.env.TURN14_CLIENT_ID, process.env.TURN14_CLIENT_SECRET)) {
       return res.status(400).json({ 
         error: 'Turn14 credentials not configured',
         message: 'Please add TURN14_CLIENT_ID and TURN14_CLIENT_SECRET to backend/.env file'
@@ -171,7 +164,7 @@ router.get('/parts/:partNumber/pricing', async (req, res) => {
 
     const { partNumber } = req.params;
     const { quantity } = req.query;
-    const pricing = await getPartPricing(partNumber, quantity ? parseInt(quantity) : 1);
+    const pricing = await getPartPricing(partNumber, turn14PricingQuantity(quantity));
     res.json({ pricing });
   } catch (error) {
     console.error('Turn14 get pricing error:', error);
@@ -184,10 +177,7 @@ router.get('/parts/:partNumber/pricing', async (req, res) => {
  */
 router.get('/parts/:partNumber/availability', async (req, res) => {
   try {
-    // Check if credentials are configured
-    if (!process.env.TURN14_CLIENT_ID || !process.env.TURN14_CLIENT_SECRET ||
-        process.env.TURN14_CLIENT_ID.trim() === '' || 
-        process.env.TURN14_CLIENT_SECRET.trim() === '') {
+    if (!isTurn14ConfiguredForApi(process.env.TURN14_CLIENT_ID, process.env.TURN14_CLIENT_SECRET)) {
       return res.status(400).json({ 
         error: 'Turn14 credentials not configured',
         message: 'Please add TURN14_CLIENT_ID and TURN14_CLIENT_SECRET to backend/.env file'
@@ -209,10 +199,7 @@ router.get('/parts/:partNumber/availability', async (req, res) => {
  */
 router.get('/parts/fitment', async (req, res) => {
   try {
-    // Check if credentials are configured
-    if (!process.env.TURN14_CLIENT_ID || !process.env.TURN14_CLIENT_SECRET ||
-        process.env.TURN14_CLIENT_ID.trim() === '' || 
-        process.env.TURN14_CLIENT_SECRET.trim() === '') {
+    if (!isTurn14ConfiguredForApi(process.env.TURN14_CLIENT_ID, process.env.TURN14_CLIENT_SECRET)) {
       return res.status(400).json({ 
         error: 'Turn14 credentials not configured',
         message: 'Please add TURN14_CLIENT_ID and TURN14_CLIENT_SECRET to backend/.env file'
@@ -240,10 +227,7 @@ router.get('/parts/fitment', async (req, res) => {
  */
 router.post('/orders', requireAdmin, async (req, res) => {
   try {
-    // Check if credentials are configured
-    if (!process.env.TURN14_CLIENT_ID || !process.env.TURN14_CLIENT_SECRET ||
-        process.env.TURN14_CLIENT_ID.trim() === '' || 
-        process.env.TURN14_CLIENT_SECRET.trim() === '') {
+    if (!isTurn14ConfiguredForApi(process.env.TURN14_CLIENT_ID, process.env.TURN14_CLIENT_SECRET)) {
       return res.status(400).json({ 
         error: 'Turn14 credentials not configured',
         message: 'Please add TURN14_CLIENT_ID and TURN14_CLIENT_SECRET to backend/.env file'
@@ -269,10 +253,7 @@ router.post('/orders', requireAdmin, async (req, res) => {
  */
 router.get('/orders/:orderId', async (req, res) => {
   try {
-    // Check if credentials are configured
-    if (!process.env.TURN14_CLIENT_ID || !process.env.TURN14_CLIENT_SECRET ||
-        process.env.TURN14_CLIENT_ID.trim() === '' || 
-        process.env.TURN14_CLIENT_SECRET.trim() === '') {
+    if (!isTurn14ConfiguredForApi(process.env.TURN14_CLIENT_ID, process.env.TURN14_CLIENT_SECRET)) {
       return res.status(400).json({ 
         error: 'Turn14 credentials not configured',
         message: 'Please add TURN14_CLIENT_ID and TURN14_CLIENT_SECRET to backend/.env file'
