@@ -2,6 +2,18 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { findDealsForInventoryItem } from '../services/deals/dealFinder.js';
+import {
+  parseBatchReceiveEntry,
+  parseBatchReceiveItems,
+  parseNewItemRequest,
+  parseNewItemRequestStatus,
+  parseReceiveQuantity,
+  parseRequiredPositiveId,
+  parseUseOnTaskQuantity,
+  refillReceiveStatusGate,
+  stockAfterReceive,
+  stockAfterUse,
+} from '../utils/inventoryQtyGate.js';
 
 const router = express.Router();
 
@@ -1563,10 +1575,11 @@ router.post('/refill-requests/:id/receive', async (req, res) => {
   try {
     const { id } = req.params;
     const { quantity_received } = req.body || {};
-    const qty = quantity_received === undefined || quantity_received === null || quantity_received === '' ? null : Number.parseFloat(quantity_received);
-    if (qty === null || !Number.isFinite(qty) || qty < 0) {
-      return res.status(400).json({ error: 'quantity_received must be a non-negative number' });
+    const parsedQty = parseReceiveQuantity(quantity_received);
+    if (!parsedQty.ok) {
+      return res.status(400).json({ error: parsedQty.error });
     }
+    const qty = parsedQty.quantity;
 
     const row = await db.getAsync(
       `SELECT r.*, i.name AS item_name, i.quantity AS current_quantity FROM inventory_refill_requests r
@@ -1574,15 +1587,13 @@ router.post('/refill-requests/:id/receive', async (req, res) => {
       [id]
     );
     if (!row) return res.status(404).json({ error: 'Refill request not found' });
-    if (row.status === 'received') {
-      return res.status(400).json({ error: 'This refill was already received' });
-    }
-    if (row.status === 'cancelled') {
-      return res.status(400).json({ error: 'Cannot receive a cancelled request' });
+    const receiveGate = refillReceiveStatusGate(row.status);
+    if (!receiveGate.ok) {
+      return res.status(400).json({ error: receiveGate.error });
     }
 
     const quantityBefore = row.current_quantity ?? 0;
-    const quantityAfter = quantityBefore + qty;
+    const quantityAfter = stockAfterReceive(row.current_quantity, qty);
 
     await db.runAsync(
       `UPDATE inventory_items SET quantity = ?, last_counted_at = CURRENT_TIMESTAMP, last_counted_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -1616,15 +1627,18 @@ router.post('/refill-requests/:id/receive', async (req, res) => {
 router.post('/use-on-task', async (req, res) => {
   try {
     const { item_id, task_id, quantity_used: quantityUsedRaw, notes } = req.body || {};
-    const itemId = item_id != null ? Number(item_id) : null;
-    const taskId = task_id != null ? Number(task_id) : null;
-    if (!itemId || !Number.isFinite(itemId)) return res.status(400).json({ error: 'item_id is required' });
-    if (!taskId || !Number.isFinite(taskId)) return res.status(400).json({ error: 'task_id is required' });
+    const parsedItem = parseRequiredPositiveId(item_id, 'item_id');
+    if (!parsedItem.ok) return res.status(400).json({ error: parsedItem.error });
+    const parsedTask = parseRequiredPositiveId(task_id, 'task_id');
+    if (!parsedTask.ok) return res.status(400).json({ error: parsedTask.error });
+    const itemId = parsedItem.id;
+    const taskId = parsedTask.id;
 
-    const quantityUsed = Number.parseFloat(quantityUsedRaw);
-    if (!Number.isFinite(quantityUsed) || quantityUsed <= 0) {
-      return res.status(400).json({ error: 'quantity_used must be a positive number' });
+    const parsedUsed = parseUseOnTaskQuantity(quantityUsedRaw);
+    if (!parsedUsed.ok) {
+      return res.status(400).json({ error: parsedUsed.error });
     }
+    const quantityUsed = parsedUsed.quantity;
 
     const row = await db.getAsync('SELECT id, name, quantity FROM inventory_items WHERE id = ?', [itemId]);
     if (!row) return res.status(404).json({ error: 'Item not found' });
@@ -1633,7 +1647,7 @@ router.post('/use-on-task', async (req, res) => {
     if (!task) return res.status(404).json({ error: 'Task not found' });
 
     const quantityBefore = row.quantity ?? 0;
-    const quantityAfter = Math.max(0, quantityBefore - quantityUsed);
+    const quantityAfter = stockAfterUse(row.quantity, quantityUsed);
 
     await db.runAsync(
       'UPDATE inventory_items SET quantity = ?, last_counted_at = CURRENT_TIMESTAMP, last_counted_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -1795,21 +1809,22 @@ router.get('/movement/summary', async (req, res) => {
 router.post('/batch-receive', async (req, res) => {
   try {
     const { items } = req.body || {};
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'items array is required' });
+    const parsedItems = parseBatchReceiveItems(items);
+    if (!parsedItems.ok) {
+      return res.status(400).json({ error: parsedItems.error });
     }
 
     const results = [];
-    for (const entry of items) {
-      const itemId = entry.item_id != null ? Number(entry.item_id) : null;
-      const qty = Number.parseFloat(entry.quantity);
-      if (!itemId || !Number.isFinite(itemId) || !Number.isFinite(qty) || qty <= 0) continue;
+    for (const entry of parsedItems.items) {
+      const parsed = parseBatchReceiveEntry(entry);
+      if (!parsed) continue;
+      const { itemId, qty } = parsed;
 
       const row = await db.getAsync('SELECT id, name, quantity FROM inventory_items WHERE id = ?', [itemId]);
       if (!row) continue;
 
       const quantityBefore = row.quantity ?? 0;
-      const quantityAfter = quantityBefore + qty;
+      const quantityAfter = stockAfterReceive(row.quantity, qty);
 
       await db.runAsync(
         'UPDATE inventory_items SET quantity = ?, last_counted_at = CURRENT_TIMESTAMP, last_counted_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -1834,14 +1849,14 @@ router.post('/batch-receive', async (req, res) => {
 // POST /api/inventory/new-item-requests — worker submits request for an item not in inventory
 router.post('/new-item-requests', async (req, res) => {
   try {
-    const { item_name, notes, barcode } = req.body || {};
-    const name = (item_name || '').trim();
-    if (!name) return res.status(400).json({ error: 'Item name is required' });
+    const parsedNew = parseNewItemRequest(req.body || {});
+    if (!parsedNew.ok) return res.status(400).json({ error: parsedNew.error });
+    const { name, notes, barcode } = parsedNew;
     const requestedBy = req.user.id;
     await db.runAsync(
       `INSERT INTO inventory_new_item_requests (requested_by, item_name, notes, barcode, status)
        VALUES (?, ?, ?, ?, 'pending')`,
-      [requestedBy, name, (notes || '').trim() || null, (barcode || '').trim() || null]
+      [requestedBy, name, notes, barcode]
     );
     const row = await db.getAsync(
       `SELECT r.*, u.full_name AS requested_by_name FROM inventory_new_item_requests r
@@ -1883,8 +1898,10 @@ router.get('/new-item-requests', async (req, res) => {
 router.patch('/new-item-requests/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body || {};
-    if (!['addressed', 'dismissed'].includes(status)) return res.status(400).json({ error: 'status must be addressed or dismissed' });
+    const { status: statusRaw } = req.body || {};
+    const parsedStatus = parseNewItemRequestStatus(statusRaw);
+    if (!parsedStatus.ok) return res.status(400).json({ error: parsedStatus.error });
+    const { status } = parsedStatus;
     const row = await db.getAsync('SELECT id FROM inventory_new_item_requests WHERE id = ?', [id]);
     if (!row) return res.status(404).json({ error: 'Request not found' });
     await db.runAsync(

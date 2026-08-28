@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
+import {
+  raffleExportContentDisposition,
+  raffleExportCsvBody,
+  raffleExportCsvFilename,
+  raffleExportCsvReady,
+} from "@/lib/raffleExportFilename";
 
 export async function POST(
   request: Request,
@@ -25,16 +31,16 @@ export async function POST(
     } catch {
       return NextResponse.json({ ok: false, error: "upstream_not_json" }, { status: 502 });
     }
-    if (!res.ok || !data.ok || !data.csv) {
+    if (!raffleExportCsvReady(res.ok, data)) {
       return NextResponse.json(data, { status: res.ok ? 400 : res.status });
     }
 
-    const filename = `entries-${slug}-${new Date().toISOString().slice(0, 10)}.csv`;
-    return new NextResponse("\uFEFF" + data.csv, {
+    const filename = raffleExportCsvFilename(slug);
+    return new NextResponse(raffleExportCsvBody(data.csv), {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Disposition": raffleExportContentDisposition(filename),
       },
     });
   } catch (e: unknown) {

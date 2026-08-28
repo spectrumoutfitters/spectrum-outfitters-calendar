@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import api from '../utils/api';
+import {
+  centsToDollarInput,
+  coerceQuickJobSavePayload,
+  dollarsInputToCents,
+  isQuickJobActive,
+} from '../utils/quickJobsItemMoney';
 
 const emptyJob = {
   id: null,
@@ -84,7 +90,7 @@ const QuickJobsAdmin = () => {
           id: job.id,
           name: job.name || '',
           color: job.color || '',
-          is_active: job.is_active !== 0,
+          is_active: isQuickJobActive(job.is_active),
           sort_order: job.sort_order ?? 0,
           items,
         });
@@ -98,18 +104,7 @@ const QuickJobsAdmin = () => {
     setSaving(true);
     setError('');
     try {
-      const payload = {
-        name: editing.name,
-        color: editing.color || null,
-        is_active: !!editing.is_active,
-        sort_order: Number(editing.sort_order) || 0,
-        items: editing.items.map((it) => ({
-          ...it,
-          quantity: it.quantity != null ? Number(it.quantity) : null,
-          unit_price_cents: it.unit_price_cents != null ? Number(it.unit_price_cents) : null,
-          discount_value: it.discount_value != null ? Number(it.discount_value) : null,
-        })),
-      };
+      const payload = coerceQuickJobSavePayload(editing);
       if (editing.id) {
         await api.put(`/crm/quick-jobs/${editing.id}`, payload);
       } else {
@@ -363,19 +358,13 @@ const QuickJobsAdmin = () => {
                             Unit ($)
                           </label>
                           <input
-                            value={
-                              it.unit_price_cents != null
-                                ? (Number(it.unit_price_cents) / 100).toFixed(2)
-                                : ''
-                            }
+                            value={centsToDollarInput(it.unit_price_cents)}
                             onChange={(e) =>
                               setEditing((s) => {
                                 const items = [...(s.items || [])];
-                                const val = e.target.value;
-                                const num = Number.parseFloat(val);
                                 items[idx] = {
                                   ...items[idx],
-                                  unit_price_cents: Number.isFinite(num) ? Math.round(num * 100) : null,
+                                  unit_price_cents: dollarsInputToCents(e.target.value),
                                 };
                                 return { ...s, items };
                               })
