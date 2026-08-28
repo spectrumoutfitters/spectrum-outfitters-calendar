@@ -779,6 +779,18 @@ function rateLimitOk_(ip) {
   return true;
 }
 
+function isTestModeFlag_(value) {
+  if (value === true || value === 1) return true;
+  var s = String(value == null ? '' : value).trim().toUpperCase();
+  return s === 'TRUE' || s === '1' || s === 'YES';
+}
+
+/** Keep in sync with backend/utils/raffleTestEntryPhoneGuard.js resolveUpdateTestMode. */
+function resolveUpdateTestMode_(existingRowsAreAllTest, eventDefaultTestMode) {
+  if (isTestModeFlag_(eventDefaultTestMode)) return true;
+  return !!existingRowsAreAllTest;
+}
+
 function phoneExistsForSlug_(slug, phoneNorm) {
   var sh = getSpreadsheet_().getSheetByName(SHEET_ENTRIES);
   if (!sh) return false;
@@ -789,6 +801,10 @@ function phoneExistsForSlug_(slug, phoneNorm) {
   for (var i = 0; i < values.length; i++) {
     var rowSlug = String(values[i][1] || '');
     var rowPhone = normalizePhone_(values[i][3]);
+    // Test-mode rows are excluded from official draws — they must not occupy
+    // the one-per-phone slot or ?test=1 / testMode:true can lock a customer out.
+    // Keep in sync with backend/utils/raffleTestEntryPhoneGuard.js
+    if (isTestModeFlag_(values[i][10])) continue;
     if (rowSlug === slug && rowPhone === phoneNorm) return true;
   }
   return false;
@@ -863,6 +879,7 @@ function readEntryRowsByToken_(slug, token) {
       email: String(values[i][4] || ''),
       raffleId: String(values[i][5] || ''),
       tickets: Number(values[i][9]) || 0,
+      isTest: isTestModeFlag_(values[i][10]),
       extras: ex,
     });
   }
@@ -1755,8 +1772,16 @@ function handleUpdateEntryByToken_(data) {
   }
   var newsletterBonusEarned2 = newsletterOptIn2 ? getNewsletterBonusTickets_(ev) : 0;
   totalEntries += newsletterBonusEarned2;
-  var testMode =
-    Boolean(p.testMode) || String(ev.defaultTestMode || '').toUpperCase() === 'TRUE' || ev.defaultTestMode === true;
+  var existingAllTest = rows.length > 0;
+  for (var eti = 0; eti < rows.length; eti++) {
+    if (!rows[eti].isTest) existingAllTest = false;
+  }
+  // Ignore client testMode on update: ?test=1 must not drop real tickets out of the official draw,
+  // and omitting it must not promote QA rows into the official draw.
+  var testMode = resolveUpdateTestMode_(
+    existingAllTest,
+    String(ev.defaultTestMode || '').toUpperCase() === 'TRUE' || ev.defaultTestMode === true
+  );
 
   if (testMode) {
     var block2 = String(ev.blockTestWrite || '').toUpperCase() === 'TRUE';
