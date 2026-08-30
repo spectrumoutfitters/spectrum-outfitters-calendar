@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
 import { getAppsScriptUrl } from "@/lib/env";
 import { getStripeClient } from "@/lib/stripe";
+import { verifyRaffleAdminKey } from "@/lib/verifyRaffleAdmin";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,7 @@ type Body = {
 
 /**
  * Refund a paid raffle purchase.
- * 1. Re-validate admin key (sent in `x-admin-key` header AND optionally re-confirmed via body).
+ * 1. Re-validate admin key (sent in `x-admin-key` header AND re-confirmed via body).
  * 2. Look up the Stripe session → refund the underlying payment_intent.
  * 3. Tell Apps Script to mark those rows refunded + zero their tickets.
  *
@@ -36,16 +37,22 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   if (!stripeSessionId) {
     return NextResponse.json({ ok: false, error: "missing_session" }, { status: 400 });
   }
+  if (!headerKey) {
+    return NextResponse.json({ ok: false, error: "missing_admin_key" }, { status: 401 });
+  }
   if (!typedPassword) {
     return NextResponse.json({ ok: false, error: "password_required" }, { status: 401 });
   }
-  if (headerKey && typedPassword !== headerKey) {
+  if (typedPassword !== headerKey) {
     return NextResponse.json({ ok: false, error: "password_mismatch" }, { status: 401 });
   }
 
   const base = getAppsScriptUrl();
   if (!base) {
     return NextResponse.json({ ok: false, error: "server_misconfigured" }, { status: 503 });
+  }
+  if (!(await verifyRaffleAdminKey(slug, headerKey))) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   let stripe;
@@ -61,6 +68,10 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   } catch (e) {
     const msg = e instanceof Error ? e.message : "stripe_lookup_failed";
     return NextResponse.json({ ok: false, error: msg }, { status: 502 });
+  }
+
+  if (String(session.metadata?.raffle_slug || "").trim() !== slug) {
+    return NextResponse.json({ ok: false, error: "session_not_for_raffle" }, { status: 403 });
   }
 
   if (session.payment_status !== "paid") {
@@ -110,7 +121,7 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
     const sheetRes = await fetchAppsScriptPost(base, {
       action: "refundPaidPurchase",
       slug,
-      adminKey: headerKey || typedPassword,
+      adminKey: headerKey,
       stripeSessionId,
       refundId: refund?.id || "",
       actor: "admin_panel",

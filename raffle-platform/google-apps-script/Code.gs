@@ -1919,6 +1919,16 @@ function verifyPaidPurchaseSignature_(payloadString, signatureHex) {
   return constantTimeEqualHex_(hex, String(signatureHex || ''));
 }
 
+function withDocumentWriteLock_(fn) {
+  var lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    return fn();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function appendPaidEntryRow_(slug, name, phoneNorm, email, raffleId, rowTickets, ip, userAgent, entryToken, paidMeta) {
   var extras = {
     __paid: true,
@@ -1966,64 +1976,66 @@ function handleApplyPaidTickets_(data) {
     return jsonResponse({ ok: false, error: 'missing_fields', code: 'fields' }, 400);
   }
 
-  var found = findEventRow_(slug);
-  if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
+  return withDocumentWriteLock_(function () {
+    var found = findEventRow_(slug);
+    if (!found) return jsonResponse({ ok: false, error: 'event_not_found' }, 404);
 
-  if (paidPurchaseAlreadyApplied_(slug, stripeSessionId)) {
-    return jsonResponse({ ok: true, alreadyApplied: true, totalPaidTickets: totalPaid });
-  }
-
-  var rows = readEntryRowsByToken_(slug, token);
-  if (!rows.length) return jsonResponse({ ok: false, error: 'entry_not_found', code: 'token' }, 404);
-
-  var raffles = getRafflesForSlug_(slug);
-  var validIds = {};
-  for (var ri = 0; ri < raffles.length; ri++) validIds[raffles[ri].id] = true;
-
-  var split = (p.ticketSplit && typeof p.ticketSplit === 'object' && !Array.isArray(p.ticketSplit)) ? p.ticketSplit : null;
-  var allocations = [];
-  if (split) {
-    var sum = 0;
-    Object.keys(split).forEach(function (k) {
-      var n = Math.max(0, Math.floor(Number(split[k]) || 0));
-      if (n > 0 && validIds[k]) {
-        allocations.push({ raffleId: k, tickets: n });
-        sum += n;
-      }
-    });
-    if (sum !== totalPaid) {
-      return jsonResponse({ ok: false, error: 'ticket_split_mismatch', code: 'split' }, 400);
+    if (paidPurchaseAlreadyApplied_(slug, stripeSessionId)) {
+      return jsonResponse({ ok: true, alreadyApplied: true, totalPaidTickets: totalPaid });
     }
-  } else {
-    var firstId = rows[0].raffleId;
-    if (!validIds[firstId]) firstId = (raffles[0] && raffles[0].id) || '';
-    if (!firstId) return jsonResponse({ ok: false, error: 'no_pool_for_entry' }, 500);
-    allocations.push({ raffleId: firstId, tickets: totalPaid });
-  }
 
-  var paidMeta = {
-    stripeSessionId: stripeSessionId,
-    paidAt: String(p.paidAt || ''),
-    amountTotal: Number(p.amountTotal),
-    currency: String(p.currency || ''),
-  };
+    var rows = readEntryRowsByToken_(slug, token);
+    if (!rows.length) return jsonResponse({ ok: false, error: 'entry_not_found', code: 'token' }, 404);
 
-  var name = rows[0].name;
-  var phoneNorm = rows[0].phoneNorm;
-  var email = rows[0].email;
-  var ip = String(p.clientIp || 'paid');
-  var ua = String(p.userAgent || 'stripe-webhook');
+    var raffles = getRafflesForSlug_(slug);
+    var validIds = {};
+    for (var ri = 0; ri < raffles.length; ri++) validIds[raffles[ri].id] = true;
 
-  for (var ai = 0; ai < allocations.length; ai++) {
-    var a = allocations[ai];
-    appendPaidEntryRow_(slug, name, phoneNorm, email, a.raffleId, a.tickets, ip, ua, token, paidMeta);
-  }
+    var split = (p.ticketSplit && typeof p.ticketSplit === 'object' && !Array.isArray(p.ticketSplit)) ? p.ticketSplit : null;
+    var allocations = [];
+    if (split) {
+      var sum = 0;
+      Object.keys(split).forEach(function (k) {
+        var n = Math.max(0, Math.floor(Number(split[k]) || 0));
+        if (n > 0 && validIds[k]) {
+          allocations.push({ raffleId: k, tickets: n });
+          sum += n;
+        }
+      });
+      if (sum !== totalPaid) {
+        return jsonResponse({ ok: false, error: 'ticket_split_mismatch', code: 'split' }, 400);
+      }
+    } else {
+      var firstId = rows[0].raffleId;
+      if (!validIds[firstId]) firstId = (raffles[0] && raffles[0].id) || '';
+      if (!firstId) return jsonResponse({ ok: false, error: 'no_pool_for_entry' }, 500);
+      allocations.push({ raffleId: firstId, tickets: totalPaid });
+    }
 
-  return jsonResponse({
-    ok: true,
-    alreadyApplied: false,
-    totalPaidTickets: totalPaid,
-    poolsAffected: allocations.length,
+    var paidMeta = {
+      stripeSessionId: stripeSessionId,
+      paidAt: String(p.paidAt || ''),
+      amountTotal: Number(p.amountTotal),
+      currency: String(p.currency || ''),
+    };
+
+    var name = rows[0].name;
+    var phoneNorm = rows[0].phoneNorm;
+    var email = rows[0].email;
+    var ip = String(p.clientIp || 'paid');
+    var ua = String(p.userAgent || 'stripe-webhook');
+
+    for (var ai = 0; ai < allocations.length; ai++) {
+      var a = allocations[ai];
+      appendPaidEntryRow_(slug, name, phoneNorm, email, a.raffleId, a.tickets, ip, ua, token, paidMeta);
+    }
+
+    return jsonResponse({
+      ok: true,
+      alreadyApplied: false,
+      totalPaidTickets: totalPaid,
+      poolsAffected: allocations.length,
+    });
   });
 }
 
@@ -2049,50 +2061,52 @@ function handleRefundPaidPurchase_(data) {
     return jsonResponse({ ok: false, error: 'no_entries' }, 404);
   }
   var lastCol = Math.max(13, sh.getLastColumn());
-  var values = sh.getRange(2, 1, sh.getLastRow() - 1, lastCol).getValues();
-  var exCol = getEntriesExtrasColumnIndex_();
-  var ticketsColIdx0 = 9;
+  return withDocumentWriteLock_(function () {
+    var values = sh.getRange(2, 1, sh.getLastRow() - 1, lastCol).getValues();
+    var exCol = getEntriesExtrasColumnIndex_();
+    var ticketsColIdx0 = 9;
 
-  var rowsChanged = 0;
-  var ticketsRefunded = 0;
-  var amountCentsTotal = 0;
-  var firstCurrency = '';
-  var poolsAffected = {};
+    var rowsChanged = 0;
+    var ticketsRefunded = 0;
+    var amountCentsTotal = 0;
+    var firstCurrency = '';
+    var poolsAffected = {};
 
-  for (var i = 0; i < values.length; i++) {
-    var row = values[i];
-    if (String(row[1] || '').trim() !== slug) continue;
-    var ex = parseEntryExtrasJson_(row[exCol]);
-    if (String(ex.__stripeSessionId || '') !== stripeSessionId) continue;
-    if (ex.__refunded === true) continue;
+    for (var i = 0; i < values.length; i++) {
+      var row = values[i];
+      if (String(row[1] || '').trim() !== slug) continue;
+      var ex = parseEntryExtrasJson_(row[exCol]);
+      if (String(ex.__stripeSessionId || '') !== stripeSessionId) continue;
+      if (ex.__refunded === true) continue;
 
-    var rowNum = i + 2;
-    var oldTickets = Number(row[ticketsColIdx0]) || 0;
-    ticketsRefunded += oldTickets;
-    if (Number(ex.__paidAmountCents) > 0) {
-      amountCentsTotal += Math.floor(Number(ex.__paidAmountCents));
-      if (!firstCurrency && ex.__paidCurrency) firstCurrency = String(ex.__paidCurrency);
+      var rowNum = i + 2;
+      var oldTickets = Number(row[ticketsColIdx0]) || 0;
+      ticketsRefunded += oldTickets;
+      if (Number(ex.__paidAmountCents) > 0) {
+        amountCentsTotal += Math.floor(Number(ex.__paidAmountCents));
+        if (!firstCurrency && ex.__paidCurrency) firstCurrency = String(ex.__paidCurrency);
+      }
+      poolsAffected[String(row[5] || '')] = true;
+
+      ex.__refunded = true;
+      ex.__refundedAt = new Date().toISOString();
+      if (refundId) ex.__refundId = refundId;
+      if (actor) ex.__refundedBy = actor;
+
+      sh.getRange(rowNum, ticketsColIdx0 + 1).setValue(0);
+      sh.getRange(rowNum, exCol + 1).setValue(JSON.stringify(ex));
+      rowsChanged++;
     }
-    poolsAffected[String(row[5] || '')] = true;
 
-    ex.__refunded = true;
-    ex.__refundedAt = new Date().toISOString();
-    if (refundId) ex.__refundId = refundId;
-    if (actor) ex.__refundedBy = actor;
-
-    sh.getRange(rowNum, ticketsColIdx0 + 1).setValue(0);
-    sh.getRange(rowNum, exCol + 1).setValue(JSON.stringify(ex));
-    rowsChanged++;
-  }
-
-  return jsonResponse({
-    ok: true,
-    rowsChanged: rowsChanged,
-    ticketsRefunded: ticketsRefunded,
-    amountCents: amountCentsTotal,
-    currency: firstCurrency || '',
-    poolsAffected: Object.keys(poolsAffected),
-    alreadyRefunded: rowsChanged === 0,
+    return jsonResponse({
+      ok: true,
+      rowsChanged: rowsChanged,
+      ticketsRefunded: ticketsRefunded,
+      amountCents: amountCentsTotal,
+      currency: firstCurrency || '',
+      poolsAffected: Object.keys(poolsAffected),
+      alreadyRefunded: rowsChanged === 0,
+    });
   });
 }
 
