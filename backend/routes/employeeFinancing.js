@@ -1,6 +1,11 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import {
+  parseDeductionWeek,
+  financingDeductionPlanGate,
+  computeFinancingDeduction,
+} from '../utils/employeeFinancingDeductionMath.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -313,17 +318,14 @@ router.post('/:id/record-deduction', async (req, res) => {
     if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
 
     const { week_ending_date, amount, extra_note } = req.body || {};
-    const week = (week_ending_date || '').trim();
-    if (!week) return res.status(400).json({ error: 'week_ending_date is required (e.g. pay week ending Friday)' });
+    const weekParsed = parseDeductionWeek(week_ending_date);
+    if (!weekParsed.ok) return res.status(400).json({ error: weekParsed.error });
+    const { week } = weekParsed;
 
     const plan = await db.getAsync('SELECT * FROM employee_shop_financing WHERE id = ?', [id]);
-    if (!plan) return res.status(404).json({ error: 'Plan not found' });
-    if (plan.status !== 'active') {
-      return res.status(400).json({ error: 'Only active plans can receive deductions' });
-    }
-
-    const bal = roundMoney(plan.balance_due);
-    if (bal <= 0) return res.status(400).json({ error: 'Balance is already zero' });
+    const planGate = financingDeductionPlanGate(plan);
+    if (!planGate.ok) return res.status(planGate.status).json({ error: planGate.error });
+    const { bal } = planGate;
 
     const dup = await db.getAsync(
       'SELECT id FROM employee_shop_financing_deductions WHERE financing_id = ? AND week_ending_date = ?',
@@ -335,15 +337,15 @@ router.post('/:id/record-deduction', async (req, res) => {
       });
     }
 
-    let payAmount = amount != null ? roundMoney(amount) : roundMoney(plan.weekly_payment);
-    if (payAmount <= 0) {
-      return res.status(400).json({ error: 'Amount must be greater than 0' });
-    }
-    payAmount = Math.min(payAmount, bal);
-
-    const baseReason = (plan.deduction_reason || '').trim() || 'Shop financing repayment';
-    const extra = (extra_note || '').trim();
-    const reasonNote = extra ? `${baseReason} — ${extra}` : baseReason;
+    const computed = computeFinancingDeduction({
+      amount,
+      weeklyPayment: plan.weekly_payment,
+      balance: bal,
+      deductionReason: plan.deduction_reason,
+      extraNote: extra_note,
+    });
+    if (!computed.ok) return res.status(400).json({ error: computed.error });
+    const { payAmount, reasonNote } = computed;
 
     await db.runAsync(
       `INSERT INTO employee_shop_financing_deductions (financing_id, week_ending_date, amount, reason_note, applied_by)
@@ -351,8 +353,7 @@ router.post('/:id/record-deduction', async (req, res) => {
       [id, week, payAmount, reasonNote, req.user.id]
     );
 
-    const newBal = roundMoney(bal - payAmount);
-    const newStatus = newBal <= 0 ? 'paid_off' : 'active';
+    const { newBal, newStatus } = computed;
 
     await db.runAsync(
       `UPDATE employee_shop_financing SET balance_due = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,

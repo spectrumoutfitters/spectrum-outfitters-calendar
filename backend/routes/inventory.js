@@ -2,16 +2,15 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { findDealsForInventoryItem } from '../services/deals/dealFinder.js';
+import {
+  normalizeBarcode,
+  parseAdHocScanOut,
+  itemBarcodeMatches,
+} from '../utils/inventoryAdHocScanOutGate.js';
 
 const router = express.Router();
 
 router.use(authenticateToken);
-
-function normalizeBarcode(raw) {
-  if (raw === undefined || raw === null) return null;
-  const str = String(raw).trim();
-  return str.length ? str : null;
-}
 
 function pickCategoryNameFromItemName(name) {
   const n = String(name || '').toLowerCase();
@@ -984,30 +983,17 @@ router.post('/items/:id/deals/refresh', async (req, res) => {
 router.post('/items/:id/use', async (req, res) => {
   try {
     const { id } = req.params;
-    const { quantity_used: quantityUsedRaw, reason: reasonRaw, barcode: barcodeRaw } = req.body || {};
-
-    const quantityUsed = Number.parseFloat(quantityUsedRaw);
-    if (!Number.isFinite(quantityUsed) || quantityUsed <= 0) {
-      return res.status(400).json({ error: 'Quantity to use must be a positive number.' });
+    const parsed = parseAdHocScanOut(req.body || {});
+    if (!parsed.ok) {
+      return res.status(400).json({ error: parsed.error });
     }
-
-    const reason = reasonRaw !== undefined && reasonRaw !== null ? String(reasonRaw).trim() : '';
-    if (!reason) {
-      return res.status(400).json({ error: 'Reason is required when scanning out an item not on a task.' });
-    }
-
-    const barcode = normalizeBarcode(barcodeRaw);
-    if (!barcode) {
-      return res.status(400).json({ error: 'Scan the item barcode to confirm. Barcode is required.' });
-    }
+    const { quantityUsed, reason, barcode } = parsed;
 
     const row = await db.getAsync('SELECT id, name, quantity, barcode FROM inventory_items WHERE id = ?', [id]);
     if (!row) return res.status(404).json({ error: 'Item not found' });
 
-    const primaryBarcode = normalizeBarcode(row.barcode);
-    const matchesPrimary = primaryBarcode === barcode;
     const matchesAlternate = await db.getAsync('SELECT 1 FROM inventory_item_barcodes WHERE item_id = ? AND barcode = ?', [id, barcode]);
-    if (!matchesPrimary && !matchesAlternate) {
+    if (!itemBarcodeMatches(row.barcode, barcode, matchesAlternate)) {
       return res.status(400).json({ error: 'Barcode does not match this item. Scan the correct item.' });
     }
 
@@ -1280,10 +1266,8 @@ router.post('/scan-log', async (req, res) => {
     }
     const row = await db.getAsync('SELECT id, barcode FROM inventory_items WHERE id = ?', [itemId]);
     if (!row) return res.status(404).json({ error: 'Item not found' });
-    const itemBarcode = normalizeBarcode(row.barcode);
-    const matchesPrimary = itemBarcode === barcode;
-    const matchesAlternate = !matchesPrimary && (await db.getAsync('SELECT 1 FROM inventory_item_barcodes WHERE item_id = ? AND barcode = ?', [itemId, barcode]));
-    if (!matchesPrimary && !matchesAlternate) {
+    const matchesAlternate = await db.getAsync('SELECT 1 FROM inventory_item_barcodes WHERE item_id = ? AND barcode = ?', [itemId, barcode]);
+    if (!itemBarcodeMatches(row.barcode, barcode, matchesAlternate)) {
       return res.status(400).json({ error: 'Barcode does not match this item. Scan the correct item.' });
     }
     const type = eventType === 'refill_receive' ? 'refill_receive' : 'quantity_increase';

@@ -12,6 +12,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import {
+  coerceDashboardConfigPayload,
+  applyForceSyncRequest,
+} from '../utils/dashboardConfigCoerce.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,17 +73,11 @@ router.post('/', express.json({ limit: '10mb' }), async (req, res) => {
       return res.status(400).json({ error: 'Invalid JSON body' });
     }
     await ensureDataDir();
-    const updatedAt = body.updatedAt || new Date().toISOString();
-    const payload = {
-      items: Array.isArray(body.items) ? body.items : [],
-      categoryOrder: Array.isArray(body.categoryOrder) ? body.categoryOrder : [],
-      spectrumServer: body.spectrumServer && typeof body.spectrumServer === 'object' ? body.spectrumServer : null,
-      updatedAt
-    };
+    const payload = coerceDashboardConfigPayload(body, new Date().toISOString());
     await fs.writeFile(configPath, JSON.stringify(payload, null, 2), 'utf8');
 
     const state = await readSyncState();
-    state.configUpdatedAt = updatedAt;
+    state.configUpdatedAt = payload.updatedAt;
     await writeSyncState(state);
 
     res.json({ ok: true, updatedAt: payload.updatedAt });
@@ -164,22 +162,13 @@ router.get('/clients', authenticateToken, requireAdmin, async (req, res) => {
 router.post('/force-sync', authenticateToken, requireAdmin, express.json({ limit: '1kb' }), async (req, res) => {
   try {
     const state = await readSyncState();
-    const clientId = (req.body?.clientId || '').toString().trim();
     const now = new Date().toISOString();
-
-    state.forceSyncClientIds = state.forceSyncClientIds || [];
-    if (clientId) {
-      if (!state.forceSyncClientIds.includes(clientId)) state.forceSyncClientIds.push(clientId);
-    } else {
-      state.forceSyncRequestedAt = now;
-      const allIds = Object.keys(state.clients || {});
-      allIds.forEach((id) => {
-        if (!state.forceSyncClientIds.includes(id)) state.forceSyncClientIds.push(id);
-      });
-    }
+    const applied = applyForceSyncRequest(state, req.body?.clientId, now);
+    state.forceSyncClientIds = applied.forceSyncClientIds;
+    state.forceSyncRequestedAt = applied.forceSyncRequestedAt;
     await writeSyncState(state);
 
-    res.json({ ok: true, forClientId: clientId || null });
+    res.json({ ok: true, forClientId: applied.forClientId });
   } catch (e) {
     console.error('dashboardConfig POST /force-sync:', e?.message);
     res.status(500).json({ error: 'Failed to request force sync' });
