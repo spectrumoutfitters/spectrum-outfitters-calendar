@@ -15,6 +15,7 @@ import {
   getGoogleCalendarConfig,
   isGoogleCalendarConnected
 } from '../utils/googleCalendarService.js';
+import { resolveBookingTestEmailTo } from '../utils/bookingTestEmailRecipient.js';
 
 export const bookingPublicRouter = express.Router();
 
@@ -134,17 +135,15 @@ bookingAdminRouter.post('/test-email', async (req, res) => {
       });
     }
 
-    let to = '';
-    const bodyTo = typeof req.body?.to === 'string' ? req.body.to.trim().toLowerCase() : '';
-    if (bodyTo && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bodyTo)) {
-      to = bodyTo;
-    } else {
+    let resolved = resolveBookingTestEmailTo(req.body?.to, null);
+    if (!resolved.ok) {
       const snap = await getAdminBookingSnapshot();
-      if (!snap.notify_emails?.length) {
-        return res.status(400).json({ error: 'Add notify emails in booking settings, or send ?to=inbox@yourshop.com.' });
+      resolved = resolveBookingTestEmailTo(req.body?.to, snap.notify_emails);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
       }
-      to = snap.notify_emails[0];
     }
+    const to = resolved.to;
 
     await sendMailViaGoogle({
       to,

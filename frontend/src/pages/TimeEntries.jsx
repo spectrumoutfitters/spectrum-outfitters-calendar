@@ -5,6 +5,11 @@ import EditTimeEntryModal from '../components/TimeClock/EditTimeEntryModal';
 import AdminTimeClock from '../components/Admin/AdminTimeClock';
 import api from '../utils/api';
 import { formatDateTime, formatDate, formatTime, getTodayCentralTime } from '../utils/helpers';
+import {
+  displayTimeEntryClockOut,
+  isTimeEntryStillInProgress,
+  matchLunchBreak,
+} from '../utils/timeEntryLunchPair';
 
 const TimeEntries = () => {
   const { user, isAdmin } = useAuth();
@@ -223,45 +228,15 @@ const TimeEntries = () => {
                         </thead>
                         <tbody>
                           {day.workEntries.map((entry, index) => {
-                            // Find matching lunch break (same logic as admin view)
-                            let lunchBreak = null;
-                            
-                            if (entry.isPreLunchWork) {
-                              lunchBreak = day.lunchBreaks.find(lunch => {
-                                if (!lunch.clockOut || !entry.clock_out) return false;
-                                const lunchOut = new Date(lunch.clockOut);
-                                const entryOut = new Date(entry.clock_out);
-                                return Math.abs(lunchOut - entryOut) < 60000;
-                              });
-                            } else {
-                              const entryIn = new Date(entry.clock_in);
-                              const entryOut = entry.clock_out ? new Date(entry.clock_out) : new Date();
-                              const nextEntry = day.workEntries[index + 1];
-                              const nextEntryIn = nextEntry ? new Date(nextEntry.clock_in) : entryOut;
-                              
-                              lunchBreak = day.lunchBreaks.find(lunch => {
-                                if (!lunch.clockOut) return false;
-                                const lunchOut = new Date(lunch.clockOut);
-                                return lunchOut >= entryIn && lunchOut < nextEntryIn;
-                              });
-                            }
-                            
-                            if (!lunchBreak && day.lunchBreaks.length === 1) {
-                              lunchBreak = day.lunchBreaks[0];
-                            }
-                            
-                            // Determine if this entry is still in progress
-                            // For pre-lunch work entries: if there's a return entry (clockIn exists) but no end-of-day clock out yet
-                            // For regular entries: if no clock_out exists
-                            const isStillInProgress = entry.isPreLunchWork 
-                              ? (lunchBreak && lunchBreak.clockIn && entry.original_clock_out && !entry.clock_out) || (!entry.clock_out)
-                              : !entry.clock_out;
-                            
-                            // For display: if this is a pre-lunch entry, only show clock_out if it's the actual end-of-day time
-                            // (i.e., different from original_clock_out which is the lunch break time)
-                            const displayClockOut = entry.isPreLunchWork && entry.original_clock_out
-                              ? (entry.clock_out && entry.clock_out !== entry.original_clock_out ? entry.clock_out : null)
-                              : entry.clock_out;
+                            const lunchBreak = matchLunchBreak(
+                              entry,
+                              day.lunchBreaks,
+                              day.workEntries,
+                              index,
+                              { fallback: 'employee' },
+                            );
+                            const isStillInProgress = isTimeEntryStillInProgress(entry, lunchBreak);
+                            const displayClockOut = displayTimeEntryClockOut(entry);
 
                             return (
                               <tr key={entry.id} className="border-b border-gray-100 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">

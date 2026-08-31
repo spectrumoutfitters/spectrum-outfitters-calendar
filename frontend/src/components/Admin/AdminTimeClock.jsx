@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { formatDate, formatTime, getTodayCentralTime } from '../../utils/helpers';
+import {
+  displayTimeEntryClockOut,
+  isTimeEntryStillInProgress,
+  matchLunchBreak,
+} from '../../utils/timeEntryLunchPair';
 import EditTimeEntryModal from '../TimeClock/EditTimeEntryModal';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -334,78 +339,15 @@ const AdminTimeClock = () => {
                     </thead>
                     <tbody>
                       {day.workEntries.map((entry, index) => {
-                        // Find matching lunch break for this entry
-                        // If this is a pre-lunch work entry, find the lunch break that matches its clock_out
-                        // Otherwise, find lunch breaks that occurred during this work period
-                        let lunchBreak = null;
-                        
-                        if (entry.isPreLunchWork) {
-                          // This entry IS the lunch break work entry - find the matching lunch break
-                          lunchBreak = day.lunchBreaks.find(lunch => {
-                            // Match by clock_out time (when they went to lunch)
-                            if (!lunch.clockOut || !entry.clock_out) return false;
-                            const lunchOut = new Date(lunch.clockOut);
-                            const entryOut = new Date(entry.clock_out);
-                            // Allow 1 minute tolerance for time differences
-                            return Math.abs(lunchOut - entryOut) < 60000;
-                          });
-                        } else {
-                          // Regular work entry - find lunch breaks that occurred during this period
-                          const entryIn = new Date(entry.clock_in);
-                          const entryOut = entry.clock_out ? new Date(entry.clock_out) : new Date();
-                          const nextEntry = day.workEntries[index + 1];
-                          const nextEntryIn = nextEntry ? new Date(nextEntry.clock_in) : entryOut;
-                          
-                          lunchBreak = day.lunchBreaks.find(lunch => {
-                            if (!lunch.clockOut) return false;
-                            const lunchOut = new Date(lunch.clockOut);
-                            // Lunch break occurred after this entry started and before next entry (or this entry ended)
-                            return lunchOut >= entryIn && lunchOut < nextEntryIn;
-                          });
-                        }
-                        
-                        // Also check all lunch breaks for this day if we haven't found one yet
-                        // Sometimes lunch breaks might not match perfectly due to timing
-                        if (!lunchBreak && day.lunchBreaks.length > 0) {
-                          // Try to match by date - if there's only one lunch break for the day, use it
-                          if (day.lunchBreaks.length === 1) {
-                            lunchBreak = day.lunchBreaks[0];
-                          } else {
-                            // Find the lunch break closest to this entry's clock_out time
-                            if (entry.clock_out) {
-                              const entryOut = new Date(entry.clock_out);
-                              let closestLunch = null;
-                              let minDiff = Infinity;
-                              day.lunchBreaks.forEach(lunch => {
-                                if (lunch.clockOut) {
-                                  const lunchOut = new Date(lunch.clockOut);
-                                  const diff = Math.abs(lunchOut - entryOut);
-                                  if (diff < minDiff) {
-                                    minDiff = diff;
-                                    closestLunch = lunch;
-                                  }
-                                }
-                              });
-                              // Only use if within 2 hours (reasonable lunch duration)
-                              if (minDiff < 2 * 60 * 60 * 1000) {
-                                lunchBreak = closestLunch;
-                              }
-                            }
-                          }
-                        }
-                        
-                        // Determine if this entry is still in progress
-                        // For pre-lunch work entries: if there's a return entry (clockIn exists) but no end-of-day clock out yet
-                        // For regular entries: if no clock_out exists
-                        const isStillInProgress = entry.isPreLunchWork 
-                          ? (lunchBreak && lunchBreak.clockIn && entry.original_clock_out && !entry.clock_out) || (!entry.clock_out)
-                          : !entry.clock_out;
-                        
-                        // For display: if this is a pre-lunch entry, only show clock_out if it's the actual end-of-day time
-                        // (i.e., different from original_clock_out which is the lunch break time)
-                        const displayClockOut = entry.isPreLunchWork && entry.original_clock_out
-                          ? (entry.clock_out && entry.clock_out !== entry.original_clock_out ? entry.clock_out : null)
-                          : entry.clock_out;
+                        const lunchBreak = matchLunchBreak(
+                          entry,
+                          day.lunchBreaks,
+                          day.workEntries,
+                          index,
+                          { fallback: 'admin' },
+                        );
+                        const isStillInProgress = isTimeEntryStillInProgress(entry, lunchBreak);
+                        const displayClockOut = displayTimeEntryClockOut(entry);
 
                         return (
                           <tr key={entry.id} className="border-b border-gray-100 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
