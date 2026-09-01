@@ -2,6 +2,10 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { getTodayInHouston } from '../utils/appTimezone.js';
+import {
+  normalizeWorklistTemplateCreate,
+  normalizeWorklistTemplateUpdate,
+} from '../utils/adminWorklistTemplateGate.js';
 
 const router = express.Router();
 
@@ -677,14 +681,9 @@ router.get('/templates', async (req, res) => {
 // POST /api/admin/worklist/templates - Create template
 router.post('/templates', async (req, res) => {
   try {
-    const { title, description, recurrence, day_of_week, day_of_month, link_target, sort_order, enabled } = req.body;
-
-    if (!title) {
-      return res.status(400).json({ error: 'Title is required' });
-    }
-
-    if (!['daily', 'weekly', 'monthly'].includes(recurrence)) {
-      return res.status(400).json({ error: 'Invalid recurrence type' });
+    const created = normalizeWorklistTemplateCreate(req.body);
+    if (!created.ok) {
+      return res.status(400).json({ error: created.error });
     }
 
     const result = await db.runAsync(`
@@ -692,14 +691,14 @@ router.post('/templates', async (req, res) => {
       (title, description, recurrence, day_of_week, day_of_month, link_target, sort_order, enabled, created_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      title,
-      description || null,
-      recurrence,
-      recurrence === 'weekly' ? day_of_week : null,
-      recurrence === 'monthly' ? day_of_month : null,
-      link_target || null,
-      sort_order || 0,
-      enabled !== false ? 1 : 0,
+      created.title,
+      created.description,
+      created.recurrence,
+      created.day_of_week,
+      created.day_of_month,
+      created.link_target,
+      created.sort_order,
+      created.enabled,
       req.user.id
     ]);
 
@@ -719,12 +718,13 @@ router.post('/templates', async (req, res) => {
 router.put('/templates/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, recurrence, day_of_week, day_of_month, link_target, sort_order, enabled } = req.body;
 
     const existing = await db.getAsync('SELECT * FROM admin_worklist_templates WHERE id = ?', [id]);
     if (!existing) {
       return res.status(404).json({ error: 'Template not found' });
     }
+
+    const updated = normalizeWorklistTemplateUpdate(req.body || {}, existing);
 
     await db.runAsync(`
       UPDATE admin_worklist_templates
@@ -732,14 +732,14 @@ router.put('/templates/:id', async (req, res) => {
           link_target = ?, sort_order = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
-      title !== undefined ? title : existing.title,
-      description !== undefined ? description : existing.description,
-      recurrence !== undefined ? recurrence : existing.recurrence,
-      recurrence === 'weekly' ? day_of_week : null,
-      recurrence === 'monthly' ? day_of_month : null,
-      link_target !== undefined ? link_target : existing.link_target,
-      sort_order !== undefined ? sort_order : existing.sort_order,
-      enabled !== undefined ? (enabled ? 1 : 0) : existing.enabled,
+      updated.title,
+      updated.description,
+      updated.recurrence,
+      updated.day_of_week,
+      updated.day_of_month,
+      updated.link_target,
+      updated.sort_order,
+      updated.enabled,
       id
     ]);
 
