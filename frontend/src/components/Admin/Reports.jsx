@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { formatDate, formatTime } from '../../utils/helpers';
+import { calculateOverviewStats, groupTimePayrollByUser } from '../../utils/reportOverviewMath';
 
 const Reports = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -138,49 +139,7 @@ const Reports = () => {
     { id: 'performance', label: '👥 Employee Performance', icon: '👥' }
   ];
 
-  // Calculate overview stats
-  const calculateOverviewStats = () => {
-    if (!overview) return null;
-
-    const stats = {
-      totalHours: 0,
-      totalPay: 0,
-      activeEmployees: 0,
-      tasksCompleted: 0,
-      tasksInProgress: 0,
-      avgTaskCompletion: 0
-    };
-
-    // Time stats
-    if (overview.time?.report) {
-      const timeData = overview.time.report;
-      stats.totalHours = timeData.reduce((sum, e) => sum + parseFloat(e.hours || 0), 0);
-      stats.totalPay = timeData.reduce((sum, e) => sum + parseFloat(e.pay || 0), 0);
-      stats.activeEmployees = new Set(timeData.map(e => e.user_id)).size;
-    }
-
-    // Task stats
-    if (overview.tasks?.tasks) {
-      const tasks = overview.tasks.tasks;
-      stats.tasksCompleted = tasks.filter(t => t.status === 'completed').length;
-      stats.tasksInProgress = tasks.filter(t => t.status === 'in_progress').length;
-      const completedTasks = tasks.filter(t => t.status === 'completed' && t.completed_at);
-      if (completedTasks.length > 0) {
-        const totalDuration = completedTasks.reduce((sum, t) => {
-          if (t.started_at && t.completed_at) {
-            const duration = (new Date(t.completed_at) - new Date(t.started_at)) / (1000 * 60 * 60);
-            return sum + duration;
-          }
-          return sum;
-        }, 0);
-        stats.avgTaskCompletion = totalDuration / completedTasks.length;
-      }
-    }
-
-    return stats;
-  };
-
-  const overviewStats = calculateOverviewStats();
+  const overviewStats = calculateOverviewStats(overview);
 
   return (
     <div className="space-y-6">
@@ -363,20 +322,7 @@ const Reports = () => {
 
 // Time & Payroll Report Component
 const TimePayrollReport = ({ data, onExport }) => {
-  const groupedByUser = data?.report?.reduce((acc, entry) => {
-    if (!acc[entry.user_id]) {
-      acc[entry.user_id] = {
-        user_name: entry.user_name,
-        entries: [],
-        totalHours: 0,
-        totalPay: 0
-      };
-    }
-    acc[entry.user_id].entries.push(entry);
-    acc[entry.user_id].totalHours += parseFloat(entry.hours || 0);
-    acc[entry.user_id].totalPay += parseFloat(entry.pay || 0);
-    return acc;
-  }, {}) || {};
+  const groupedByUser = groupTimePayrollByUser(data?.report);
 
   const grandTotalHours = Object.values(groupedByUser).reduce((sum, g) => sum + g.totalHours, 0);
   const grandTotalPay = Object.values(groupedByUser).reduce((sum, g) => sum + g.totalPay, 0);

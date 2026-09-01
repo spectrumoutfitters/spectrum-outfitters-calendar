@@ -2,6 +2,7 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { sendPushToAdmins } from '../utils/pushNotifications.js';
+import { formatVacationDaysLabel, formatVacationTaskNote } from '../utils/vacationChecklistCopy.js';
 
 const router = express.Router();
 
@@ -110,17 +111,8 @@ router.post('/vacation-checklist', async (req, res) => {
       taskCount = rows?.[0]?.cnt ?? 0;
     } catch (_) {}
 
-    const daysLabel =
-      days_remaining === 0
-        ? 'today'
-        : days_remaining === 1
-        ? 'tomorrow'
-        : `in ${days_remaining} day${days_remaining !== 1 ? 's' : ''}`;
-
-    const taskNote =
-      taskCount > 0
-        ? ` — they have ${taskCount} open task${taskCount !== 1 ? 's' : ''} to hand off`
-        : '';
+    const daysLabel = formatVacationDaysLabel(days_remaining);
+    const taskNote = formatVacationTaskNote(taskCount);
 
     await sendPushToAdmins({
       title: 'Team Member Going on Leave',
