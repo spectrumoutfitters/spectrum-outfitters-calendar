@@ -7,16 +7,8 @@ import path from 'path';
 import fs from 'fs';
 import db from '../database/db.js';
 import { readPayrollHistoryFromAnyPath, resolvePayrollHistoryJsonPathForWrite } from './payrollDataPath.js';
-
-/** Stable row id for INSERT OR REPLACE (matches import dedupe semantics). */
-export function stablePayrollRecordId(rec) {
-  if (rec && rec.id != null && String(rec.id).trim() !== '') return String(rec.id);
-  const e = rec.employee || {};
-  const empId = e.id || rec.employeeId || rec.employee_id || '';
-  const proc = rec.processedDate || rec.payDate || rec.date || '';
-  const week = rec.weekStart || rec.weekEnd || '';
-  return `synth:${empId}:${proc}:${week}`;
-}
+import { stablePayrollRecordId } from './payrollRecordId.js';
+export { stablePayrollRecordId };
 
 export async function countPayrollHistoryInDb() {
   try {

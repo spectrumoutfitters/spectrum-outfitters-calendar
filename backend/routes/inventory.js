@@ -2,6 +2,7 @@ import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { findDealsForInventoryItem } from '../services/deals/dealFinder.js';
+import { movementSummaryDays, movementSummarySinceExpr } from '../utils/inventoryMovementDays.js';
 
 const router = express.Router();
 
@@ -1722,8 +1723,8 @@ router.get('/low-stock', async (req, res) => {
 router.get('/movement/summary', async (req, res) => {
   try {
     const daysRaw = req.query.days;
-    const days = Math.min(365, Math.max(1, Number(daysRaw || 30)));
-    const sinceExpr = `-${days} days`;
+    const days = movementSummaryDays(daysRaw);
+    const sinceExpr = movementSummarySinceExpr(daysRaw);
 
     const totals = await db.getAsync(
       `SELECT

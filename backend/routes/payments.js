@@ -10,6 +10,10 @@ import {
   syncStripePaymentMethodsToDb,
   verifyStripeWebhookEvent,
 } from '../services/payments/stripePayments.js';
+import {
+  requireCustomerAndPaymentMethod,
+  requirePaymentRouteId,
+} from '../utils/paymentRouteId.js';
 
 const router = express.Router();
 
@@ -19,8 +23,9 @@ router.use(authenticateToken);
 // GET /api/payments/invoices/:id/payments
 router.get('/invoices/:id/payments', async (req, res) => {
   try {
-    const invoiceId = req.params.id != null ? Number(req.params.id) : null;
-    if (!invoiceId || !Number.isFinite(invoiceId)) return res.status(400).json({ error: 'Invoice id is required' });
+    const parsed = requirePaymentRouteId(req.params.id, 'Invoice id is required');
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+    const invoiceId = parsed.id;
 
     const invoice = await db.getAsync('SELECT id, payment_status, total_cents, paid_at FROM crm_invoices WHERE id = ?', [invoiceId]);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
@@ -44,8 +49,9 @@ router.get('/invoices/:id/payments', async (req, res) => {
 // POST /api/payments/invoices/:id/create-intent
 router.post('/invoices/:id/create-intent', async (req, res) => {
   try {
-    const invoiceId = req.params.id != null ? Number(req.params.id) : null;
-    if (!invoiceId || !Number.isFinite(invoiceId)) return res.status(400).json({ error: 'Invoice id is required' });
+    const parsed = requirePaymentRouteId(req.params.id, 'Invoice id is required');
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+    const invoiceId = parsed.id;
 
     const result = await createStripePaymentIntentForInvoice(invoiceId);
     if (result.error) return res.status(400).json({ error: result.error });
@@ -59,8 +65,9 @@ router.post('/invoices/:id/create-intent', async (req, res) => {
 // POST /api/payments/customers/:id/setup-intent
 router.post('/customers/:id/setup-intent', async (req, res) => {
   try {
-    const crmCustomerId = req.params.id != null ? Number(req.params.id) : null;
-    if (!crmCustomerId || !Number.isFinite(crmCustomerId)) return res.status(400).json({ error: 'Customer id is required' });
+    const parsed = requirePaymentRouteId(req.params.id, 'Customer id is required');
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+    const crmCustomerId = parsed.id;
 
     const result = await createStripeSetupIntent(crmCustomerId);
     if (result.error) return res.status(400).json({ error: result.error });
@@ -74,8 +81,9 @@ router.post('/customers/:id/setup-intent', async (req, res) => {
 // GET /api/payments/customers/:id/payment-methods
 router.get('/customers/:id/payment-methods', async (req, res) => {
   try {
-    const crmCustomerId = req.params.id != null ? Number(req.params.id) : null;
-    if (!crmCustomerId || !Number.isFinite(crmCustomerId)) return res.status(400).json({ error: 'Customer id is required' });
+    const parsed = requirePaymentRouteId(req.params.id, 'Customer id is required');
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+    const crmCustomerId = parsed.id;
 
     const result = await syncStripePaymentMethodsToDb(crmCustomerId);
     if (result.error) return res.status(400).json({ error: result.error });
@@ -89,9 +97,9 @@ router.get('/customers/:id/payment-methods', async (req, res) => {
 // POST /api/payments/customers/:id/payment-methods/:pmId/default
 router.post('/customers/:id/payment-methods/:pmId/default', async (req, res) => {
   try {
-    const crmCustomerId = req.params.id != null ? Number(req.params.id) : null;
-    const pmId = req.params.pmId ? String(req.params.pmId) : null;
-    if (!crmCustomerId || !Number.isFinite(crmCustomerId) || !pmId) return res.status(400).json({ error: 'Customer id and payment method id are required' });
+    const parsed = requireCustomerAndPaymentMethod(req.params.id, req.params.pmId);
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+    const { crmCustomerId, pmId } = parsed;
 
     const result = await setStripeDefaultPaymentMethod(crmCustomerId, pmId);
     if (result.error) return res.status(400).json({ error: result.error });
@@ -105,9 +113,9 @@ router.post('/customers/:id/payment-methods/:pmId/default', async (req, res) => 
 // DELETE /api/payments/customers/:id/payment-methods/:pmId
 router.delete('/customers/:id/payment-methods/:pmId', async (req, res) => {
   try {
-    const crmCustomerId = req.params.id != null ? Number(req.params.id) : null;
-    const pmId = req.params.pmId ? String(req.params.pmId) : null;
-    if (!crmCustomerId || !Number.isFinite(crmCustomerId) || !pmId) return res.status(400).json({ error: 'Customer id and payment method id are required' });
+    const parsed = requireCustomerAndPaymentMethod(req.params.id, req.params.pmId);
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+    const { crmCustomerId, pmId } = parsed;
 
     const result = await detachStripePaymentMethod(crmCustomerId, pmId);
     if (result.error) return res.status(400).json({ error: result.error });
@@ -121,8 +129,9 @@ router.delete('/customers/:id/payment-methods/:pmId', async (req, res) => {
 // POST /api/payments/invoices/:id/record-manual — record non-card payment types
 router.post('/invoices/:id/record-manual', async (req, res) => {
   try {
-    const invoiceId = req.params.id != null ? Number(req.params.id) : null;
-    if (!invoiceId || !Number.isFinite(invoiceId)) return res.status(400).json({ error: 'Invoice id is required' });
+    const parsed = requirePaymentRouteId(req.params.id, 'Invoice id is required');
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+    const invoiceId = parsed.id;
 
     const { amount_cents, payment_method_type, payment_reference } = req.body || {};
     const amount = Number(amount_cents);
