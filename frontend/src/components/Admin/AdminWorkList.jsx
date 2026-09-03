@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { filterWorklistItems, getDueTimeStatus } from '../../utils/adminWorklistFilter';
 import WorkListItemDetail from './WorkListItemDetail';
 
 const SUGGESTED_TASKS = {
@@ -308,15 +309,7 @@ const AdminWorkList = () => {
 
   // ─── Helpers ──────────────────────────────────────────────
 
-  const filterItems = (items) => {
-    return items.filter(item => {
-      if (filters.priority !== 'all' && item.priority !== filters.priority) return false;
-      if (filters.category !== 'all' && item.category !== filters.category) return false;
-      if (filters.status === 'pending' && item.is_completed === 1) return false;
-      if (filters.status === 'completed' && item.is_completed !== 1) return false;
-      return true;
-    });
-  };
+  const filterItems = (items) => filterWorklistItems(items, filters);
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -353,19 +346,6 @@ const AdminWorkList = () => {
     if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  };
-
-  const getDueTimeStatus = (dueTime) => {
-    if (!dueTime) return null;
-    const now = new Date();
-    const [hours, minutes] = dueTime.split(':').map(Number);
-    const due = new Date(now);
-    due.setHours(hours, minutes, 0, 0);
-    const diff = due - now;
-    const diffMinutes = diff / (1000 * 60);
-    if (diffMinutes < 0) return 'overdue';
-    if (diffMinutes < 60) return 'due-soon';
-    return 'upcoming';
   };
 
   const getDayName = (dayNum) => {

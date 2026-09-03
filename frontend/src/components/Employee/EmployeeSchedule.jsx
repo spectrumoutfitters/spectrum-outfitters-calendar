@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { formatDate } from '../../utils/helpers';
+import { applyScheduleEventTarget } from '../../utils/scheduleEventTarget';
 import { useAuth } from '../../contexts/AuthContext';
 import AdaptiveModal from '../ui/AdaptiveModal';
 
@@ -190,15 +191,11 @@ const EmployeeSchedule = () => {
         location: eventFormData.location?.trim() || null,
         is_event: true
       };
-      if (isAdmin && eventFormData.target_user_id) {
-        if (eventFormData.target_user_id.startsWith('gcal:')) {
-          payload.google_calendar_id = eventFormData.target_user_id.slice(5);
-          payload.user_id = user?.id; // entry owned by admin, pushed to selected Google calendar
-        } else {
-          const uid = eventFormData.target_user_id.replace(/^user:/, '');
-          if (uid) payload.user_id = Number(uid);
-        }
-      }
+      applyScheduleEventTarget(payload, {
+        isAdmin,
+        targetUserId: eventFormData.target_user_id,
+        adminUserId: user?.id,
+      });
       await api.post('/schedule', payload);
       setShowAddEventModal(false);
       setEventFormData({

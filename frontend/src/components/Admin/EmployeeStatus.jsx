@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { formatTime, calculateElapsedTime } from '../../utils/helpers';
 import { useAuth } from '../../contexts/AuthContext';
+import { classifyEmployeePresence, formatLastLogin, hasLongInactivity } from '../../utils/employeeStatusDisplay';
 
 const EmployeeStatus = () => {
   const { user: currentUser } = useAuth();
@@ -72,32 +73,6 @@ const EmployeeStatus = () => {
           Off Today
         </span>
       );
-    }
-  };
-
-  const formatLastLogin = (lastLogin, daysSinceLogin) => {
-    if (!lastLogin) {
-      return { text: 'Never logged in', isWarning: true };
-    }
-    
-    if (daysSinceLogin === null || daysSinceLogin === undefined) {
-      // Calculate if not provided
-      const loginDate = new Date(lastLogin);
-      const now = new Date();
-      const diffMs = now - loginDate;
-      daysSinceLogin = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    }
-    
-    if (daysSinceLogin === 0) {
-      return { text: 'Today', isWarning: false };
-    } else if (daysSinceLogin === 1) {
-      return { text: 'Yesterday', isWarning: false };
-    } else if (daysSinceLogin < 7) {
-      return { text: `${daysSinceLogin} days ago`, isWarning: false };
-    } else if (daysSinceLogin < 30) {
-      return { text: `${daysSinceLogin} days ago`, isWarning: true };
-    } else {
-      return { text: `${Math.floor(daysSinceLogin / 30)} month${Math.floor(daysSinceLogin / 30) > 1 ? 's' : ''} ago`, isWarning: true };
     }
   };
 
@@ -190,10 +165,10 @@ const EmployeeStatus = () => {
   };
 
   // Group employees by status
-  const clockedIn = employees.filter(e => e.clockedIn);
-  const onLunch = employees.filter(e => e.onLunch);
-  const clockedOut = employees.filter(e => !e.clockedIn && !e.onLunch && (e.lastActivity || e.hoursWorkedToday));
-  const offToday = employees.filter(e => !e.clockedIn && !e.onLunch && !e.lastActivity && !e.hoursWorkedToday);
+  const clockedIn = employees.filter(e => classifyEmployeePresence(e) === 'clocked_in');
+  const onLunch = employees.filter(e => classifyEmployeePresence(e) === 'on_lunch');
+  const clockedOut = employees.filter(e => classifyEmployeePresence(e) === 'clocked_out');
+  const offToday = employees.filter(e => classifyEmployeePresence(e) === 'off_today');
 
   if (loading) {
     return <div className="text-center py-8 text-gray-600 dark:text-neutral-100">Loading employee status...</div>;
@@ -253,13 +228,13 @@ const EmployeeStatus = () => {
               ) : (
                 employees.map((employee) => {
                   const lastLoginInfo = formatLastLogin(employee.lastLogin, employee.daysSinceLogin);
-                  const hasLongInactivity = lastLoginInfo.isWarning && (employee.daysSinceLogin >= 7);
+                  const longInactive = hasLongInactivity(lastLoginInfo, employee.daysSinceLogin);
                   
                   return (
                     <tr 
                       key={employee.id} 
                       className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 ${
-                        hasLongInactivity ? 'bg-orange-50 dark:bg-orange-900/20' : ''
+                        longInactive ? 'bg-orange-50 dark:bg-orange-900/20' : ''
                       }`}
                     >
                       <td className="py-3 px-3 md:px-4">
