@@ -4,6 +4,7 @@ import TaskPhotos from './TaskPhotos';
 import api from '../../utils/api';
 import { formatDateTime, getPriorityColor, getCategoryColor, formatDate, toTitleCase, calculateDuration, calculateTotalDuration, calculateDurationMinutes, getDueDateColor, formatDuration } from '../../utils/helpers';
 import { useAuth } from '../../contexts/AuthContext';
+import { isFluidOrConsumable, quantityUsedForLink, quantityUsedForUpdate } from '../../utils/taskInventoryLinkQty';
 import { parseISO } from 'date-fns';
 import BarcodeScannerModal from '../Inventory/BarcodeScannerModal';
 
@@ -417,18 +418,8 @@ const TaskModal = ({ task, onClose }) => {
     return () => clearTimeout(t);
   }, [showAddInventory, inventorySearch]);
 
-  const isFluidOrConsumable = (item) => {
-    const cat = (item?.category_name || '').toLowerCase();
-    const unit = (item?.unit || item?.item_unit || '').toLowerCase();
-    return cat.includes('oil') || cat.includes('fluid') || cat.includes('cleaning') ||
-      unit.includes('oz') || unit.includes('qt') || unit.includes('gal') || unit.includes('bottle') || unit.includes('can');
-  };
-
   const handleLinkInventoryItem = async (item, qtyInput) => {
-    const isFluid = isFluidOrConsumable(item);
-    const quantityUsed = isFluid && qtyInput !== undefined && qtyInput !== '' && qtyInput !== null
-      ? (parseFloat(qtyInput) || null)
-      : (isFluid ? null : 1);
+    const quantityUsed = quantityUsedForLink(item, qtyInput);
     setAddingInventoryItemId(item.id);
     try {
       const res = await api.post(`/tasks/${task.id}/inventory`, {
@@ -451,7 +442,7 @@ const TaskModal = ({ task, onClose }) => {
     setUpdatingUsageId(usageId);
     try {
       const res = await api.patch(`/tasks/${task.id}/inventory/${usageId}`, {
-        quantity_used: newQty === '' || newQty === null ? null : parseFloat(newQty)
+        quantity_used: quantityUsedForUpdate(newQty)
       });
       setTaskData({
         ...taskData,
