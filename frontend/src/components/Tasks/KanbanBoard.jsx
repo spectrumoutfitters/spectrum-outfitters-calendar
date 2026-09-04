@@ -21,6 +21,11 @@ import TaskModal from './TaskModal';
 import EmployeeTaskModal from './EmployeeTaskModal';
 import CreateTaskForm from './CreateTaskForm';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  filterKanbanColumn,
+  isKanbanDragBlocked,
+  resolveKanbanDropStatus,
+} from '../../utils/kanbanColumnFilter';
 
 const baseColumns = [
   { id: 'todo', title: 'To Do', color: 'bg-gray-200' },
@@ -118,28 +123,12 @@ const KanbanBoard = () => {
     
     if (!currentTask) return;
 
-    // Prevent dragging archived tasks
-    if (currentTask.is_archived === 1 || currentTask.is_archived === true) {
+    if (isKanbanDragBlocked(currentTask)) {
       return;
     }
 
-    let newStatus = over.id;
-    
-    // Check if dropped on a column or on another task
-    const isColumn = baseColumns.find(col => col.id === over.id) || (showArchived && over.id === 'archived');
-    
-    if (!isColumn) {
-      // If dropped on another task, use that task's status
-      const targetTask = tasks.find(t => t.id === over.id);
-      if (targetTask) {
-        newStatus = targetTask.status;
-      } else {
-        return;
-      }
-    }
-
-    // Prevent moving to archived column via drag (archiving should be done via modal)
-    if (newStatus === 'archived') {
+    const newStatus = resolveKanbanDropStatus(over.id, tasks, { showArchived });
+    if (newStatus == null) {
       return;
     }
 
@@ -164,25 +153,7 @@ const KanbanBoard = () => {
     }
   };
 
-  const getTasksByStatus = (status) => {
-    let filtered;
-    
-    if (status === 'archived') {
-      // For archived column, show all archived tasks regardless of status
-      filtered = tasks.filter((task) => task.is_archived === 1);
-    } else {
-      // For other columns, exclude archived tasks
-      filtered = tasks.filter((task) => {
-        return task.status === status && (task.is_archived !== 1 && task.is_archived !== true);
-      });
-    }
-    
-    if (filter !== 'all') {
-      filtered = filtered.filter((task) => task.category === filter);
-    }
-    
-    return filtered;
-  };
+  const getTasksByStatus = (status) => filterKanbanColumn(tasks, status, filter);
 
   const categories = ['PPF', 'Tinting', 'Wraps', 'Maintenance', 'Upfitting', 'Signs', 'Body Work', 'Admin', 'Other'];
 

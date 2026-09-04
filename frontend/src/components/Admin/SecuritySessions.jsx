@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
+import { buildOnPremConfigPayload } from '../../utils/onPremConfigPayload';
 
 const SecuritySessions = () => {
   const [view, setView] = useState('overview');
@@ -104,10 +105,12 @@ const SecuritySessions = () => {
     setConfigSaving(true);
     setConfigMsg('');
     try {
-      const allowedIPs = editIPs.split('\n').map(s => s.trim()).filter(Boolean);
-      const geofence = editGeoLat && editGeoLng && editGeoRadius
-        ? { lat: parseFloat(editGeoLat), lng: parseFloat(editGeoLng), radiusMeters: parseFloat(editGeoRadius) }
-        : null;
+      const { allowedIPs, geofence } = buildOnPremConfigPayload({
+        allowedIpText: editIPs,
+        lat: editGeoLat,
+        lng: editGeoLng,
+        radius: editGeoRadius,
+      });
       const res = await api.put('/admin/security/on-prem-config', { allowedIPs, geofence });
       setConfig(res.data);
       setConfigMsg('Configuration saved.');
