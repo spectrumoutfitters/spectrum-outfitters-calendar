@@ -3,6 +3,13 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../utils/api';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
+import {
+  invoiceAddItemQuantity,
+  invoiceAddItemUnitCents,
+  isRejectedManualPaymentCents,
+  manualPaymentCentsFromDollars,
+  taxCentsFromDraft,
+} from '../utils/invoiceLineMutate';
 
 const fmtCents = (cents) => {
   const n = Number(cents);
@@ -350,8 +357,8 @@ const InvoiceDetail = () => {
                     type="button"
                     onClick={async () => {
                       try {
-                        const cents = taxDraft.trim() === '' ? 0 : Number(taxDraft);
-                        await api.put(`/crm/invoices/${invoice.id}`, { tax_cents: Number.isFinite(cents) ? Math.round(cents) : 0 });
+                        const cents = taxCentsFromDraft(taxDraft);
+                        await api.put(`/crm/invoices/${invoice.id}`, { tax_cents: cents });
                         const res = await api.get(`/crm/invoices/${encodeURIComponent(id)}`);
                         setInvoice(res.data?.invoice || null);
                         setItems(res.data?.items || []);
@@ -610,9 +617,8 @@ const InvoiceDetail = () => {
                           setManualSaving(true);
                           setManualMsg('');
                           try {
-                            const dollars = Number.parseFloat(manualAmount || '');
-                            const cents = Number.isFinite(dollars) ? Math.round(dollars * 100) : null;
-                            if (!cents || cents <= 0) {
+                            const cents = manualPaymentCentsFromDollars(manualAmount);
+                            if (isRejectedManualPaymentCents(cents)) {
                               setManualMsg('Enter a valid amount.');
                               return;
                             }
@@ -1011,15 +1017,12 @@ const InvoiceDetail = () => {
                       setAddSaving(true);
                       setAddMsg('');
                       try {
-                        const qty = Number(addForm.quantity);
-                        const unit = Number(addForm.unit_price);
-                        const unitCents = Number.isFinite(unit) ? Math.round(unit * 100) : null;
                         const payload = {
                           line_type: addForm.line_type,
                           description: addForm.description || undefined,
                           part_number: addForm.part_number || undefined,
-                          quantity: Number.isFinite(qty) ? qty : 1,
-                          unit_price_cents: unitCents,
+                          quantity: invoiceAddItemQuantity(addForm.quantity),
+                          unit_price_cents: invoiceAddItemUnitCents(addForm.unit_price),
                           inventory_item_id: addForm.inventory_item_id || undefined,
                         };
                         await api.post(`/crm/invoices/${invoice.id}/items`, payload);

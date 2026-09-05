@@ -3,6 +3,7 @@ import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import CleanupChecklist from '../TimeEntry/CleanupChecklist';
 import EmployeeTaskModal from '../Tasks/EmployeeTaskModal';
+import { selectEmployeeDashboardTasks } from '../../utils/employeeDashboardTasks';
 
 // ─── Constants ───────────────────────────────────────────────
 
@@ -237,12 +238,7 @@ export default function EmployeeDashboard({ onClockAction }) {
 
       // Tasks assigned to this user, not archived/completed
       const allTasks = tasksRes.data?.tasks || [];
-      const myTasks = allTasks
-        .filter((t) => t.status !== 'completed' && !t.is_archived)
-        .sort((a, b) => {
-          const order = { in_progress: 0, review: 1, todo: 2 };
-          return (order[a.status] ?? 3) - (order[b.status] ?? 3);
-        });
+      const myTasks = selectEmployeeDashboardTasks(allTasks);
       setTasks(myTasks);
 
       const daysOff = daysOffRes.data?.upcoming || null;
