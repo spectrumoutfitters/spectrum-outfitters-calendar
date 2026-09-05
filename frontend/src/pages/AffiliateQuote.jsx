@@ -1,29 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import Logo from '../components/Logo';
-
-const SHOPMONKEY_QUOTE_BASE = 'https://app.shopmonkey.cloud/public/quote-request/b6ddd723-82be-48b3-9166-59ac434cda7c';
-
-function buildIframeSrc(affiliateToken) {
-  const params = new URLSearchParams();
-  params.set('noExternalScripts', '1');
-
-  // Best-effort: if ShopMonkey copies query params into request fields,
-  // these make the token discoverable later in webhooks/payloads.
-  params.set('affiliateToken', affiliateToken);
-  params.set('note', `AFFILIATE_TOKEN:${affiliateToken}`);
-  params.set('description', `AFFILIATE_TOKEN:${affiliateToken}`);
-
-  return `${SHOPMONKEY_QUOTE_BASE}?${params.toString()}`;
-}
+import {
+  buildAffiliateQuoteIframeSrc,
+  extractAffiliateTrackIds,
+  normalizeAffiliateToken,
+} from '../utils/affiliateQuoteTrack';
 
 export default function AffiliateQuote() {
   const { token } = useParams();
-  const affiliateToken = String(token || '').trim();
+  const affiliateToken = normalizeAffiliateToken(token);
 
   const iframeSrc = useMemo(() => {
     if (!affiliateToken) return '';
-    return buildIframeSrc(affiliateToken);
+    return buildAffiliateQuoteIframeSrc(affiliateToken);
   }, [affiliateToken]);
 
   const [status, setStatus] = useState({ kind: 'idle', message: '' });
@@ -36,25 +26,17 @@ export default function AffiliateQuote() {
       // we can track it immediately; otherwise the backend will rely on webhooks.
       try {
         const payload = event?.data;
-        if (!payload) return;
-        if (typeof payload !== 'object') return;
-
-        const data = payload.data && typeof payload.data === 'object' ? payload.data : payload;
-        const workmonkeyWorkRequestId =
-          data?.workRequestId || data?.work_request_id || data?.workRequest?.id || data?.work_request?.id || null;
-        const orderId = data?.orderId || data?.order_id || data?.order?.id || null;
-        const customerId = data?.customerId || data?.customer_id || data?.customer?.id || null;
-
-        if (!workmonkeyWorkRequestId && !orderId && !customerId) return;
+        const ids = extractAffiliateTrackIds(payload);
+        if (!ids) return;
 
         const res = await fetch('/api/affiliates/public/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             affiliate_token: affiliateToken,
-            shopmonkey_work_request_id: workmonkeyWorkRequestId,
-            shopmonkey_order_id: orderId,
-            shopmonkey_customer_id: customerId,
+            shopmonkey_work_request_id: ids.workRequestId,
+            shopmonkey_order_id: ids.orderId,
+            shopmonkey_customer_id: ids.customerId,
             raw_json: payload,
           }),
         });
