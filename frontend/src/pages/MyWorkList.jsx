@@ -15,6 +15,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
+import { partitionMyWorklistItems } from '../utils/myWorklistCompleted';
 
 const PRIORITIES = [
   { value: 'high', label: 'High', className: 'bg-red-100 dark:bg-red-950/50 border-red-300 dark:border-red-800 text-red-800 dark:text-red-200' },
@@ -254,8 +255,7 @@ const MyWorkList = () => {
     }
   }, []);
 
-  const pendingItems = items.filter(i => !i.is_completed);
-  const completedItems = items.filter(i => i.is_completed);
+  const { pendingItems, completedItems } = partitionMyWorklistItems(items);
 
   if (loading) {
     return (
