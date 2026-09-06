@@ -2,11 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { usePlaidLink } from 'react-plaid-link';
 import api from '../../utils/api';
-
-const fmt$ = (v) => {
-  const n = Number(v) || 0;
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-};
+import {
+  averageProjectedField,
+  filterDailyRevenueByYear,
+  formatFinanceDollars as fmt$,
+  revenueYearKeys,
+  sumBusinessExpenseAbs,
+  sumDailyRevenue,
+} from '../../utils/financeDashboardMath';
 
 function PlaidLinkButton({ onSuccess }) {
   const [linkToken, setLinkToken] = useState(null);
@@ -131,11 +134,11 @@ function RevenueTable({ daily }) {
   const [showAll, setShowAll] = useState(false);
   const [filterYear, setFilterYear] = useState('');
 
-  const years = [...new Set(daily.map(d => d.date.slice(0, 4)))].sort().reverse();
+  const years = revenueYearKeys(daily);
 
-  const filtered = filterYear ? daily.filter(d => d.date.startsWith(filterYear)) : daily;
+  const filtered = filterDailyRevenueByYear(daily, filterYear);
   const visible = showAll ? filtered : filtered.slice(0, 60);
-  const totalVisible = filtered.reduce((s, d) => s + (parseFloat(d.revenue) || 0), 0);
+  const totalVisible = sumDailyRevenue(filtered);
 
   return (
     <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-5">
@@ -394,7 +397,7 @@ export default function FinanceDashboard() {
             <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">Business Expenses (Bank)</p>
               <p className="text-2xl font-bold text-red-600">
-                {fmt$(transactions.filter(t => t.is_business_expense).reduce((s, t) => s + Math.abs(t.amount), 0))}
+                {fmt$(sumBusinessExpenseAbs(transactions))}
               </p>
             </div>
             <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-xl p-4">
@@ -437,13 +440,13 @@ export default function FinanceDashboard() {
                 <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
                   <p className="text-xs text-gray-500">Avg Projected Revenue</p>
                   <p className="text-lg font-bold text-green-600">
-                    {fmt$(forecast.projected.reduce((s, w) => s + w.projected_revenue, 0) / forecast.projected.length)}
+                    {fmt$(averageProjectedField(forecast.projected, 'projected_revenue'))}
                   </p>
                 </div>
                 <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
                   <p className="text-xs text-gray-500">Avg Projected Expenses</p>
                   <p className="text-lg font-bold text-red-600">
-                    {fmt$(forecast.projected.reduce((s, w) => s + w.projected_expenses, 0) / forecast.projected.length)}
+                    {fmt$(averageProjectedField(forecast.projected, 'projected_expenses'))}
                   </p>
                 </div>
                 <div className={`rounded-lg p-3 ${
@@ -453,7 +456,7 @@ export default function FinanceDashboard() {
                   <p className={`text-lg font-bold ${
                     forecast.projected.reduce((s, w) => s + w.projected_net, 0) >= 0 ? 'text-green-700' : 'text-red-700'
                   }`}>
-                    {fmt$(forecast.projected.reduce((s, w) => s + w.projected_net, 0) / forecast.projected.length)}
+                    {fmt$(averageProjectedField(forecast.projected, 'projected_net'))}
                   </p>
                 </div>
               </div>

@@ -18,6 +18,12 @@ import {
   normalizePayRecordDate,
   dedupePayRecordsList,
 } from '../utils/payrollDedupe.js';
+import {
+  CASH_FLOW_WEEKS_DEFAULT,
+  FORECAST_HISTORY_DEFAULT,
+  FORECAST_PROJECT_DEFAULT,
+  parseFinanceWeekCount,
+} from '../utils/financeWeekCount.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -147,7 +153,7 @@ async function getWeeklyExpenses(weekStart, weekEnd) {
  */
 router.get('/cash-flow', async (req, res) => {
   try {
-    const numWeeks = parseInt(req.query.weeks) || 12;
+    const numWeeks = parseFinanceWeekCount(req.query.weeks, CASH_FLOW_WEEKS_DEFAULT);
 
     const todayStr = getTodayInHouston();
     const currentFriday = getWeekEndingFriday(todayStr);
@@ -184,8 +190,8 @@ router.get('/cash-flow', async (req, res) => {
  */
 router.get('/forecast', async (req, res) => {
   try {
-    const historyWeeks = parseInt(req.query.history) || 12;
-    const projectWeeks = parseInt(req.query.project) || 8;
+    const historyWeeks = parseFinanceWeekCount(req.query.history, FORECAST_HISTORY_DEFAULT);
+    const projectWeeks = parseFinanceWeekCount(req.query.project, FORECAST_PROJECT_DEFAULT);
 
     const todayStr = getTodayInHouston();
     const currentFriday = getWeekEndingFriday(todayStr);
