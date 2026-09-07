@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { formatDate } from '../../utils/helpers';
+import { filterTimeApprovalRows, inclusiveCalendarDays } from '../../utils/timeOffApprovalFilter';
 
 const TimeApproval = () => {
   const [requests, setRequests] = useState([]);
@@ -17,21 +18,7 @@ const TimeApproval = () => {
     try {
       // Get all schedule entries, we'll filter by status on the frontend
       const response = await api.get('/schedule');
-      let allRequests = response.data.entries || [];
-      
-      // Filter to only show time off requests (not admin-created day_off entries)
-      allRequests = allRequests.filter(req => 
-        req.type === 'time_off_request' || req.status === 'pending'
-      );
-      
-      // Apply status filter
-      if (filter !== 'all') {
-        allRequests = allRequests.filter(req => req.status === filter);
-      }
-      
-      // Sort by start date (most recent first)
-      allRequests.sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
-      
+      const allRequests = filterTimeApprovalRows(response.data.entries || [], filter);
       setRequests(allRequests);
     } catch (error) {
       console.error('Error loading time off requests:', error);
@@ -49,13 +36,7 @@ const TimeApproval = () => {
     }
   };
 
-  const calculateDays = (startDate, endDate) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days
-    return diffDays;
-  };
+  const calculateDays = inclusiveCalendarDays;
 
   if (loading) {
     return <div className="text-center py-8">Loading time off requests...</div>;

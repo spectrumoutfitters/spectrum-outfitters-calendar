@@ -29,6 +29,7 @@ import {
   ADMIN_MAIN_TABS_EMPLOYEE,
   ADMIN_SUB_TABS,
 } from '../config/adminNavRegistry';
+import { resolveAdminDeepLink } from '../utils/adminDeepLinkApply';
 
 const GOLD = '#D4A017';
 
@@ -217,32 +218,37 @@ const Admin = () => {
   useEffect(() => {
     const adm = searchParams.get('adm');
     const adsub = searchParams.get('adsub');
-    if (!isAdmin || !adm) return;
+    const resolved = resolveAdminDeepLink({
+      adm,
+      adsub,
+      isAdmin,
+      mainTabs: ADMIN_MAIN_TABS_ADMIN,
+      subTabs: ADMIN_SUB_TABS,
+    });
+    if (!resolved.applied) return;
 
-    const validMain = ADMIN_MAIN_TABS_ADMIN.some((t) => t.id === adm);
-    if (!validMain) return;
+    setMainTab(resolved.mainTab);
+    localStorage.setItem('admin_main_tab', resolved.mainTab);
 
-    setMainTab(adm);
-    localStorage.setItem('admin_main_tab', adm);
-
-    const subs = ADMIN_SUB_TABS[adm];
-    if (subs && adsub && subs.some((s) => s.id === adsub)) {
+    if (resolved.subTab) {
       setSubTabs((prev) => {
-        const next = { ...prev, [adm]: adsub };
+        const next = { ...prev, [resolved.mainTab]: resolved.subTab };
         localStorage.setItem('admin_sub_tabs', JSON.stringify(next));
         return next;
       });
     }
 
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete('adm');
-        next.delete('adsub');
-        return next;
-      },
-      { replace: true },
-    );
+    if (resolved.clearQuery) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('adm');
+          next.delete('adsub');
+          return next;
+        },
+        { replace: true },
+      );
+    }
   }, [searchParams, isAdmin, setSearchParams]);
 
   useEffect(() => {

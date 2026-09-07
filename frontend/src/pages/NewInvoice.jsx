@@ -1,33 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
-
-function titleCase(input) {
-  const s = String(input || '').trim();
-  if (!s) return '';
-  return s
-    .toLowerCase()
-    .split(/\s+/)
-    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ''))
-    .join(' ');
-}
-
-function digitsOnly(s) {
-  return String(s || '').replace(/\D+/g, '');
-}
-
-function formatPhoneUS(s) {
-  const d = digitsOnly(s);
-  if (d.length < 7) return String(s || '');
-  if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
-  if (d.length === 11 && d.startsWith('1')) return `+1 (${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
-  return String(s || '');
-}
-
-function vehicleLabel(v) {
-  const label = [v?.year, v?.make, v?.model].filter(Boolean).join(' ');
-  return label || v?.vin || v?.license_plate || '—';
-}
+import { formatPhoneUS, titleCase, vehicleLabel } from '../utils/newInvoiceFormat';
 
 function errorToMessage(e) {
   if (!e) return 'Something went wrong';
