@@ -18,6 +18,18 @@ import {
   normalizePayRecordDate,
   dedupePayRecordsList,
 } from '../utils/payrollDedupe.js';
+import {
+  MONTHLY_WEEKS,
+  addPayrollPeopleWeeklyCosts,
+  bankExpenseTotal,
+  combineWeeklyExpenseTotals,
+  hourlyPayrollCost,
+  shiftHoursFromEntry,
+  sumExpenseAmounts,
+  usesHourlyRate,
+  usesWeeklySalary,
+  weeklySalaryCost,
+} from '../utils/financeWeeklyExpenseMath.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -89,18 +101,18 @@ async function getWeeklyExpenses(weekStart, weekEnd) {
   const employees = await db.allAsync('SELECT id, full_name, weekly_salary, hourly_rate FROM users WHERE is_active = 1');
   let payrollTotal = 0;
   for (const emp of employees) {
-    if (emp.weekly_salary && emp.weekly_salary > 0) {
-      payrollTotal += parseFloat(emp.weekly_salary);
-    } else if (emp.hourly_rate && emp.hourly_rate > 0) {
+    if (usesWeeklySalary(emp)) {
+      payrollTotal += weeklySalaryCost(emp.weekly_salary);
+    } else if (usesHourlyRate(emp)) {
       const entries = await db.allAsync(
         'SELECT clock_in, clock_out, break_minutes FROM time_entries WHERE user_id = ? AND DATE(clock_in) >= ? AND DATE(clock_in) <= ? AND clock_out IS NOT NULL',
         [emp.id, weekStart, weekEnd]
       );
       let hours = 0;
       for (const e of entries) {
-        hours += Math.max(0, (new Date(e.clock_out) - new Date(e.clock_in)) / 3600000 - (e.break_minutes || 0) / 60);
+        hours += shiftHoursFromEntry(e);
       }
-      payrollTotal += hours * parseFloat(emp.hourly_rate);
+      payrollTotal += hourlyPayrollCost(hours, emp.hourly_rate);
     }
   }
 
@@ -109,17 +121,7 @@ async function getWeeklyExpenses(weekStart, weekEnd) {
   const payrollPeople = await db.allAsync(
     'SELECT id, full_name, weekly_salary FROM payroll_people WHERE is_active = 1 AND weekly_salary > 0'
   );
-  const seenPpWeekly = new Set();
-  for (const p of payrollPeople) {
-    const cost = parseFloat(p.weekly_salary) || 0;
-    if (cost <= 0) continue;
-    const norm = normalizePayrollDisplayName(p.full_name);
-    if (userWeeklyNames.has(norm)) continue;
-    const key = `${norm}|${cost}`;
-    if (seenPpWeekly.has(key)) continue;
-    seenPpWeekly.add(key);
-    payrollTotal += cost;
-  }
+  payrollTotal = addPayrollPeopleWeeklyCosts(payrollTotal, payrollPeople, userWeeklyNames);
 
   // Manual expenses
   const oneTime = await db.allAsync('SELECT amount FROM business_expenses WHERE frequency = ? AND expense_date >= ? AND expense_date <= ?', ['one_time', weekStart, weekEnd]);
@@ -127,19 +129,19 @@ async function getWeeklyExpenses(weekStart, weekEnd) {
   const monthYear = weekEnd.substring(0, 7);
   const monthly = await db.allAsync('SELECT amount FROM business_expenses WHERE frequency = ? AND month_year = ?', ['monthly', monthYear]);
 
-  let manualTotal = 0;
-  for (const e of oneTime) manualTotal += parseFloat(e.amount) || 0;
-  for (const e of weekly) manualTotal += parseFloat(e.amount) || 0;
-  for (const e of monthly) manualTotal += (parseFloat(e.amount) || 0) / 4.33;
+  const manualTotal =
+    sumExpenseAmounts(oneTime) +
+    sumExpenseAmounts(weekly) +
+    sumExpenseAmounts(monthly, MONTHLY_WEEKS);
 
   // Bank expenses
   const bank = await db.getAsync(
     'SELECT COALESCE(SUM(amount), 0) as total FROM bank_transactions WHERE date >= ? AND date <= ? AND is_business_expense = 1 AND amount > 0',
     [weekStart, weekEnd]
   ).catch(() => ({ total: 0 }));
-  const bankTotal = parseFloat(bank?.total || 0);
+  const bankTotal = bankExpenseTotal(bank);
 
-  return { payroll: payrollTotal, manual: manualTotal, bank: bankTotal, total: payrollTotal + manualTotal + bankTotal };
+  return combineWeeklyExpenseTotals({ payroll: payrollTotal, manual: manualTotal, bank: bankTotal });
 }
 
 /**
