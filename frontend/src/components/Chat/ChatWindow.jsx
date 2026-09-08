@@ -3,6 +3,10 @@ import { useSocket } from '../../contexts/SocketContext';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../utils/api';
 import { formatDateTime, formatTime } from '../../utils/helpers';
+import {
+  incomingMessageMatchesConversation,
+  sentMessageMatchesConversation,
+} from '../../utils/chatTeamMessage';
 
 const ChatWindow = ({ 
   onClose, 
@@ -92,15 +96,7 @@ const ChatWindow = ({
       // Don't handle our own messages here (they're handled by message_sent)
       if (message.sender_id === user.id) return;
       
-      const isTeamMessage = message.is_team_message === 1 || message.is_team_message === true;
-      const messageBoardType = message.board_type || message.type || (isTeamMessage ? 'team_board' : null);
-      
-      if (
-        (currentConv?.id === 'team_board' && messageBoardType === 'team_board') ||
-        (currentConv?.id === 'admin_board' && messageBoardType === 'admin_board') ||
-        (currentConv?.id === message.sender_id && !isTeamMessage) ||
-        (currentConv?.id === message.recipient_id && !isTeamMessage)
-      ) {
+      if (incomingMessageMatchesConversation(message, currentConv)) {
         // Check if message already exists (prevent duplicates)
         setMessages(prev => {
           const exists = prev.some(m => m.id === message.id);
@@ -136,14 +132,7 @@ const ChatWindow = ({
 
     const handleMessageSent = (message) => {
       // Handle message sent confirmation - replace temp message with real one
-      const isTeamMessage = message.is_team_message === 1 || message.is_team_message === true;
-      const messageBoardType = message.board_type || message.type || (isTeamMessage ? 'team_board' : null);
-      
-      if (
-        (currentConv?.id === 'team_board' && messageBoardType === 'team_board') ||
-        (currentConv?.id === 'admin_board' && messageBoardType === 'admin_board') ||
-        (currentConv?.id === message.recipient_id && !isTeamMessage)
-      ) {
+      if (sentMessageMatchesConversation(message, currentConv)) {
         setMessages(prev => {
           // Remove temp messages from current user with matching content
           const filtered = prev.filter(m => 

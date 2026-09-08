@@ -12,41 +12,13 @@ import {
   setSyncCalendarIds,
   clearGoogleSourcedScheduleEntries
 } from '../utils/googleCalendarService.js';
+import {
+  firstQueryParam,
+  oauthFallbackRedirectUrl,
+  oauthPostMessageTargetOrigin,
+} from '../utils/googleCalendarOauth.js';
 
 const router = express.Router();
-
-function firstQueryParam(val) {
-  if (val == null) return undefined;
-  const v = Array.isArray(val) ? val[0] : val;
-  const s = typeof v === 'string' ? v.trim() : '';
-  return s ? s : undefined;
-}
-
-/** Where the SPA runs (OAuth popup notifies opener on this origin). */
-function oauthPostMessageTargetOrigin() {
-  const raw = (process.env.FRONTEND_URL || process.env.PUBLIC_FRONTEND_ORIGIN || '').trim();
-  if (raw) {
-    try {
-      const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-      return new URL(withProto).origin;
-    } catch {
-      /* fall through */
-    }
-  }
-  const port = process.env.FRONTEND_PORT || 5173;
-  const useHttpsLocal = process.env.FRONTEND_USE_HTTPS === '1';
-  return `${useHttpsLocal ? 'https' : 'http'}://localhost:${port}`;
-}
-
-function oauthFallbackRedirectUrl() {
-  const raw = (process.env.FRONTEND_URL || '').trim();
-  if (/^https?:\/\//i.test(raw)) {
-    return raw.replace(/\/+$/, '');
-  }
-  const port = process.env.FRONTEND_PORT || 5173;
-  const useHttpsLocal = process.env.FRONTEND_USE_HTTPS === '1';
-  return `${useHttpsLocal ? 'https' : 'http'}://localhost:${port}`;
-}
 
 // Callback does NOT require auth (Google redirects here)
 router.get('/callback', async (req, res) => {
