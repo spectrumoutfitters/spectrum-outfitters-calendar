@@ -57,6 +57,7 @@ import { syncStripeRevenue, syncPaymentProcessorRevenue } from './routes/payment
 import { authenticateToken, requireAdmin } from './middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { pullChangesFromGoogle } from './utils/googleCalendarService.js';
+import { parseMentions } from './utils/parseMentions.js';
 import { getSocketClientIP, startSession, endSession, heartbeatSession } from './utils/security.js';
 import shortLinksRoutes from './routes/shortLinks.js';
 import publicInvoicesRoutes from './routes/publicInvoices.js';
@@ -179,6 +180,16 @@ io.use(async (socket, next) => {
 // Store connected users
 const connectedUsers = new Map();
 
+async function lookupMentionUsers(usernames) {
+  const unique = [...new Set((usernames || []).map((u) => String(u).toLowerCase()).filter(Boolean))];
+  if (unique.length === 0) return [];
+  const placeholders = unique.map(() => '?').join(',');
+  return db.allAsync(
+    `SELECT id, username, full_name, role FROM users WHERE is_active = 1 AND LOWER(username) IN (${placeholders})`,
+    unique
+  );
+}
+
 io.on('connection', async (socket) => {
   console.log(`User connected: ${socket.userFullName} (${socket.userId})`);
   const socketIP = getSocketClientIP(socket);
@@ -268,7 +279,10 @@ io.on('connection', async (socket) => {
       console.log(`Team board message from ${socket.userFullName} (${socket.userId}): ${message}`);
       
       // Parse @mentions
-      const mentionedUsers = await parseMentions(message);
+      const mentionedUsers = await parseMentions(message, {
+        lookupUsers: lookupMentionUsers,
+        boardType: 'team_board'
+      });
       
       // Save message to database
       const result = await db.runAsync(
@@ -306,6 +320,7 @@ io.on('connection', async (socket) => {
       };
       
       io.to('team').emit('new_message', broadcastData);
+      socket.emit('message_sent', broadcastData);
       
       // Send hard notifications to mentioned users
       if (mentionedUsers.length > 0) {
@@ -340,8 +355,11 @@ io.on('connection', async (socket) => {
       const { message } = data;
       console.log(`Admin board message from ${socket.userFullName} (${socket.userId}): ${message}`);
       
-      // Parse @mentions
-      const mentionedUsers = await parseMentions(message);
+      // Parse @mentions (admin-only recipients so employees never get admin-board bodies)
+      const mentionedUsers = await parseMentions(message, {
+        lookupUsers: lookupMentionUsers,
+        boardType: 'admin_board'
+      });
       
       // Save message to database
       const result = await db.runAsync(
@@ -379,6 +397,7 @@ io.on('connection', async (socket) => {
       };
       
       io.to('admin').emit('new_message', broadcastData);
+      socket.emit('message_sent', broadcastData);
       
       // Send hard notifications to mentioned users
       if (mentionedUsers.length > 0) {
@@ -413,8 +432,11 @@ io.on('connection', async (socket) => {
       const { message } = data;
       console.log(`Legacy team message from ${socket.userFullName} (${socket.userId}): ${message}`);
       
-      // Parse @mentions
-      const mentionedUsers = await parseMentions(message);
+      // Parse @mentions (admin-only recipients so employees never get admin-board bodies)
+      const mentionedUsers = await parseMentions(message, {
+        lookupUsers: lookupMentionUsers,
+        boardType: 'admin_board'
+      });
       
       // Save message to database as admin_board
       const result = await db.runAsync(
@@ -452,6 +474,7 @@ io.on('connection', async (socket) => {
       };
       
       io.to('admin').emit('new_message', broadcastData);
+      socket.emit('message_sent', broadcastData);
       
       // Send hard notifications to mentioned users
       if (mentionedUsers.length > 0) {
