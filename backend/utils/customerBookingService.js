@@ -8,6 +8,12 @@ import {
   isGoogleCalendarConnected,
   hasBookingOutboundMailScopes
 } from './googleCalendarService.js';
+import {
+  coerceBookingCustomerName,
+  coerceBookingCustomerPhone,
+  coerceBookingCustomerEmail,
+  bookingSubmitFieldError
+} from './customerBookingSubmitGate.js';
 
 const SETTINGS_DEFAULTS = {
   booking_enabled: '0',
@@ -395,37 +401,16 @@ export async function submitCustomerBooking(payload) {
     throw err;
   }
 
-  const name = String(payload.customer_name ?? '')
-    .trim()
-    .slice(0, 200);
-  const phone = String(payload.customer_phone ?? '')
-    .replace(/[^\d+()\-\s]/g, '')
-    .trim()
-    .slice(0, 40);
-  const emailPart = String(payload.customer_email ?? '')
-    .trim()
-    .toLowerCase()
-    .slice(0, 200);
-  const customer_email =
-    emailPart && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailPart) ? emailPart : null;
-
-  if (!name || name.length < 2) {
-    const err = new Error('Please enter your name.');
-    err.code = 'validation';
-    throw err;
-  }
-  if (!phone || phone.replace(/\D/g, '').length < 7) {
-    const err = new Error('Please enter a valid phone number.');
-    err.code = 'validation';
+  const fieldErr = bookingSubmitFieldError(payload);
+  if (fieldErr) {
+    const err = new Error(fieldErr.message);
+    err.code = fieldErr.code;
     throw err;
   }
 
-  const honeypot = String(payload.company_website ?? payload.website ?? '').trim();
-  if (honeypot) {
-    const err = new Error('Spam blocked.');
-    err.code = 'spam';
-    throw err;
-  }
+  const name = coerceBookingCustomerName(payload.customer_name);
+  const phone = coerceBookingCustomerPhone(payload.customer_phone);
+  const customer_email = coerceBookingCustomerEmail(payload.customer_email);
 
   const vehicles = sanitizeVehicleList(payload.vehicles);
   const selectedIds = Array.isArray(payload.selected_service_ids)

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Logo from '../components/Logo';
 import { getBookingConfig, getBookingSlots, submitBooking } from '../utils/publicBookingApi';
+import { customerBookingFormError } from '../utils/customerBookingValidate';
 
 function formatTimeOnly(iso, timeZone) {
   try {
@@ -168,14 +169,8 @@ const CustomerBooking = () => {
   const addVehicle = () => setVehicles((prev) => (prev.length < 10 ? [...prev, emptyVehicle()] : prev));
   const removeVehicle = (idx) => setVehicles((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
 
-  const validate = () => {
-    if (!customerName.trim() || customerName.trim().length < 2) return 'Please enter your full name.';
-    const digits = customerPhone.replace(/\D/g, '');
-    if (digits.length < 7) return 'Please enter a valid phone number.';
-    if (!slotStartIso) return 'Pick a drop-off time.';
-    if (!config?.enabled) return 'Booking is not available.';
-    return null;
-  };
+  const validate = () =>
+    customerBookingFormError({ customerName, customerPhone, slotStartIso, config });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
