@@ -8,6 +8,22 @@ import {
   isGoogleCalendarConnected,
   hasBookingOutboundMailScopes
 } from './googleCalendarService.js';
+import {
+  DEFAULT_BOOKING_WEEKLY_HOURS_JSON,
+  DEFAULT_BOOKING_SERVICES_CHECKLIST,
+  parseJsonSafe,
+  uniqCalendarIds,
+  calendarIdsFromGoogleCfg,
+  sanitizeWeeklyHoursJson,
+  sanitizeServiceChecklist,
+  emailListFromJson,
+  sanitizeVehicleList
+} from './bookingSettingsSanitize.js';
+import {
+  clampBookingSlotMinutesFromSetting,
+  clampBookingHorizonDaysFromSetting,
+  clampBookingBufferMinutesFromSetting
+} from './bookingConfigClamp.js';
 
 const SETTINGS_DEFAULTS = {
   booking_enabled: '0',
@@ -15,23 +31,8 @@ const SETTINGS_DEFAULTS = {
   booking_slot_minutes: '30',
   booking_horizon_days: '21',
   booking_buffer_before_minutes: '0',
-  booking_weekly_hours: JSON.stringify({
-    '1': [{ start: '08:00', end: '17:00' }],
-    '2': [{ start: '08:00', end: '17:00' }],
-    '3': [{ start: '08:00', end: '17:00' }],
-    '4': [{ start: '08:00', end: '17:00' }],
-    '5': [{ start: '08:00', end: '17:00' }],
-    '6': [],
-    '7': []
-  }),
-  booking_services_checklist: JSON.stringify([
-    { id: 'oil_change', label: 'Oil change' },
-    { id: 'state_inspection', label: 'State inspection' },
-    { id: 'brakes', label: 'Brakes' },
-    { id: 'tires', label: 'Tires' },
-    { id: 'diagnostic', label: 'Diagnostics' },
-    { id: 'other', label: 'Other (describe in notes)' }
-  ]),
+  booking_weekly_hours: DEFAULT_BOOKING_WEEKLY_HOURS_JSON,
+  booking_services_checklist: JSON.stringify(DEFAULT_BOOKING_SERVICES_CHECKLIST),
   booking_write_calendar_id: '',
   booking_availability_calendar_ids: '',
   booking_notify_emails: JSON.stringify([]),
@@ -39,42 +40,7 @@ const SETTINGS_DEFAULTS = {
   booking_success_message: 'You are booked! We look forward to seeing you.'
 };
 
-function uniqStrings(list) {
-  const seen = new Set();
-  const out = [];
-  for (const item of list || []) {
-    const s = String(item || '').trim();
-    if (!s || seen.has(s)) continue;
-    seen.add(s);
-    out.push(s);
-  }
-  return out;
-}
-
-function uniqCalendarIds(ids) {
-  const out = [];
-  const seen = new Set();
-  for (const x of ids || []) {
-    const id = typeof x === 'string' ? x.trim() : '';
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    out.push(id);
-  }
-  return out;
-}
-
-function calendarIdsFromGoogleCfg(cfg) {
-  const raw = cfg?.sync_calendar_ids;
-  if (raw && typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string' && item.trim())) {
-        return uniqCalendarIds(parsed);
-      }
-    } catch (_) {}
-  }
-  return [cfg.calendar_id || 'primary'];
-}
+export { sanitizeServiceChecklist } from './bookingSettingsSanitize.js';
 
 async function ensureDefaultSettingsSilently() {
   for (const [key, val] of Object.entries(SETTINGS_DEFAULTS)) {
@@ -119,15 +85,6 @@ export async function persistBookingSettings(patch) {
   }
 }
 
-function parseJsonSafe(raw, fallback) {
-  if (raw == null || raw === '') return fallback;
-  try {
-    return JSON.parse(typeof raw === 'string' ? raw : String(raw));
-  } catch (_) {
-    return fallback;
-  }
-}
-
 function overlapsInterval(startMs, endMs, intervals) {
   for (const b of intervals || []) {
     const bs = Date.parse(b.start);
@@ -138,59 +95,13 @@ function overlapsInterval(startMs, endMs, intervals) {
   return false;
 }
 
-function sanitizeWeeklyHoursJson(rawStr) {
-  const d = parseJsonSafe(rawStr, null);
-  if (!d || typeof d !== 'object') return SETTINGS_DEFAULTS.booking_weekly_hours;
-  const out = {};
-  for (const k of ['1', '2', '3', '4', '5', '6', '7']) {
-    const intervals = Array.isArray(d[k]) ? d[k] : [];
-    out[k] = [];
-    for (const block of intervals) {
-      const start = String(block?.start || '').slice(0, 5);
-      const end = String(block?.end || '').slice(0, 5);
-      if (/^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end)) {
-        out[k].push({ start, end });
-      }
-    }
-  }
-  return JSON.stringify(out);
-}
-
-export function sanitizeServiceChecklist(parsed) {
-  if (!Array.isArray(parsed)) return parseJsonSafe(SETTINGS_DEFAULTS.booking_services_checklist, []);
-  return parsed
-    .map((item, idx) => {
-      const label = typeof item.label === 'string' ? item.label.trim().slice(0, 120) : '';
-      let id =
-        typeof item.id === 'string' && item.id.trim()
-          ? item.id.trim().slice(0, 64).replace(/\s+/g, '_')
-          : `svc_${idx}`;
-      if (!label) return null;
-      return { id, label };
-    })
-    .filter(Boolean);
-}
-
-function emailListFromJson(raw) {
-  let arr = parseJsonSafe(raw, []);
-  if (!Array.isArray(arr)) arr = [];
-  const out = [];
-  for (const e of arr) {
-    const s = String(e || '')
-      .trim()
-      .toLowerCase();
-    if (s && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) out.push(s);
-  }
-  return uniqStrings(out);
-}
-
 export async function getResolvedBookingConfig() {
   await ensureDefaultSettingsSilently();
 
   const gcfg = await getGoogleCalendarConfig();
-  const slotMinutes = Math.min(480, Math.max(15, parseInt(await loadSetting('booking_slot_minutes'), 10) || 30));
-  const horizonDays = Math.min(60, Math.max(1, parseInt(await loadSetting('booking_horizon_days'), 10) || 21));
-  const bufferBefore = Math.min(120, Math.max(0, parseInt(await loadSetting('booking_buffer_before_minutes'), 10) || 0));
+  const slotMinutes = clampBookingSlotMinutesFromSetting(await loadSetting('booking_slot_minutes'));
+  const horizonDays = clampBookingHorizonDaysFromSetting(await loadSetting('booking_horizon_days'));
+  const bufferBefore = clampBookingBufferMinutesFromSetting(await loadSetting('booking_buffer_before_minutes'));
 
   let tz = (await loadSetting('booking_timezone')) || SETTINGS_DEFAULTS.booking_timezone;
   try {
@@ -337,28 +248,6 @@ export async function computeAvailableBookingSlots() {
     slots: freeSlots.slice(0, 2000),
     freebusy_errors: errors?.length ? errors : undefined
   };
-}
-
-function sanitizeVehicleList(raw) {
-  if (!Array.isArray(raw)) return [];
-  const out = [];
-  for (let i = 0; i < raw.length && out.length < 10; i++) {
-    const v = raw[i] || {};
-    const year = String(v.year ?? '').trim().slice(0, 4);
-    const make = String(v.make ?? '').trim().slice(0, 64);
-    const model = String(v.model ?? '').trim().slice(0, 64);
-    const vin = String(v.vin ?? '').trim().slice(0, 32).toUpperCase();
-    const plate = String(v.plate ?? v.license_plate ?? '').trim().slice(0, 16).toUpperCase();
-    if (!year && !make && !model) continue;
-    out.push({
-      ...(year ? { year } : {}),
-      ...(make ? { make } : {}),
-      ...(model ? { model } : {}),
-      ...(vin ? { vin } : {}),
-      ...(plate ? { plate } : {})
-    });
-  }
-  return out;
 }
 
 function formatVehiclesHuman(vehicles) {
