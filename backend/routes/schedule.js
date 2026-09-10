@@ -610,7 +610,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     // Sync delete to Google Calendar (best-effort)
     if (entry.google_event_id) {
       try {
-        await deleteEventFromGoogle(entry.google_event_id);
+        await deleteEventFromGoogle(entry.google_event_id, entry);
       } catch (syncErr) {
         console.warn('Google Calendar sync (delete) failed:', syncErr?.message || syncErr);
       }
@@ -689,7 +689,7 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
       // If rejected and it was previously synced, delete the Google event (best-effort)
       if (updatedEntry?.google_event_id) {
         try {
-          await deleteEventFromGoogle(updatedEntry.google_event_id);
+          await deleteEventFromGoogle(updatedEntry.google_event_id, updatedEntry);
         } catch (syncErr) {
           console.warn('Google Calendar sync (reject delete) failed:', syncErr?.message || syncErr);
         }
