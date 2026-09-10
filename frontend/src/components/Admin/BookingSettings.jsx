@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../utils/api';
 import { withBase } from '../../utils/basePath';
+import {
+  clampBookingSlotMinutesFromConfig,
+  clampBookingHorizonDaysFromConfig,
+  clampBookingBufferMinutesFromConfig
+} from '../../utils/bookingConfigClamp';
 
 const GOLD = '#D4A017';
 
@@ -77,9 +82,9 @@ export default function BookingSettings() {
 
       setEnabled(!!s.enabled);
       setTimezone(s.timezone || 'America/Chicago');
-      setSlotMinutes(Math.min(480, Math.max(15, s.slotMinutes ?? 30)));
-      setHorizonDays(Math.min(60, Math.max(1, s.horizonDays ?? 21)));
-      setBufferMinutes(Math.min(120, Math.max(0, s.bufferBeforeMinutes ?? 0)));
+      setSlotMinutes(clampBookingSlotMinutesFromConfig(s.slotMinutes));
+      setHorizonDays(clampBookingHorizonDaysFromConfig(s.horizonDays));
+      setBufferMinutes(clampBookingBufferMinutesFromConfig(s.bufferBeforeMinutes));
       setIntroText(s.intro_text || '');
       setSuccessMessage(s.success_message || '');
       setWriteCalendarId(s.write_calendar_id || '');

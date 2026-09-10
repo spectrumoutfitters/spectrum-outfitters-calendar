@@ -1,10 +1,6 @@
 import db from '../database/db.js';
 import { getTodayInHouston, addDaysInHouston, getHoustonDayOfWeek } from './appTimezone.js';
-
-function toNumber(v) {
-  const n = parseFloat(v);
-  return Number.isFinite(n) ? n : 0;
-}
+import { toNumber, pickSplitPayRunAmount } from './payrollSplitAmount.js';
 
 function previousFridayFrom(dateStr) {
   const d = getHoustonDayOfWeek(dateStr);
@@ -38,13 +34,13 @@ export async function recordWeeklySplitPayRuns(opts = {}) {
   `;
 
   for (const u of users) {
-    const amount = toNumber(u.weekly_salary) > 0 ? toNumber(u.weekly_salary) : toNumber(u.split_reimbursable_amount);
+    const amount = pickSplitPayRunAmount(u);
     if (amount <= 0) continue;
     const r = await db.runAsync(insertSql, ['user', u.id, weekEnding, amount, u.full_name || null]);
     if (r?.changes) inserted += r.changes;
   }
   for (const p of people) {
-    const amount = toNumber(p.weekly_salary) > 0 ? toNumber(p.weekly_salary) : toNumber(p.split_reimbursable_amount);
+    const amount = pickSplitPayRunAmount(p);
     if (amount <= 0) continue;
     const r = await db.runAsync(insertSql, ['payroll_person', p.id, weekEnding, amount, p.full_name || null]);
     if (r?.changes) inserted += r.changes;

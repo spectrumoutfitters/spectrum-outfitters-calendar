@@ -4,20 +4,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import Logo from '../Logo';
 import { NavIcon } from './NavIcons';
 import api from '../../utils/api';
+import { SIDEBAR_DEFAULT_NAV_ORDER, mergeNavOrder } from '../../utils/navOrderMerge';
 
-const DEFAULT_NAV_ORDER = [
-  'dashboard',
-  'dispatch',
-  'tasks',
-  'time',
-  'schedule',
-  'inventory',
-  'products',
-  'crm',
-  'profile',
-  'admin',
-  'grand_opening',
-];
+const DEFAULT_NAV_ORDER = SIDEBAR_DEFAULT_NAV_ORDER;
 
 const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
@@ -45,16 +34,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       .then((res) => {
         let order = res.data?.order;
         if (!cancelled && Array.isArray(order) && order.length > 0) {
-          const missing = DEFAULT_NAV_ORDER.filter(k => !order.includes(k));
-          if (missing.length > 0) {
-            for (const key of missing) {
-              const defaultIdx = DEFAULT_NAV_ORDER.indexOf(key);
-              const insertAt = Math.min(defaultIdx, order.length);
-              order = [...order];
-              order.splice(insertAt, 0, key);
-            }
-          }
-          setNavOrder(order);
+          setNavOrder(mergeNavOrder(order, DEFAULT_NAV_ORDER));
         }
       })
       .catch(() => {});

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { SETTINGS_DEFAULT_NAV_ORDER, mergeNavOrder } from '../../utils/navOrderMerge';
 
-const DEFAULT_NAV_ORDER = ['dashboard', 'mylist', 'tasks', 'time', 'schedule', 'inventory', 'products', 'profile', 'admin'];
+const DEFAULT_NAV_ORDER = SETTINGS_DEFAULT_NAV_ORDER;
 const NAV_LABELS = {
   dashboard: 'Dashboard',
   mylist: 'My List',
@@ -55,15 +56,7 @@ Your attention to detail in keeping our shop clean reflects the quality of work 
       setMessagePool(messagesRes.data?.messages || []);
       let order = navRes.data?.order;
       if (Array.isArray(order) && order.length > 0) {
-        const missing = DEFAULT_NAV_ORDER.filter(k => !order.includes(k));
-        if (missing.length > 0) {
-          order = [...order];
-          for (const key of missing) {
-            const defaultIdx = DEFAULT_NAV_ORDER.indexOf(key);
-            order.splice(Math.min(defaultIdx, order.length), 0, key);
-          }
-        }
-        setNavOrder(order);
+        setNavOrder(mergeNavOrder(order, DEFAULT_NAV_ORDER));
       }
     } catch (error) {
       console.error('Error loading settings:', error);

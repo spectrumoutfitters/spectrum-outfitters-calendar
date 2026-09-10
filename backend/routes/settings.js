@@ -1,10 +1,9 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { DEFAULT_NAV_ORDER, mergeNavOrder } from '../utils/navOrderMerge.js';
 
 const router = express.Router();
-
-const DEFAULT_NAV_ORDER = ['dashboard', 'mylist', 'tasks', 'time', 'schedule', 'inventory', 'products', 'profile', 'admin'];
 
 // GET /api/settings/nav-order - Get sidebar nav order (any authenticated user)
 router.get('/nav-order', authenticateToken, async (req, res) => {
@@ -13,15 +12,7 @@ router.get('/nav-order', authenticateToken, async (req, res) => {
     let order = row?.value ? JSON.parse(row.value) : DEFAULT_NAV_ORDER;
     if (!Array.isArray(order)) order = DEFAULT_NAV_ORDER;
 
-    // Merge any new keys from DEFAULT_NAV_ORDER that aren't in the saved order
-    const missing = DEFAULT_NAV_ORDER.filter(k => !order.includes(k));
-    if (missing.length > 0) {
-      for (const key of missing) {
-        const defaultIdx = DEFAULT_NAV_ORDER.indexOf(key);
-        const insertAt = Math.min(defaultIdx, order.length);
-        order.splice(insertAt, 0, key);
-      }
-    }
+    order = mergeNavOrder(order, DEFAULT_NAV_ORDER);
 
     return res.json({ order });
   } catch (error) {
