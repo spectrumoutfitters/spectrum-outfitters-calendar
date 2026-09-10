@@ -1,6 +1,9 @@
 import { google } from 'googleapis';
 import crypto from 'crypto';
 import db from '../database/db.js';
+import { calendarIdForGoogleEvent } from './googleCalendarEventId.js';
+
+export { calendarIdForGoogleEvent };
 
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
@@ -415,8 +418,8 @@ export async function pushEventToGoogle(entry) {
   if (!(await isGoogleCalendarConnected())) return null;
 
   const { calendar, cfg } = await getAuthedCalendarClient();
-  // When entry was created with a specific target (e.g. Outfitters Projects), push there
-  const calendarId = entry.push_calendar_id || cfg.calendar_id || 'primary';
+  // Prefer the entry's push/source calendar so updates hit the same calendar pull uses
+  const calendarId = calendarIdForGoogleEvent(entry, cfg);
 
   const startDate = toDateOnly(entry.start_date);
   const endDate = toDateOnly(entry.end_date);
@@ -467,12 +470,12 @@ export async function pushEventToGoogle(entry) {
   return { google_event_id: created.data.id, google_updated_at: created.data.updated };
 }
 
-export async function deleteEventFromGoogle(googleEventId) {
+export async function deleteEventFromGoogle(googleEventId, entry = null) {
   if (!googleEventId) return;
   if (!(await isGoogleCalendarConnected())) return;
 
   const { calendar, cfg } = await getAuthedCalendarClient();
-  const calendarId = cfg.calendar_id || 'primary';
+  const calendarId = calendarIdForGoogleEvent(entry, cfg);
 
   await calendar.events.delete({
     calendarId,
