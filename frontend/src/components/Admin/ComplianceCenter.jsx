@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import ProfitAndLoss from './ProfitAndLoss';
+import { estimatedHoustonSalesTax } from '../../utils/houstonSalesTax';
 
 const ComplianceCenter = () => {
   const [loading, setLoading] = useState(true);
@@ -975,9 +976,7 @@ const ComplianceCenter = () => {
                         step="0.01"
                         value={salesForm.taxable_sales}
                         onChange={(e) => {
-                          const taxable = parseFloat(e.target.value) || 0;
-                          const taxRate = 0.0825; // Houston TX rate
-                          const estimatedTax = (taxable * taxRate).toFixed(2);
+                          const estimatedTax = estimatedHoustonSalesTax(e.target.value);
                           setSalesForm({ 
                             ...salesForm, 
                             taxable_sales: e.target.value,

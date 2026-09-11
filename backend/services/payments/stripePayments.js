@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import db from '../../database/db.js';
+import { invoicePaymentStatus } from '../../utils/invoicePaymentStatus.js';
 
 function getStripe() {
   const key = (process.env.STRIPE_SECRET_KEY || '').trim().replace(/^["']|["']$/g, '');
@@ -242,7 +243,7 @@ export async function handleStripeEvent(event) {
     );
     const paid = cents(paidRow?.paid) || 0;
 
-    const paymentStatus = paid >= total && total > 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
+    const paymentStatus = invoicePaymentStatus(paid, total);
     await db.runAsync(
       `UPDATE crm_invoices
        SET payment_status = ?, paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE paid_at END
