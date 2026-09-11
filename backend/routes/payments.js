@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { invoicePaymentStatus } from '../utils/invoicePaymentStatus.js';
 import {
   createStripePaymentIntentForInvoice,
   createStripeSetupIntent,
@@ -149,7 +150,7 @@ router.post('/invoices/:id/record-manual', async (req, res) => {
       [invoiceId]
     );
     const paid = Number(paidRow?.paid) || 0;
-    const paymentStatus = paid >= total && total > 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
+    const paymentStatus = invoicePaymentStatus(paid, total);
     await db.runAsync(
       `UPDATE crm_invoices
        SET payment_status = ?, paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE paid_at END,

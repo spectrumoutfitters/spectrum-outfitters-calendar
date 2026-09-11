@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { invoicePaymentStatus } from '../utils/invoicePaymentStatus.js';
 import {
   cancelBackfillJob,
   enqueueBackfillJob,
@@ -94,7 +95,7 @@ async function recalcInvoiceTotals(invoiceId) {
       [invoiceId]
     );
     const paid = toInt(paidRow?.paid) || 0;
-    const paymentStatus = paid >= total && total > 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
+    const paymentStatus = invoicePaymentStatus(paid, total);
     await db.runAsync(
       `UPDATE crm_invoices
        SET payment_status = ?, paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE paid_at END

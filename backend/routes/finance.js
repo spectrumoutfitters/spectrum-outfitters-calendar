@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import db from '../database/db.js';
 import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/payrollHistoryRecords.js';
+import { payrollHistoryImportRecords } from '../utils/payrollHistoryImportBody.js';
 import { payrollHistoryRecordMatchesSource } from '../utils/payrollHistoryMatch.js';
 import { readPayrollEmployeesFromAnyPath } from '../utils/payrollDataPath.js';
 import { readPayrollHistorySyncStatus, runPayrollHistorySyncNow } from '../utils/payrollHistoryAutoSync.js';
@@ -368,9 +369,8 @@ router.delete('/payroll-people/:id', async (req, res) => {
  */
 router.post('/payroll-history-import', async (req, res) => {
   try {
-    let records = req.body?.records;
-    if (!Array.isArray(records) && Array.isArray(req.body)) records = req.body;
-    if (!Array.isArray(records) || records.length === 0) {
+    const records = payrollHistoryImportRecords(req.body);
+    if (!records) {
       return res.status(400).json({ error: 'Body must include a non-empty "records" array (Payroll System pay history).' });
     }
     const { imported, total } = await mergeImportPayrollHistory(records);

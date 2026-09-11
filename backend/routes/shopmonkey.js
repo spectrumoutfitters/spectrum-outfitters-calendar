@@ -13,6 +13,7 @@ import {
   syncTaskCompletionToShopMonkey
 } from '../utils/shopmonkey.js';
 import db from '../database/db.js';
+import { isShopmonkeyApiKeyConfigured } from '../utils/shopmonkeyCredentialsGate.js';
 
 const router = express.Router();
 
@@ -26,9 +27,7 @@ router.use(requireAdmin);
 router.get('/workflow/statuses', async (req, res) => {
   try {
     // Check if API key is configured
-    if (!process.env.SHOPMONKEY_API_KEY || 
-        process.env.SHOPMONKEY_API_KEY.trim() === '' || 
-        process.env.SHOPMONKEY_API_KEY === 'your_shopmonkey_api_key_here') {
+    if (!isShopmonkeyApiKeyConfigured()) {
       return res.status(400).json({ 
         error: 'ShopMonkey API key not configured',
         message: 'Please add SHOPMONKEY_API_KEY to backend/.env file'
@@ -51,9 +50,7 @@ router.get('/workflow/statuses', async (req, res) => {
 router.get('/orders', async (req, res) => {
   try {
     // Check if API key is configured
-    if (!process.env.SHOPMONKEY_API_KEY || 
-        process.env.SHOPMONKEY_API_KEY.trim() === '' || 
-        process.env.SHOPMONKEY_API_KEY === 'your_shopmonkey_api_key_here') {
+    if (!isShopmonkeyApiKeyConfigured()) {
       return res.status(400).json({ 
         error: 'ShopMonkey API key not configured',
         message: 'Please add SHOPMONKEY_API_KEY to backend/.env file'
@@ -133,9 +130,7 @@ router.get('/orders', async (req, res) => {
 router.get('/orders/:id', async (req, res) => {
   try {
     // Check if API key is configured
-    if (!process.env.SHOPMONKEY_API_KEY || 
-        process.env.SHOPMONKEY_API_KEY.trim() === '' || 
-        process.env.SHOPMONKEY_API_KEY === 'your_shopmonkey_api_key_here') {
+    if (!isShopmonkeyApiKeyConfigured()) {
       return res.status(400).json({ 
         error: 'ShopMonkey API key not configured',
         message: 'Please add SHOPMONKEY_API_KEY to backend/.env file'
@@ -158,9 +153,7 @@ router.get('/orders/:id', async (req, res) => {
 router.post('/orders/:id/parse', async (req, res) => {
   try {
     // Check if API key is configured
-    if (!process.env.SHOPMONKEY_API_KEY || 
-        process.env.SHOPMONKEY_API_KEY.trim() === '' || 
-        process.env.SHOPMONKEY_API_KEY === 'your_shopmonkey_api_key_here') {
+    if (!isShopmonkeyApiKeyConfigured()) {
       return res.status(400).json({ 
         error: 'ShopMonkey API key not configured',
         message: 'Please add SHOPMONKEY_API_KEY to backend/.env file'
@@ -255,9 +248,7 @@ router.post('/orders/:id/parse', async (req, res) => {
 router.get('/vehicles/:id', async (req, res) => {
   try {
     // Check if API key is configured
-    if (!process.env.SHOPMONKEY_API_KEY || 
-        process.env.SHOPMONKEY_API_KEY.trim() === '' || 
-        process.env.SHOPMONKEY_API_KEY === 'your_shopmonkey_api_key_here') {
+    if (!isShopmonkeyApiKeyConfigured()) {
       return res.status(400).json({ 
         error: 'ShopMonkey API key not configured',
         message: 'Please add SHOPMONKEY_API_KEY to backend/.env file'
@@ -279,9 +270,7 @@ router.get('/vehicles/:id', async (req, res) => {
 router.get('/customers/:id', async (req, res) => {
   try {
     // Check if API key is configured
-    if (!process.env.SHOPMONKEY_API_KEY || 
-        process.env.SHOPMONKEY_API_KEY.trim() === '' || 
-        process.env.SHOPMONKEY_API_KEY === 'your_shopmonkey_api_key_here') {
+    if (!isShopmonkeyApiKeyConfigured()) {
       return res.status(400).json({ 
         error: 'ShopMonkey API key not configured',
         message: 'Please add SHOPMONKEY_API_KEY to backend/.env file'
@@ -304,9 +293,7 @@ router.get('/customers/:id', async (req, res) => {
 router.post('/tasks/:taskId/sync', async (req, res) => {
   try {
     // Check if API key is configured
-    if (!process.env.SHOPMONKEY_API_KEY || 
-        process.env.SHOPMONKEY_API_KEY.trim() === '' || 
-        process.env.SHOPMONKEY_API_KEY === 'your_shopmonkey_api_key_here') {
+    if (!isShopmonkeyApiKeyConfigured()) {
       return res.status(400).json({ 
         error: 'ShopMonkey API key not configured',
         message: 'Please add SHOPMONKEY_API_KEY to backend/.env file'
@@ -595,9 +582,7 @@ router.post('/webhook', async (req, res) => {
 router.get('/test', async (req, res) => {
   try {
     // Check if API key is configured
-    if (!process.env.SHOPMONKEY_API_KEY || 
-        process.env.SHOPMONKEY_API_KEY.trim() === '' || 
-        process.env.SHOPMONKEY_API_KEY === 'your_shopmonkey_api_key_here') {
+    if (!isShopmonkeyApiKeyConfigured()) {
       return res.status(400).json({ 
         success: false,
         error: 'ShopMonkey API key not configured',
