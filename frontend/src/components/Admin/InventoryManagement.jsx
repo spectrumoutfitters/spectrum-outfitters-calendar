@@ -4,11 +4,11 @@ import api from '../../utils/api';
 import InventoryColorLegend from '../Inventory/InventoryColorLegend';
 import BarcodeScannerModal from '../Inventory/BarcodeScannerModal';
 import { useOpenScan } from '../../contexts/OpenScanContext';
-
-const safeNumber = (v) => {
-  const n = Number.parseFloat(v);
-  return Number.isFinite(n) ? n : null;
-};
+import { amazonCartLink } from '../../utils/amazonCartLink';
+import {
+  parseInventoryQuantityUpdate,
+  prepareInventoryAdminPayload,
+} from '../../utils/inventoryAdminFormGate';
 
 const categoryIcon = (name) => {
   const n = (name || '').toLowerCase();
@@ -589,13 +589,10 @@ const InventoryManagement = () => {
     return () => { cancelled = true; };
   }, [showModal, editing?.id]);
 
-  const amazonLinkForCurrentForm = useMemo(() => {
-    const url = (form.amazon_url || '').trim();
-    if (url) return url;
-    const asin = (form.amazon_asin || '').trim();
-    if (!asin) return null;
-    return `https://www.amazon.com/gp/aws/cart/add.html?ASIN.1=${encodeURIComponent(asin)}&Quantity.1=1`;
-  }, [form.amazon_asin, form.amazon_url]);
+  const amazonLinkForCurrentForm = useMemo(
+    () => amazonCartLink(form.amazon_url, form.amazon_asin),
+    [form.amazon_asin, form.amazon_url]
+  );
 
   useEffect(() => {
     if (!showModal || !editing?.id) {
@@ -734,58 +731,12 @@ const InventoryManagement = () => {
     setError(null);
 
     try {
-      if (!editing?.id && !(form.barcode || '').trim()) {
-        setError('Barcode is required when adding an item. Scan or enter a barcode.');
+      const prepared = prepareInventoryAdminPayload(form, { isCreate: !editing?.id });
+      if (prepared.error) {
+        setError(prepared.error);
         return;
       }
-      if (!form.name.trim()) {
-        setError('Name is required.');
-        return;
-      }
-
-      if (form.needs_return && !form.return_supplier.trim()) {
-        setError('Supplier is required when flagging for return (where was this part bought from?).');
-        return;
-      }
-
-      const parsedPrice = form.price === '' ? null : safeNumber(form.price);
-      if (form.price !== '' && parsedPrice === null) {
-        setError('Price must be a number.');
-        return;
-      }
-      const parsedReorderCost = form.reorder_cost === '' ? null : safeNumber(form.reorder_cost);
-      if (form.reorder_cost !== '' && parsedReorderCost === null) {
-        setError('Reorder cost must be a number.');
-        return;
-      }
-
-      const payload = {
-        barcode: form.barcode.trim() || null,
-        name: form.name.trim(),
-        category_id: form.category_id ? Number(form.category_id) : null,
-        unit: form.unit.trim() || 'each',
-        price: parsedPrice,
-        image_url: form.image_url && form.image_url.trim() ? form.image_url.trim() : undefined,
-        needs_return: form.needs_return,
-        return_supplier: form.return_supplier.trim() || null,
-        size_per_unit: form.size_per_unit.trim() || null,
-        min_quantity: form.min_quantity.trim() === '' ? null : safeNumber(form.min_quantity),
-        keep_in_stock: form.keep_in_stock,
-        location: form.location.trim() || null,
-        location_notes: form.location_notes.trim() || null,
-        preferred_vendor: form.preferred_vendor.trim() || null,
-        supplier_name: form.supplier_name.trim() || null,
-        supplier_contact: form.supplier_contact.trim() || null,
-        supplier_part_number: form.supplier_part_number.trim() || null,
-        reorder_cost: parsedReorderCost,
-        amazon_asin: form.amazon_asin.trim() || null,
-        amazon_url: form.amazon_url.trim() || null,
-      };
-
-      if (payload.price !== null && payload.price !== undefined && !Number.isFinite(payload.price)) {
-        setError('Price must be a number.');
-        return;
-      }
+      const payload = prepared.payload;
 
       let savedItem;
       if (editing?.id) {
@@ -797,13 +748,13 @@ const InventoryManagement = () => {
       }
 
       // Optional quantity update (separate endpoint; allowed for admins)
-      if (form.quantity !== '') {
-        const qNum = safeNumber(form.quantity);
-        if (qNum === null || qNum < 0) {
-          setError('Quantity must be a non-negative number.');
-          return;
-        }
-        const resQ = await api.post(`/inventory/items/${savedItem.id}/quantity`, { quantity: qNum });
+      const qtyUpdate = parseInventoryQuantityUpdate(form.quantity);
+      if (qtyUpdate.error) {
+        setError(qtyUpdate.error);
+        return;
+      }
+      if (!qtyUpdate.skip) {
+        const resQ = await api.post(`/inventory/items/${savedItem.id}/quantity`, { quantity: qtyUpdate.quantity });
         savedItem = resQ.data.item;
       }
 
