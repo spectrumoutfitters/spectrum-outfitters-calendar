@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
 import api from '../../utils/api';
+import {
+  buildTurn14SearchParams,
+  formatTurn14Price,
+  getTurn14PartName,
+  getTurn14PartNumber,
+  turn14PartLookupKey,
+} from '../../utils/turn14PartDisplay';
 
 const PartsLookup = ({ onPartSelect, showOrderButton = false }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,25 +34,13 @@ const PartsLookup = ({ onPartSelect, showOrderButton = false }) => {
     setAvailability(null);
 
     try {
-      const params = {};
-      
-      if (searchMode === 'query' && searchQuery.trim()) {
-        params.query = searchQuery.trim();
-      } else if (searchMode === 'partNumber' && partNumber.trim()) {
-        params.partNumber = partNumber.trim();
-      } else if (searchMode === 'vehicle') {
-        if (make.trim()) params.make = make.trim();
-        if (model.trim()) params.model = model.trim();
-        if (year.trim()) params.year = year.trim();
-      }
+      const params = buildTurn14SearchParams({ searchMode, searchQuery, partNumber, make, model, year });
 
-      if (Object.keys(params).length === 0) {
+      if (!params) {
         setError('Please enter a search query, part number, or vehicle information');
         setLoading(false);
         return;
       }
-
-      params.limit = 50; // Limit results
 
       const response = await api.get('/turn14/parts/search', { params });
       setParts(response.data.parts || []);
@@ -75,7 +70,7 @@ const PartsLookup = ({ onPartSelect, showOrderButton = false }) => {
 
     try {
       // Get detailed part information
-      const partNum = part.partNumber || part.part_number || part.sku || part.number;
+      const partNum = turn14PartLookupKey(part);
       if (partNum) {
         // Fetch part details, pricing, and availability in parallel
         const [detailsRes, pricingRes, availabilityRes] = await Promise.allSettled([
@@ -117,29 +112,9 @@ const PartsLookup = ({ onPartSelect, showOrderButton = false }) => {
     }
   };
 
-  const formatPrice = (price) => {
-    if (typeof price === 'number') {
-      return `$${price.toFixed(2)}`;
-    }
-    if (typeof price === 'string') {
-      return price;
-    }
-    if (price && price.amount) {
-      return `$${parseFloat(price.amount).toFixed(2)}`;
-    }
-    if (price && price.value) {
-      return `$${parseFloat(price.value).toFixed(2)}`;
-    }
-    return 'N/A';
-  };
-
-  const getPartNumber = (part) => {
-    return part.partNumber || part.part_number || part.sku || part.number || part.id || 'N/A';
-  };
-
-  const getPartName = (part) => {
-    return part.name || part.description || part.title || part.productName || 'Unknown Part';
-  };
+  const formatPrice = formatTurn14Price;
+  const getPartNumber = getTurn14PartNumber;
+  const getPartName = getTurn14PartName;
 
   return (
     <div className="space-y-4">
