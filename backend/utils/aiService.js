@@ -8,6 +8,17 @@ import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  isAnthropicApiKeyConfigured,
+  isAiFeatureFlagEnabled,
+  isLocalAiSyncEnabled,
+} from './aiCredentialsGate.js';
+import {
+  parseAiWorkItemsResponse,
+  parseFirstJsonArray,
+  parseFirstJsonObject,
+  parseAiCategoryResponse,
+} from './aiResponseJsonParse.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,7 +43,7 @@ function initializeAnthropic() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const model = process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
   
-  if (!apiKey || apiKey.trim() === '' || apiKey === 'your_api_key_here') {
+  if (!isAnthropicApiKeyConfigured(apiKey)) {
     console.warn('Anthropic API key not configured. Will try local AI fallback.');
     return null;
   }
@@ -70,7 +81,7 @@ async function checkLocalAI() {
  * Check if AI is enabled (Claude or local)
  */
 export async function isAIEnabled() {
-  const enabled = process.env.AI_ENABLED !== 'false';
+  const enabled = isAiFeatureFlagEnabled(process.env.AI_ENABLED);
   
   // Check Claude first
   const claudeClient = initializeAnthropic();
@@ -96,9 +107,9 @@ export async function isAIEnabled() {
  * Synchronous check (for quick checks without async)
  */
 export function isAIEnabledSync() {
-  const enabled = process.env.AI_ENABLED !== 'false';
+  const enabled = isAiFeatureFlagEnabled(process.env.AI_ENABLED);
   const claudeClient = initializeAnthropic();
-  return enabled && (claudeClient !== null || process.env.USE_LOCAL_AI === 'true');
+  return enabled && (claudeClient !== null || isLocalAiSyncEnabled(process.env.USE_LOCAL_AI));
 }
 
 /**
@@ -325,12 +336,8 @@ ${text.substring(0, 50000)}`; // Limit to 50k chars to avoid token limits
       maxTokens: 2048
     });
     
-    // Parse JSON from response
-    const jsonMatch = response.text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const items = JSON.parse(jsonMatch[0]);
-      return items.map(item => ({ title: item.title || item.name || '', order: item.order || 0 }));
-    }
+    const items = parseAiWorkItemsResponse(response.text);
+    if (items) return items;
     
     return null;
   } catch (error) {
@@ -377,12 +384,7 @@ ${text.substring(0, 20000)}`;
       maxTokens: 1024
     });
     
-    const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    
-    return null;
+    return parseFirstJsonObject(response.text);
   } catch (error) {
     console.error('AI vehicle info extraction error:', error);
     return null;
@@ -429,12 +431,7 @@ Provide realistic estimates based on typical automotive service times.`;
       maxTokens: 512
     });
     
-    const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    
-    return null;
+    return parseFirstJsonObject(response.text);
   } catch (error) {
     console.error('AI time estimation error:', error);
     return null;
@@ -491,12 +488,7 @@ Consider: skills, current workload, availability, task complexity.`;
       maxTokens: 1024
     });
     
-    const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    
-    return null;
+    return parseFirstJsonObject(response.text);
   } catch (error) {
     console.error('AI assignment suggestion error:', error);
     return null;
@@ -537,16 +529,7 @@ Choose the most appropriate category based on the work described.`;
       maxTokens: 256
     });
     
-    const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[0]);
-      // Validate category is in our list
-      if (categories.includes(result.category)) {
-        return result;
-      }
-    }
-    
-    return null;
+    return parseAiCategoryResponse(response.text, categories);
   } catch (error) {
     console.error('AI categorization error:', error);
     return null;
@@ -597,12 +580,7 @@ Return 5-10 specific, actionable check items.`;
       maxTokens: 1024
     });
     
-    const jsonMatch = response.text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    
-    return null;
+    return parseFirstJsonArray(response.text);
   } catch (error) {
     console.error('AI quality checks error:', error);
     return null;
@@ -654,12 +632,7 @@ Consider: task dependencies, employee availability, workload balance, deadlines.
       maxTokens: 2048
     });
     
-    const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    
-    return null;
+    return parseFirstJsonObject(response.text);
   } catch (error) {
     console.error('AI schedule optimization error:', error);
     return null;
@@ -707,12 +680,7 @@ Provide realistic recommendations based on the work described.`;
       maxTokens: 2048
     });
     
-    const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    
-    return null;
+    return parseFirstJsonObject(response.text);
   } catch (error) {
     console.error('AI recommendations error:', error);
     return null;
