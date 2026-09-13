@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
 import PushNotificationSettings from '../components/Notifications/PushNotificationSettings';
+import { validatePasswordChange, validateUsernameChange } from '../utils/profileAccountGate';
 
 const Profile = () => {
   const { user, isAdmin, refreshUser } = useAuth();
@@ -34,13 +35,12 @@ const Profile = () => {
     e.preventDefault();
     setMessage({ type: '', text: '' });
 
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setMessage({ type: 'error', text: 'New passwords do not match' });
-      return;
-    }
-
-    if (passwordData.newPassword.length < 6) {
-      setMessage({ type: 'error', text: 'Password must be at least 6 characters' });
+    const passwordGate = validatePasswordChange({
+      newPassword: passwordData.newPassword,
+      confirmPassword: passwordData.confirmPassword,
+    });
+    if (passwordGate.error) {
+      setMessage({ type: 'error', text: passwordGate.error });
       return;
     }
 
@@ -70,13 +70,12 @@ const Profile = () => {
     e.preventDefault();
     setUsernameMessage({ type: '', text: '' });
 
-    if (!usernameData.newUsername || usernameData.newUsername.trim().length === 0) {
-      setUsernameMessage({ type: 'error', text: 'Username cannot be empty' });
-      return;
-    }
-
-    if (usernameData.newUsername === user?.username) {
-      setUsernameMessage({ type: 'error', text: 'Username is the same as current' });
+    const usernameGate = validateUsernameChange({
+      newUsername: usernameData.newUsername,
+      currentUsername: user?.username,
+    });
+    if (usernameGate.error) {
+      setUsernameMessage({ type: 'error', text: usernameGate.error });
       return;
     }
 

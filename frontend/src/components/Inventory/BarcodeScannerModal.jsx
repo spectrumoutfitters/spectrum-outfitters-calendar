@@ -1,10 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import api from '../../utils/api';
+import {
+  isBarcodeScannerAllowed,
+  parseUseOnTaskSubmit,
+  parseBatchReceiveItems,
+} from '../../utils/barcodeScanQtyGate';
 
 const isSecure = () => {
   try {
-    return window.isSecureContext === true || window.location.hostname === 'localhost';
+    return isBarcodeScannerAllowed({
+      isSecureContext: window.isSecureContext,
+      hostname: window.location.hostname,
+    });
   } catch {
     return false;
   }
@@ -254,9 +262,9 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
   const handleUotSubmit = async () => {
     if (!uotItem) return;
     const taskId = pendingContext?.task_id || uotTaskId;
-    if (!taskId) { setUotError('Please select a task'); return; }
-    const qty = parseFloat(uotQty);
-    if (!qty || qty <= 0) { setUotError('Enter a valid quantity'); return; }
+    const qtyGate = parseUseOnTaskSubmit({ taskId, qtyRaw: uotQty });
+    if (qtyGate.error) { setUotError(qtyGate.error); return; }
+    const qty = qtyGate.quantity;
     setUotStep('submitting');
     setUotError(null);
     try {
@@ -309,9 +317,7 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected, pendingContext = nul
     setBatchError(null);
     setBatchConfirming(false);
     try {
-      const items = batchItems
-        .map((b) => ({ item_id: b.item.id, quantity: parseFloat(b.qty) || 0 }))
-        .filter((b) => b.quantity > 0);
+      const items = parseBatchReceiveItems(batchItems);
       const res = await api.post('/inventory/batch-receive', { items });
       onDetectedRef.current(res.data.results);
       setBatchSuccess(true);
