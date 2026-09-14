@@ -31,6 +31,24 @@ function normPayAmount(amt) {
   return Math.round(x * 100) / 100;
 }
 
+/** Import vs split-run week-ending: Friday stub vs Saturday/Monday deposit still same pay week. */
+export const PAY_RECORD_NEAR_DUP_WINDOW_MS = 6 * 86400000;
+
+export function isSplitPlaceholderRecord(r) {
+  return r?.splitPlaceholder === true;
+}
+
+function payRecordTimeMs(r) {
+  const d = normalizePayRecordDate(r?.pay_date);
+  return d ? Date.parse(`${d}T12:00:00Z`) : NaN;
+}
+
+function withinNearDupWindow(a, b) {
+  const ta = payRecordTimeMs(a);
+  const tb = payRecordTimeMs(b);
+  return Number.isFinite(ta) && Number.isFinite(tb) && Math.abs(ta - tb) <= PAY_RECORD_NEAR_DUP_WINDOW_MS;
+}
+
 /**
  * Calendar day for matching (avoids duplicate lines when one source uses "2026-04-14" and another "2026-04-14T16:28:00.000Z").
  */
@@ -68,7 +86,6 @@ export function dedupePayRecordsList(records) {
     return da.localeCompare(db);
   });
   const out = [];
-  const windowMs = 6 * 86400000;
   for (const r of sorted) {
     const amt = normPayAmount(r?.amount);
     const d = normalizePayRecordDate(r.pay_date);
@@ -79,7 +96,7 @@ export function dedupePayRecordsList(records) {
         if (normPayAmount(ex.amount) !== amt) continue;
         const ed = normalizePayRecordDate(ex.pay_date);
         const et = ed ? Date.parse(`${ed}T12:00:00Z`) : NaN;
-        if (Number.isFinite(et) && Math.abs(t - et) <= windowMs) {
+        if (Number.isFinite(et) && Math.abs(t - et) <= PAY_RECORD_NEAR_DUP_WINDOW_MS) {
           dup = true;
           break;
         }
@@ -92,4 +109,26 @@ export function dedupePayRecordsList(records) {
     const db = normalizePayRecordDate(b.pay_date) || String(b.pay_date || '');
     return da.localeCompare(db);
   });
+}
+
+/**
+ * Split-run rows are week placeholders (synthetic). When payroll history already covers
+ * that week, drop the placeholder even if amounts differ (hourly gross vs reimbursable
+ * slice, overtime, salary change after INSERT OR IGNORE). Real history rows with
+ * different amounts in the same week (paycheck + bonus) are kept.
+ *
+ * Extra placeholders in the same window (Calendar user + payroll_people for one person)
+ * collapse to one so `payRecords.length * expected_amount` is not doubled.
+ */
+export function mergePayRecordsPreferringReal(records) {
+  const list = Array.isArray(records) ? records : [];
+  const real = list.filter((r) => !isSplitPlaceholderRecord(r));
+  const placeholders = list.filter((r) => isSplitPlaceholderRecord(r));
+  const keptPlaceholders = [];
+  for (const s of placeholders) {
+    if (real.some((h) => withinNearDupWindow(h, s))) continue;
+    if (keptPlaceholders.some((p) => withinNearDupWindow(p, s))) continue;
+    keptPlaceholders.push(s);
+  }
+  return dedupePayRecordsList([...real, ...keptPlaceholders]);
 }
