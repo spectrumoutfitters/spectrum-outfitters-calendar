@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-
-const STATUS_CONFIG = {
-  todo:        { label: 'Received',          color: 'bg-blue-100 text-blue-800 border-blue-300',   icon: '🔵' },
-  in_progress: { label: 'In Progress',       color: 'bg-amber-100 text-amber-800 border-amber-300', icon: '🔧' },
-  review:      { label: 'Ready for Pickup',  color: 'bg-green-100 text-green-800 border-green-300', icon: '✅' },
-  completed:   { label: 'Completed',         color: 'bg-gray-100 text-gray-700 border-gray-300',    icon: '🏁' },
-};
+import {
+  CUSTOMER_STATUS_STEPS,
+  getCustomerStatusDisplay,
+  getCustomerStatusStepIndex,
+} from '../utils/customerStatusDisplay';
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
@@ -44,7 +42,7 @@ export default function CustomerStatus() {
     return () => controller.abort();
   }, [token]);
 
-  const statusInfo = STATUS_CONFIG[data?.status] || STATUS_CONFIG.todo;
+  const statusInfo = getCustomerStatusDisplay(data?.status);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -123,9 +121,8 @@ export default function CustomerStatus() {
 
             {/* Progress steps */}
             <div className="w-full flex items-center gap-1 mb-6">
-              {['todo', 'in_progress', 'review', 'completed'].map((s, i) => {
-                const statuses = ['todo', 'in_progress', 'review', 'completed'];
-                const currentIdx = statuses.indexOf(data.status);
+              {CUSTOMER_STATUS_STEPS.map((s, i) => {
+                const currentIdx = getCustomerStatusStepIndex(data.status);
                 const isDone = i <= currentIdx;
                 const isCurrent = i === currentIdx;
                 return (
