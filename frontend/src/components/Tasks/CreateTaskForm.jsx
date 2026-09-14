@@ -4,6 +4,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toTitleCase } from '../../utils/helpers';
 import axios from 'axios';
 import ShopMonkeyItemSelector from './ShopMonkeyItemSelector';
+import {
+  createTaskPdfUploadError,
+  createTaskTitleError,
+  createTaskTitlePresent,
+  createTaskImportSelectionError,
+} from '../../utils/createTaskFormGate';
 
 const CreateTaskForm = ({ onClose }) => {
   // FORCE ALERT TO VERIFY CODE IS LOADED - TEMPORARY TEST
@@ -80,15 +86,10 @@ const CreateTaskForm = ({ onClose }) => {
 
   const handlePdfUpload = async (event) => {
     const file = event.target.files[0];
+    const pdfError = createTaskPdfUploadError(file);
     if (!file) return;
-
-    if (file.type !== 'application/pdf') {
-      alert('Please upload a PDF file');
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB');
+    if (pdfError) {
+      alert(pdfError);
       return;
     }
 
@@ -227,8 +228,9 @@ const CreateTaskForm = ({ onClose }) => {
   };
 
   const handleConfirmSelectedItems = (selectedItems) => {
-    if (!selectedItems || selectedItems.length === 0) {
-      alert('Please select at least one item to import.');
+    const importError = createTaskImportSelectionError(selectedItems);
+    if (importError) {
+      alert(importError);
       return;
     }
 
@@ -262,7 +264,7 @@ const CreateTaskForm = ({ onClose }) => {
   };
 
   const handleAIEstimate = async () => {
-    if (!formData.title) {
+    if (!createTaskTitlePresent(formData.title)) {
       alert('Please enter a task title first');
       return;
     }
@@ -294,7 +296,7 @@ const CreateTaskForm = ({ onClose }) => {
   };
 
   const handleSuggestAssignment = async () => {
-    if (!formData.title) {
+    if (!createTaskTitlePresent(formData.title)) {
       alert('Please enter a task title first');
       return;
     }
@@ -334,8 +336,9 @@ const CreateTaskForm = ({ onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.title.trim()) {
-      alert('Title is required');
+    const titleError = createTaskTitleError(formData.title);
+    if (titleError) {
+      alert(titleError);
       return;
     }
 
