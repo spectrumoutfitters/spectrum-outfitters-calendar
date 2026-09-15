@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../utils/api';
+import {
+  googleCalendarIdSaveError,
+  googleCalendarOAuthPopupOrigins,
+  isGoogleCalendarOAuthPopupMessage,
+} from '../../utils/googleCalendarOAuthPopup';
 
 const GoogleCalendarSettings = () => {
   const [loading, setLoading] = useState(true);
@@ -71,20 +76,13 @@ const GoogleCalendarSettings = () => {
   }, [loadStatus]);
 
   useEffect(() => {
-    const host = typeof window.location.hostname === 'string' ? window.location.hostname : 'localhost';
-    const origins = new Set([
-      window.location.origin,
-      `http://${host}:5000`,
-      `https://${host}:5000`,
-      'http://localhost:5000',
-      'https://localhost:5000',
-      'http://127.0.0.1:5000',
-      'https://127.0.0.1:5000'
-    ]);
+    const origins = googleCalendarOAuthPopupOrigins({
+      pageOrigin: window.location.origin,
+      hostname: window.location.hostname,
+    });
 
     function onOAuthPopupMessage(event) {
-      if (!event?.data || event.data.type !== 'spectrum_google_calendar_connected') return;
-      if (!origins.has(event.origin)) return;
+      if (!isGoogleCalendarOAuthPopupMessage(event, origins)) return;
       setMessage({ type: 'success', text: 'Google authorization completed — refreshing status.' });
       loadStatus();
     }
@@ -167,11 +165,12 @@ const GoogleCalendarSettings = () => {
   };
 
   const saveCalendarId = async () => {
-    const trimmed = (calendarIdInput || '').trim();
-    if (!trimmed) {
-      setMessage({ type: 'error', text: 'Calendar ID cannot be empty.' });
+    const idError = googleCalendarIdSaveError(calendarIdInput);
+    if (idError) {
+      setMessage({ type: 'error', text: idError });
       return;
     }
+    const trimmed = (calendarIdInput || '').trim();
     setWorking(true);
     setMessage(null);
     try {

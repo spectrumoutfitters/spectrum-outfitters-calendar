@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AdminEventEditable, AdminRaffleRow } from "@/lib/types";
 import { compressImageToJpegBlob } from "@/lib/compressImageToJpeg";
+import {
+  coerceAdminEventFields,
+  ensureAdminRaffleRows,
+  normalizeAdminRaffleRow,
+  serializeAdminRafflesForSave,
+} from "@/lib/adminEventConfigCoerce";
 
 type Props = {
   slug: string;
@@ -40,20 +46,7 @@ function newClientListKey(): string {
 }
 
 function normalizeRaffle(r: Partial<AdminRaffleRow> & { id?: string; raffleId?: string }): AdminRaffleRow {
-  const id = String(r.raffleId || r.id || "").trim() || "new-prize";
-  const existingKey = typeof r._clientListKey === "string" && r._clientListKey.length > 0 ? r._clientListKey : "";
-  return {
-    id,
-    raffleId: id,
-    title: String(r.title || ""),
-    subtitle: String(r.subtitle || ""),
-    imageUrl: String(r.imageUrl || "").trim(),
-    valueLabel: String(r.valueLabel ?? "").trim().slice(0, 160),
-    sortOrder: Number.isFinite(Number(r.sortOrder)) ? Number(r.sortOrder) : 0,
-    active: r.active !== false && String(r.active).toUpperCase() !== "FALSE",
-    drawAt: String(r.drawAt ?? "").trim().slice(0, 50),
-    _clientListKey: existingKey || newClientListKey(),
-  };
+  return normalizeAdminRaffleRow(r, newClientListKey) as AdminRaffleRow;
 }
 
 /** `datetime-local` value in local time; empty if invalid or blank. */
@@ -136,27 +129,9 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
         return;
       }
       const ev = data.event;
-      setEvent({
-        name: String(ev.name ?? ""),
-        description: String(ev.description ?? ""),
-        logoUrl: String(ev.logoUrl ?? ""),
-        primaryColor: String(ev.primaryColor ?? "#c9a227"),
-        secondaryColor: String(ev.secondaryColor ?? "#1a1a1a"),
-        theme: ev.theme === "light" ? "light" : "dark",
-        active: Boolean(ev.active),
-        defaultTestMode: Boolean(ev.defaultTestMode),
-        blockTestWrite: Boolean(ev.blockTestWrite),
-        bonusRulesJson: String(ev.bonusRulesJson ?? ""),
-        paidTicketsEnabled: Boolean(ev.paidTicketsEnabled),
-        ticketPriceCents: Math.max(0, Math.floor(Number(ev.ticketPriceCents) || 0)),
-        ticketCurrency: String(ev.ticketCurrency ?? "usd").toLowerCase().slice(0, 8) || "usd",
-        paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(ev.paidTicketsMaxPerPurchase) || 100)),
-        baseTicketsPerEntry: Math.max(1, Math.floor(Number(ev.baseTicketsPerEntry) || 2)),
-        newsletterBonusEnabled: ev.newsletterBonusEnabled !== false,
-        newsletterBonusTickets: Math.max(0, Math.floor(Number(ev.newsletterBonusTickets) || 0)),
-      });
+      setEvent(coerceAdminEventFields(ev) as AdminEventEditable);
       const rows = Array.isArray(data.raffles) ? data.raffles.map((r) => normalizeRaffle(r)) : [];
-      setRaffles(rows.length ? rows : [normalizeRaffle({ raffleId: "grand-prize", title: "Grand prize", sortOrder: 1 })]);
+      setRaffles(ensureAdminRaffleRows(rows, newClientListKey) as AdminRaffleRow[]);
       setExpandedIdx(0);
     } catch {
       setErr("Network error loading config");
@@ -182,16 +157,7 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
         },
         body: JSON.stringify({
           event,
-          raffles: raffles.map((r, i) => ({
-            raffleId: r.raffleId.trim() || r.id.trim(),
-            title: r.title.trim(),
-            subtitle: r.subtitle,
-            imageUrl: r.imageUrl.trim(),
-            valueLabel: r.valueLabel.trim().slice(0, 160),
-            sortOrder: r.sortOrder || i + 1,
-            active: r.active,
-            drawAt: r.drawAt.trim().slice(0, 50),
-          })),
+          raffles: serializeAdminRafflesForSave(raffles),
         }),
       });
       const data = (await res.json()) as {
@@ -205,26 +171,7 @@ export function AdminEventConfigPanel({ slug, adminKey, onSaved }: Props) {
         return;
       }
       if (data.event && data.raffles) {
-        const ev = data.event;
-        setEvent({
-          name: String(ev.name ?? ""),
-          description: String(ev.description ?? ""),
-          logoUrl: String(ev.logoUrl ?? ""),
-          primaryColor: String(ev.primaryColor ?? "#c9a227"),
-          secondaryColor: String(ev.secondaryColor ?? "#1a1a1a"),
-          theme: ev.theme === "light" ? "light" : "dark",
-          active: Boolean(ev.active),
-          defaultTestMode: Boolean(ev.defaultTestMode),
-          blockTestWrite: Boolean(ev.blockTestWrite),
-          bonusRulesJson: String(ev.bonusRulesJson ?? ""),
-          paidTicketsEnabled: Boolean(ev.paidTicketsEnabled),
-          ticketPriceCents: Math.max(0, Math.floor(Number(ev.ticketPriceCents) || 0)),
-          ticketCurrency: String(ev.ticketCurrency ?? "usd").toLowerCase().slice(0, 8) || "usd",
-          paidTicketsMaxPerPurchase: Math.max(1, Math.floor(Number(ev.paidTicketsMaxPerPurchase) || 100)),
-          baseTicketsPerEntry: Math.max(1, Math.floor(Number(ev.baseTicketsPerEntry) || 2)),
-          newsletterBonusEnabled: ev.newsletterBonusEnabled !== false,
-          newsletterBonusTickets: Math.max(0, Math.floor(Number(ev.newsletterBonusTickets) || 0)),
-        });
+        setEvent(coerceAdminEventFields(data.event) as AdminEventEditable);
         setRaffles(data.raffles.map((r) => normalizeRaffle(r)));
       }
       setMsg("Saved to Google Sheet. Public entry page may take up to a minute to refresh.");

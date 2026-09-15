@@ -5,6 +5,11 @@ import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import { BASE_PATH } from '../utils/basePath';
+import {
+  buildAffiliateAdminUrl,
+  coerceAssignedUserId,
+  isAffiliateAssignableEmployee,
+} from '../utils/affiliateAdminLink';
 
 const toOriginSafe = () => {
   try {
@@ -14,11 +19,8 @@ const toOriginSafe = () => {
   }
 };
 
-const fullAffiliateUrl = (token) => {
-  const origin = toOriginSafe();
-  const base = BASE_PATH || '';
-  return `${origin}${base}/affiliates/${token}`;
-};
+const fullAffiliateUrl = (token) =>
+  buildAffiliateAdminUrl({ origin: toOriginSafe(), basePath: BASE_PATH || '', token });
 
 export default function AffiliatesAdmin() {
   const [employees, setEmployees] = useState([]);
@@ -46,7 +48,7 @@ export default function AffiliatesAdmin() {
       ]);
 
       const users = usersRes.data?.users || [];
-      const emps = users.filter((u) => u.role === 'employee' && u.is_active !== 0);
+      const emps = users.filter(isAffiliateAssignableEmployee);
       setEmployees(emps);
 
       setLinks(linksRes.data?.links || []);
@@ -68,7 +70,7 @@ export default function AffiliatesAdmin() {
     try {
       const payload = {
         label: label.trim() || null,
-        assigned_user_id: assignedUserId ? Number(assignedUserId) : null,
+        assigned_user_id: coerceAssignedUserId(assignedUserId),
       };
       const res = await api.post('/affiliates/links', payload);
       const fullUrl = res.data?.full_url || fullAffiliateUrl(res.data?.link?.token);
