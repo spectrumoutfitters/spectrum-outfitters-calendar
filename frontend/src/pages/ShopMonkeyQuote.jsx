@@ -1,27 +1,22 @@
 import React, { useEffect } from 'react';
 import Logo from '../components/Logo';
+import {
+  SHOPMONKEY_QUOTE_ORIGIN,
+  shopMonkeyQuoteEmbedSrc,
+  shouldAcceptShopMonkeyQuoteMessage,
+} from '../utils/shopMonkeyQuoteMessage';
 
-const SM_ORIGIN = 'https://app.shopmonkey.cloud';
 /** Override: VITE_SHOPMONKEY_QUOTE_URL — ShopMonkey public work-request / quote embed URL */
-const DEFAULT_EMBED_SRC =
-  'https://app.shopmonkey.cloud/public/quote-request/b6ddd723-82be-48b3-9166-59ac434cda7c';
-
-const embedSrc =
-  typeof import.meta.env.VITE_SHOPMONKEY_QUOTE_URL === 'string' &&
-  import.meta.env.VITE_SHOPMONKEY_QUOTE_URL.trim()
-    ? import.meta.env.VITE_SHOPMONKEY_QUOTE_URL.trim()
-    : DEFAULT_EMBED_SRC;
+const embedSrc = shopMonkeyQuoteEmbedSrc(import.meta.env.VITE_SHOPMONKEY_QUOTE_URL);
 
 const GOLD = '#D4A017';
 
 export default function ShopMonkeyQuote() {
   useEffect(() => {
     const onMessage = (e) => {
-      if (e.origin !== SM_ORIGIN) return;
-      if (e.data && e.data.source === 'sm_wrf' && e.data.dataLayer) {
-        window.dataLayer = window.dataLayer || [];
-        window.dataLayer.push(e.data.dataLayer);
-      }
+      if (!shouldAcceptShopMonkeyQuoteMessage(e, SHOPMONKEY_QUOTE_ORIGIN)) return;
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push(e.data.dataLayer);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
