@@ -5,24 +5,17 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import dotenv from 'dotenv';
+import { resolveDatabasePath } from '../utils/databasePathResolve.js';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Resolve database path - handle both absolute and relative paths
-let dbPath = process.env.DATABASE_PATH;
-if (!dbPath) {
-  dbPath = path.join(__dirname, 'shop_tasks.db');
-} else if (!path.isAbsolute(dbPath)) {
-  // If relative path, resolve from backend directory (parent of database directory)
-  // This handles DATABASE_PATH=./database/shop_tasks.db correctly
-  const backendDir = path.resolve(__dirname, '..');
-  dbPath = path.resolve(backendDir, dbPath);
-  // Normalize the path to handle any double slashes or weird paths
-  dbPath = path.normalize(dbPath);
-}
+const dbPath = resolveDatabasePath(process.env.DATABASE_PATH, {
+  databaseDir: __dirname,
+  backendDir: path.resolve(__dirname, '..'),
+});
 
 // Ensure database directory exists
 const dbDir = path.dirname(dbPath);

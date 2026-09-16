@@ -17,6 +17,13 @@ import {
 import { BonusToggle } from "./BonusToggle";
 import { BuyTicketsCard } from "./BuyTicketsCard";
 import { PoolTicketField } from "./PoolTicketField";
+import {
+  formatCheckoutError,
+  isNewsletterBonusShown,
+  isPaidTicketsUiEnabled,
+  newsletterOptInForSubmit,
+  validateEntryPoolSplit,
+} from "@/lib/eventEntryClientGate";
 
 type Props = {
   event: EventConfig;
@@ -34,26 +41,6 @@ function formatMoney(cents: number, currency: string): string {
   }
 }
 
-function formatCheckoutError(code: string | undefined): string {
-  switch (code) {
-    case "paid_tickets_disabled":
-      return "Paid tickets aren't enabled for this event yet.";
-    case "ticket_price_not_set":
-      return "Ticket pricing isn't configured yet.";
-    case "must_buy_at_least_one":
-      return "Pick at least one ticket before checking out.";
-    case "entry_locked":
-      return "This entry is locked because a draw is too close.";
-    case "stripe_not_configured":
-      return "Online payments are temporarily unavailable.";
-    case "missing_fields":
-      return "Something is missing from the request — refresh and try again.";
-    default:
-      if (code && code.startsWith("max_")) return code.replace(/_/g, " ");
-      return "We couldn't open Stripe right now.";
-  }
-}
-
 export function EventEntryClient({ event }: Props) {
   const searchParams = useSearchParams();
   const urlTest = searchParams.get("test") === "1";
@@ -63,7 +50,6 @@ export function EventEntryClient({ event }: Props) {
   const [email, setEmail] = useState("");
   const bonusRules = useMemo(() => resolveBonusRules(event), [event]);
   const baseTickets = Math.max(1, Math.floor(Number(event.baseTicketsPerEntry) || 2));
-  const newsletterEnabled = event.newsletterBonusEnabled !== false;
   const newsletterBonus = Math.max(0, Math.floor(Number(event.newsletterBonusTickets) || 0));
   const [bonusById, setBonusById] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(bonusRules.map((r) => [r.id, false])),
@@ -98,12 +84,19 @@ export function EventEntryClient({ event }: Props) {
   const priceCents = Math.max(0, Math.floor(Number(event.ticketPriceCents) || 0));
   const currency = String(event.ticketCurrency || "usd").toLowerCase();
   const maxPerPurchase = Math.max(1, Math.floor(Number(event.paidTicketsMaxPerPurchase) || 100));
-  const paidEnabled = Boolean(event.paidTicketsEnabled) && priceCents > 0 && !testMode;
+  const paidEnabled = isPaidTicketsUiEnabled({
+    paidTicketsEnabled: event.paidTicketsEnabled,
+    ticketPriceCents: event.ticketPriceCents,
+    testMode,
+  });
 
   const accent = event.primaryColor || "#c9a227";
   const secondary = event.secondaryColor || "#1c1917";
 
-  const newsletterShowsBonus = newsletterEnabled && newsletterBonus > 0;
+  const newsletterShowsBonus = isNewsletterBonusShown(
+    event.newsletterBonusEnabled,
+    event.newsletterBonusTickets,
+  );
 
   const previewTickets = useMemo(() => {
     const baseOnly = computeTicketsFromBonuses(bonusById, bonusRules, baseTickets);
@@ -167,22 +160,15 @@ export function EventEntryClient({ event }: Props) {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    const poolSum = sumPoolTickets(orderedIds, poolTickets);
-    if (countPositivePools(orderedIds, poolTickets) < 1) {
+    const poolErr = validateEntryPoolSplit({
+      positivePools: countPositivePools(orderedIds, poolTickets),
+      poolSum: sumPoolTickets(orderedIds, poolTickets),
+      previewTickets,
+      termsAccepted: terms,
+    });
+    if (poolErr) {
       setStatus("error");
-      setMessage("Give at least one ticket to a prize pool (use the number next to each pool).");
-      return;
-    }
-    if (poolSum !== previewTickets) {
-      setStatus("error");
-      setMessage(
-        `Tickets per pool must add up to ${previewTickets} (you have ${poolSum} assigned). Adjust each pool so the counts match your total.`,
-      );
-      return;
-    }
-    if (!terms) {
-      setStatus("error");
-      setMessage("Please accept the official rules and terms.");
+      setMessage(poolErr);
       return;
     }
     const proofErr = validateBonusProof(bonusProof, bonusRules, bonusById);
@@ -202,7 +188,7 @@ export function EventEntryClient({ event }: Props) {
         bonusInstagram: Boolean(bonusById.instagram),
         bonusReview: Boolean(bonusById.review),
         bonusReferral: Boolean(bonusById.referral),
-        newsletterOptIn: newsletterShowsBonus ? newsletterOptIn : false,
+        newsletterOptIn: newsletterOptInForSubmit(newsletterShowsBonus, newsletterOptIn),
         company,
         termsAccepted: terms,
         testMode,
