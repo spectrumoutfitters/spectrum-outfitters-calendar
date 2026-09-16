@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { coerceWorklistActualMinutes } from '../../utils/worklistActualMinutes';
 
 const WorkListItemDetail = ({ item, onClose, onUpdate }) => {
   const [loading, setLoading] = useState(true);
@@ -47,7 +48,7 @@ const WorkListItemDetail = ({ item, onClose, onUpdate }) => {
     setCompleting(true);
     try {
       await api.post(`/admin/worklist/items/${item.id}/complete`, {
-        actual_minutes: actualMinutes ? parseInt(actualMinutes) : null
+        actual_minutes: coerceWorklistActualMinutes(actualMinutes)
       });
       if (onUpdate) onUpdate();
       onClose();
