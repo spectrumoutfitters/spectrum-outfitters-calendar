@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../../utils/api';
+import { canSendBroadcast, buildBroadcastPayload } from '../../utils/adminBroadcastGate';
 
 const AdminBroadcastNotification = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -9,10 +10,10 @@ const AdminBroadcastNotification = () => {
   const [status, setStatus] = useState('idle'); // idle | sending | sent | error
 
   const handleSend = async () => {
-    if (!title.trim() || !body.trim()) return;
+    if (!canSendBroadcast(title, body)) return;
     try {
       setStatus('sending');
-      await api.post('/push/broadcast', { title: title.trim(), body: body.trim(), target });
+      await api.post('/push/broadcast', buildBroadcastPayload(title, body, target));
       setStatus('sent');
       setTimeout(() => {
         setStatus('idle');
@@ -114,7 +115,7 @@ const AdminBroadcastNotification = () => {
                 </button>
                 <button
                   onClick={handleSend}
-                  disabled={!title.trim() || !body.trim() || status === 'sending'}
+                  disabled={!canSendBroadcast(title, body) || status === 'sending'}
                   className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {status === 'sending' ? 'Sending...' : 'Send Broadcast'}
