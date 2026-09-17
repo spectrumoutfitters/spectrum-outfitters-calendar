@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import api from '../../utils/api';
 import { useSocket } from '../../contexts/SocketContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { partsArrivedError, buildPartsArrivedPayload } from '../../utils/partsArrivedNotifyGate';
 
 const PartsArrivedModal = ({ onClose }) => {
   // VERSION 2.0 - Text input only, no task loading
@@ -18,13 +19,9 @@ const PartsArrivedModal = ({ onClose }) => {
     e.preventDefault();
     setError('');
 
-    if (!formData.vehicle.trim()) {
-      setError('Please enter the vehicle/car information');
-      return;
-    }
-
-    if (!formData.distributor.trim()) {
-      setError('Please enter the parts distributor');
+    const fieldError = partsArrivedError(formData.vehicle, formData.distributor);
+    if (fieldError) {
+      setError(fieldError);
       return;
     }
 
@@ -32,12 +29,7 @@ const PartsArrivedModal = ({ onClose }) => {
       setSubmitting(true);
       
       // Send quick notification to admins with vehicle information
-      await api.post('/notifications/quick', {
-        type: 'parts_arrived',
-        taskTitle: formData.vehicle.trim(), // Using vehicle as taskTitle for backward compatibility
-        vehicle: formData.vehicle.trim(),
-        distributor: formData.distributor.trim(),
-      });
+      await api.post('/notifications/quick', buildPartsArrivedPayload(formData.vehicle, formData.distributor));
 
       // Show success message
       alert(`✅ Notification sent! Admins have been notified that parts arrived for ${formData.vehicle.trim()} from ${formData.distributor.trim()}.`);

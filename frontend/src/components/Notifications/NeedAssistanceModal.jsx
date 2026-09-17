@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  canSendNeedAssistance,
+  needAssistanceError,
+  buildNeedAssistancePayload,
+  formatNeedAssistanceUrgency,
+} from '../../utils/needAssistanceNotifyGate';
 
 const NeedAssistanceModal = ({ onClose }) => {
   const { user } = useAuth();
@@ -12,8 +18,9 @@ const NeedAssistanceModal = ({ onClose }) => {
     e.preventDefault();
     setError('');
 
-    if (!urgency) {
-      setError('Please select an urgency level');
+    const fieldError = needAssistanceError(urgency);
+    if (fieldError) {
+      setError(fieldError);
       return;
     }
 
@@ -21,13 +28,10 @@ const NeedAssistanceModal = ({ onClose }) => {
       setSubmitting(true);
       
       // Send quick notification to admins
-      await api.post('/notifications/quick', {
-        type: 'need_assistance',
-        urgency: urgency,
-      });
+      await api.post('/notifications/quick', buildNeedAssistancePayload(urgency));
 
       // Show success message
-      const urgencyText = urgency === 'immediate' ? 'Immediate' : 'At First Convenience';
+      const urgencyText = formatNeedAssistanceUrgency(urgency);
       alert(`✅ Notification sent! Admins have been notified that you need ${urgencyText.toLowerCase()} assistance.`);
       
       // Close modal
@@ -129,7 +133,7 @@ const NeedAssistanceModal = ({ onClose }) => {
             <button
               type="submit"
               className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={submitting || !urgency}
+              disabled={submitting || !canSendNeedAssistance(urgency)}
             >
               {submitting ? 'Sending...' : 'Send Notification'}
             </button>

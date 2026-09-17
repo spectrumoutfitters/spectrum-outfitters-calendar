@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminEventConfigPanel } from "@/components/raffle/AdminEventConfigPanel";
 import { AdminInsightsPanel } from "@/components/raffle/AdminInsightsPanel";
+import { formatAdminApiError, rafflePoolOdds } from "@/lib/raffleAdminDashboardMath";
 import type { AdminStats } from "@/lib/types";
 
 type WinnerInfo = {
@@ -19,47 +20,6 @@ type Props = {
 };
 
 const STORAGE_KEY = "raffle_admin_key";
-
-function formatAdminApiError(code: string | undefined): string {
-  if (code === "unauthorized") {
-    return (
-      "Admin key was rejected. Paste the exact value from your Google Sheet (Events row for this slug, column adminKey) — " +
-      "no extra spaces. If you just created a new Apps Script project, open it from Extensions → Apps Script on this spreadsheet so it stays bound to the same file."
-    );
-  }
-  if (code === "apps_script_timeout") {
-    return (
-      "Google Apps Script took too long to respond (cold start or heavy sheet). Wait 30 seconds and reload. " +
-      "If this keeps happening, open the script from your spreadsheet and run a quick test, then try again."
-    );
-  }
-  if (code === "server_misconfigured") {
-    return (
-      "The raffle server is missing APPS_SCRIPT_URL. That must be your Apps Script web app URL (starts with https://script.google.com/macros/s/ and ends with /exec)—not your Google Sheet link (docs.google.com/spreadsheets/…). " +
-      "From the sheet: Extensions → Apps Script → Deploy → Manage deployments → copy the Web app URL. " +
-      "On the droplet: put APPS_SCRIPT_URL=…/exec in /etc/spectrum-raffle.env, copy that file to /opt/spectrum-raffle/raffle-platform/.env.local, then pm2 restart spectrum-raffle. " +
-      "Or set GitHub secret RAFFLE_APPS_SCRIPT_URL and push main."
-    );
-  }
-  return code || "Request failed";
-}
-
-/** One ticket = one chance in the drum; draw picks uniformly among tickets (see drawWinner in Apps Script). */
-function rafflePoolOdds(tickets: number, people: number): { oneIn: string; pctLabel: string; avgTickets: string } {
-  if (tickets <= 0) {
-    return { oneIn: "—", pctLabel: "No tickets yet", avgTickets: people > 0 ? "0" : "—" };
-  }
-  const pct = 100 / tickets;
-  const pctLabel =
-    pct >= 10 ? `~${pct.toFixed(0)}%` : pct >= 1 ? `~${pct.toFixed(1)}%` : `~${pct.toFixed(2)}%`;
-  const avgTickets =
-    people > 0 ? (tickets / people).toFixed(people > 5 ? 1 : 2) : tickets > 0 ? String(tickets) : "—";
-  return {
-    oneIn: `1 in ${tickets.toLocaleString()}`,
-    pctLabel: `${pctLabel} per ticket`,
-    avgTickets,
-  };
-}
 
 export function AdminDashboardClient({ slug }: Props) {
   const [adminKey, setAdminKey] = useState("");
