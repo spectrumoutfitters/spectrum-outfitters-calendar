@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import Logo from '../components/Logo';
 import ThemeToggle from '../components/ui/ThemeToggle';
+import { mapLoginConnectionError } from '../utils/loginConnectionError';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -57,11 +58,7 @@ const Login = () => {
     if (result.success) {
       navigate('/dashboard');
     } else {
-      if (result.error?.includes('Cannot connect') || result.error?.includes('ERR_CONNECTION_REFUSED') || result.error?.includes('Network Error')) {
-        setError('Cannot connect to server. Please ensure the backend is running on port 5000.');
-      } else {
-        setError(result.error);
-      }
+      setError(mapLoginConnectionError(result.error));
     }
 
     setLoading(false);
