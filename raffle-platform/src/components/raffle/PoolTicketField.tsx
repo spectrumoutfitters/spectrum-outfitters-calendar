@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  clampPoolTicketCount,
+  digitsOnlyTicketText,
+  parsePoolTicketText,
+} from "@/lib/poolTicketClamp";
 
 type Props = {
   inputId: string;
@@ -28,8 +33,7 @@ export function PoolTicketField({ inputId, label, value, max, disabled, onCommit
   }, [value, focused]);
 
   function commit(n: number) {
-    const clamped = Math.max(0, Math.min(max, Math.floor(Number.isFinite(n) ? n : 0)));
-    onCommit(clamped);
+    onCommit(clampPoolTicketCount(n, max));
   }
 
   const display = focused ? text : String(value);
@@ -73,13 +77,11 @@ export function PoolTicketField({ inputId, label, value, max, disabled, onCommit
             setText(value === 0 ? "" : String(value));
           }}
           onChange={(e) => {
-            const digits = e.target.value.replace(/\D/g, "");
-            setText(digits);
+            setText(digitsOnlyTicketText(e.target.value));
           }}
           onBlur={() => {
             setFocused(false);
-            const n = text === "" ? 0 : parseInt(text, 10);
-            commit(Number.isFinite(n) ? n : 0);
+            commit(parsePoolTicketText(text));
           }}
           className={inputClassName}
         />

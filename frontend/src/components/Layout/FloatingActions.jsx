@@ -4,6 +4,11 @@ import ChatBubble from '../Chat/ChatBubble';
 import QuickNotificationButton from '../Notifications/QuickNotificationButton';
 import InventoryScanFab from '../Inventory/InventoryScanFab';
 import QuickClockButton from '../TimeEntry/QuickClockButton';
+import {
+  isInventoryPath,
+  isPublicCustomerPath,
+  shouldShowClockFab,
+} from '../../utils/employeeFloatingActionsGate';
 
 /**
  * Single fixed container that stacks all floating action buttons (chat, notifications, inventory scan)
@@ -11,22 +16,11 @@ import QuickClockButton from '../TimeEntry/QuickClockButton';
  */
 export default function FloatingActions() {
   const location = useLocation();
-  const tab = new URLSearchParams(location.search).get('tab');
-  const onAdminInventory = location.pathname.toLowerCase().includes('admin') && tab === 'inventory';
-  const onInventory = location.pathname.toLowerCase().includes('inventory') || onAdminInventory;
-  // Show quick clock FAB on all pages except login, dispatch, and customer status
-  const path = location.pathname.toLowerCase();
+  const onInventory = isInventoryPath(location.pathname, location.search);
   // Public customer-facing pages shouldn't show employee floating actions / clock.
-  if (
-    path === '/book' ||
-    path === '/new-client' ||
-    path === '/new-customer' ||
-    path === '/quote' ||
-    path.startsWith('/pay/')
-  )
-    return null;
+  if (isPublicCustomerPath(location.pathname)) return null;
 
-  const showClockFab = path !== '/login' && !path.startsWith('/status') && path !== '/dispatch';
+  const showClockFab = shouldShowClockFab(location.pathname);
 
   return (
     <div
