@@ -58,6 +58,8 @@ import { authenticateToken, requireAdmin } from './middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { pullChangesFromGoogle } from './utils/googleCalendarService.js';
 import { getSocketClientIP, startSession, endSession, heartbeatSession } from './utils/security.js';
+import { isAllowedCorsOrigin, parseAllowedOriginsList, productionOriginRegexForEnv } from './utils/corsOriginAllow.js';
+import { isValidAffiliateLandingToken } from './utils/affiliateLandingToken.js';
 import shortLinksRoutes from './routes/shortLinks.js';
 import publicInvoicesRoutes from './routes/publicInvoices.js';
 import { bookingPublicRouter, bookingAdminRouter } from './routes/customerBooking.js';
@@ -111,28 +113,18 @@ const allowedOrigins = [
   `http://${localIP}:${frontendPort}`,
   `https://${localIP}:${frontendPort}`,
   ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
-  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean) : [])
+  ...parseAllowedOriginsList(process.env.ALLOWED_ORIGINS)
 ];
 // In production, allow spectrumoutfitters.com and any subdomain (e.g. login.spectrumoutfitters.com)
-const productionOriginRegex = process.env.NODE_ENV === 'production'
-  ? /^https?:\/\/([a-z0-9-]+\.)*spectrumoutfitters\.com(:\d+)?$/i
-  : null;
+const productionOriginRegex = productionOriginRegexForEnv(process.env.NODE_ENV);
 
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.some(allowed => origin.startsWith(allowed.replace(/:\d+$/, '')))) {
-        callback(null, true);
-      } else if (productionOriginRegex && productionOriginRegex.test(origin)) {
+      if (isAllowedCorsOrigin(origin, { allowedOrigins, productionOriginRegex })) {
         callback(null, true);
       } else {
-        const isLocalNetwork = origin.match(/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|localhost|127\.0\.0\.1)/);
-        if (isLocalNetwork) {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
+        callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
@@ -598,23 +590,10 @@ app.set('connectedUsers', connectedUsers);
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Check if origin is in allowed list
-    if (allowedOrigins.some(allowed => origin.startsWith(allowed.replace(/:\d+$/, '')))) {
+    if (isAllowedCorsOrigin(origin, { allowedOrigins, productionOriginRegex })) {
       callback(null, true);
     } else {
-      // In production, allow spectrumoutfitters.com and subdomains (e.g. login.spectrumoutfitters.com)
-      if (productionOriginRegex && productionOriginRegex.test(origin)) {
-        return callback(null, true);
-      }
-      // For development, allow any local network origin (HTTP or HTTPS for phone camera)
-      const isLocalNetwork = origin.match(/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|localhost|127\.0\.0\.1)/);
-      if (isLocalNetwork) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true
@@ -646,7 +625,7 @@ app.get('/api/health', (req, res) => {
 // This avoids relying on spectrumoutfitters.com React routing /base44 configuration.
 app.get(['/affiliates/:token', '/base44/affiliates/:token'], (req, res) => {
   const token = String(req.params?.token || '').trim();
-  if (!token || !/^[a-fA-F0-9]{8,}$/.test(token)) {
+  if (!isValidAffiliateLandingToken(token)) {
     res.status(400).send('Invalid affiliate token');
     return;
   }

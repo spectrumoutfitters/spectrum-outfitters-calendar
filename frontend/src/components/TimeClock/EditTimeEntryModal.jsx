@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { formatDateTime } from '../../utils/helpers';
 import { useAuth } from '../../contexts/AuthContext';
+import { isLunchReturnTimeMatch, pickEarliestLunchReturn } from '../../utils/lunchReturnSameDay';
 
 // Central Time Zone (Houston, Texas)
 const CENTRAL_TIMEZONE = 'America/Chicago';
@@ -272,15 +273,13 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
                 }
               });
               
-              // Find entry with matching clock_in time (within a few seconds tolerance)
-              const originalReturnTime = new Date(entry.lunchReturnClockIn).getTime();
-              const matchingEntry = searchResponse.data.entries.find(e => {
-                if (!e.clock_in || e.id === entry.id) return false;
-                if (e.notes && e.notes.toLowerCase().includes('lunch break')) return false;
-                const entryTime = new Date(e.clock_in).getTime();
-                // Match within 5 minutes tolerance
-                return Math.abs(entryTime - originalReturnTime) < 5 * 60 * 1000;
-              });
+              // Find entry with matching clock_in time (within 5 minutes)
+              const matchingEntry = searchResponse.data.entries.find(e =>
+                isLunchReturnTimeMatch(e, {
+                  lunchEntryId: entry.id,
+                  originalReturnIso: entry.lunchReturnClockIn,
+                })
+              );
               
               if (matchingEntry) {
                 console.log('Found return entry by clock_in time:', matchingEntry);
@@ -319,9 +318,6 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
                 }
               });
               
-              const lunchOutTime = new Date(lunchUpdateData.clock_out);
-              const lunchOutDateStr = lunchOutTime.toISOString().split('T')[0];
-              
               console.log('Searching for return entry from:', lunchDateStr, 'to', nextDayStr);
               console.log('Lunch break clock_out:', lunchUpdateData.clock_out);
               console.log('Lunch break entry ID:', entry.id);
@@ -334,41 +330,11 @@ const EditTimeEntryModal = ({ entry, onClose, onUpdate }) => {
               // CRITICAL: Only look for return entries on the SAME DAY as the lunch break
               // A lunch break return should NEVER be on a different day
               // This prevents accidentally matching a new day's clock-in as a lunch return
-              const candidateEntries = entriesResponse.data.entries
-                .filter(e => {
-                  // Exclude the lunch break entry itself
-                  if (e.id === entry.id) {
-                    console.log(`[Same-day filter] Excluding lunch break entry: ${e.id}`);
-                    return false;
-                  }
-                  // Exclude other lunch break entries
-                  if (e.notes && e.notes.toLowerCase().includes('lunch break')) {
-                    console.log(`[Same-day filter] Excluding other lunch break entry: ${e.id}`);
-                    return false;
-                  }
-                  // Must have a clock_in time
-                  if (!e.clock_in) {
-                    console.log(`[Same-day filter] Excluding entry without clock_in: ${e.id}`);
-                    return false;
-                  }
-                  
-                  const entryInTime = new Date(e.clock_in);
-                  const entryDateStr = entryInTime.toISOString().split('T')[0];
-                  const isAfter = entryInTime > lunchOutTime;
-                  
-                  // CRITICAL: Must be on the SAME DAY and AFTER the lunch break
-                  const isValid = entryDateStr === lunchOutDateStr && isAfter;
-                  
-                  console.log(`[Same-day filter] Entry ${e.id}: clock_in=${e.clock_in}, date=${entryDateStr}, lunchOutDate=${lunchOutDateStr}, isAfter=${isAfter}, isValid=${isValid}`);
-                  return isValid;
-                })
-                .sort((a, b) => new Date(a.clock_in) - new Date(b.clock_in));
-              
-              console.log(`[Same-day filter] Found ${candidateEntries.length} candidate entries on same day`);
-              
-              console.log('Candidate entries after lunch:', candidateEntries);
-              
-              const nextEntry = candidateEntries[0]; // Get the earliest one after lunch
+              const nextEntry = pickEarliestLunchReturn(entriesResponse.data.entries, {
+                lunchEntryId: entry.id,
+                lunchOutIso: lunchUpdateData.clock_out,
+              });
+              console.log(`[Same-day filter] Found return candidate:`, nextEntry);
               
               if (nextEntry) {
                 console.log('Found return entry:', nextEntry);

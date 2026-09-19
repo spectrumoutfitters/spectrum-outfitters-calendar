@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import UpdatesModal from './UpdatesModal';
+import { formatUnreadBadgeCount, shouldAutoShowUpdates } from '../../utils/updatesBadgeGate';
 
 const UpdatesBadge = () => {
   const [unreadCount, setUnreadCount] = useState(0);
@@ -18,16 +19,12 @@ const UpdatesBadge = () => {
       const response = await api.get('/updates/unread');
       setUnreadCount(response.data.unreadCount || 0);
       
-      // Auto-show modal if there are unread updates and modal isn't already showing
-      if (response.data.unreadCount > 0 && !showModal) {
-        // Only auto-show once per session (check localStorage)
-        const lastShown = localStorage.getItem('updates_last_shown');
-        const now = Date.now();
-        // Show if never shown before, or if it's been more than 1 hour since last show
-        if (!lastShown || (now - parseInt(lastShown)) > 60 * 60 * 1000) {
-          setShowModal(true);
-          localStorage.setItem('updates_last_shown', now.toString());
-        }
+      if (!showModal && shouldAutoShowUpdates({
+        unreadCount: response.data.unreadCount,
+        lastShownAt: localStorage.getItem('updates_last_shown'),
+      })) {
+        setShowModal(true);
+        localStorage.setItem('updates_last_shown', Date.now().toString());
       }
     } catch (error) {
       console.error('Error checking unread updates:', error);
@@ -56,7 +53,7 @@ const UpdatesBadge = () => {
           </svg>
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-              {unreadCount > 9 ? '9+' : unreadCount}
+              {formatUnreadBadgeCount(unreadCount)}
             </span>
           )}
         </button>
