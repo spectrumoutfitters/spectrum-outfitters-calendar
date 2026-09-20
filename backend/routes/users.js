@@ -2,7 +2,14 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
-import { sanitizeInput, validateEmail, toTitleCase } from '../utils/helpers.js';
+import { sanitizeInput, toTitleCase } from '../utils/helpers.js';
+import {
+  changeOwnPasswordError,
+  createUserValidationError,
+  ownUsernameRequiredError,
+  resetPasswordError,
+  updateUserEmailValidationError,
+} from '../utils/userCredentialGate.js';
 
 const router = express.Router();
 
@@ -77,16 +84,9 @@ router.post('/', requireAdmin, async (req, res) => {
   try {
     const { username, password, email, full_name, role, hourly_rate, weekly_salary } = req.body;
 
-    if (!username || !password || !full_name) {
-      return res.status(400).json({ error: 'Username, password, and full name required' });
-    }
-
-    if (email && !validateEmail(email)) {
-      return res.status(400).json({ error: 'Invalid email format' });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const createError = createUserValidationError({ username, password, full_name, email });
+    if (createError) {
+      return res.status(400).json({ error: createError });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -142,8 +142,9 @@ router.put('/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { username, email, full_name, role, hourly_rate, weekly_salary, is_active, split_reimbursable_amount, split_reimbursable_notes, split_reimbursable_period } = req.body;
 
-    if (email && !validateEmail(email)) {
-      return res.status(400).json({ error: 'Invalid email format' });
+    const emailError = updateUserEmailValidationError(email);
+    if (emailError) {
+      return res.status(400).json({ error: emailError });
     }
 
     // Check if username is being changed and if it's already taken
@@ -231,8 +232,9 @@ router.put('/me/username', async (req, res) => {
     const { newUsername } = req.body;
     const userId = req.user.id;
 
-    if (!newUsername || newUsername.trim().length === 0) {
-      return res.status(400).json({ error: 'Username is required' });
+    const usernameError = ownUsernameRequiredError(newUsername);
+    if (usernameError) {
+      return res.status(400).json({ error: usernameError });
     }
 
     // Check if username is already taken
@@ -265,12 +267,9 @@ router.put('/me/password', async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     const userId = req.user.id;
 
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: 'Current password and new password required' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    const passwordError = changeOwnPasswordError({ currentPassword, newPassword });
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
     }
 
     // Get current user
@@ -319,8 +318,9 @@ router.post('/:id/reset-password', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { newPassword } = req.body;
 
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const resetError = resetPasswordError(newPassword);
+    if (resetError) {
+      return res.status(400).json({ error: resetError });
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);

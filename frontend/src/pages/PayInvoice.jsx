@@ -4,6 +4,7 @@ import api from '../utils/api';
 import Logo from '../components/Logo';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
+import { isInvoiceAlreadyPaid, shouldStartPaymentIntent } from '../utils/publicInvoicePayGate';
 
 const fmtCents = (cents) => {
   const n = Number(cents);
@@ -113,8 +114,7 @@ const PayInvoice = () => {
 
   useEffect(() => {
     setClientSecret(null);
-    if (amountDueCents == null) return;
-    if (Number(amountDueCents) <= 0) return;
+    if (!shouldStartPaymentIntent(amountDueCents)) return;
     createIntent();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amountDueCents, token]);
@@ -156,7 +156,7 @@ const PayInvoice = () => {
                 </div>
               </div>
 
-              {Number(amountDueCents || 0) <= 0 ? (
+              {isInvoiceAlreadyPaid(amountDueCents) ? (
                 <div className="rounded-xl border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900/20 p-3 text-sm text-green-800 dark:text-green-200">
                   This invoice is already paid.
                 </div>

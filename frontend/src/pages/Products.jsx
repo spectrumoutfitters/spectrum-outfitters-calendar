@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { isOrderPhotoCameraHostAllowed, shouldBlockOrderPhotoCamera } from '../utils/orderPhotoCameraGate';
 
 // Helper to get backend URL for images
 const getBackendUrl = () => {
@@ -97,13 +98,12 @@ const Products = () => {
     setOrderTotal(getCartTotal());
     setShowCheckout(true);
     
-    // Check if we're on localhost (camera works with HTTP on localhost)
-    // Or if we're on HTTPS (camera works with HTTPS)
-    const isLocalhost = window.location.hostname === 'localhost' || 
-                       window.location.hostname === '127.0.0.1';
-    const isHTTPS = window.location.protocol === 'https:';
-    
-    if (isLocalhost || isHTTPS) {
+    if (
+      isOrderPhotoCameraHostAllowed({
+        hostname: window.location.hostname,
+        protocol: window.location.protocol,
+      })
+    ) {
       // Camera access works on localhost (HTTP) or HTTPS
       setShowCamera(true);
     } else {
@@ -180,19 +180,16 @@ const Products = () => {
 
   useEffect(() => {
     if (showCamera) {
-      // Check if mediaDevices is available
-      // Camera access works on localhost (HTTP) or HTTPS
-      const isLocalhost = window.location.hostname === 'localhost' || 
-                         window.location.hostname === '127.0.0.1' ||
-                         window.location.protocol === 'https:';
-      
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        if (!isLocalhost && window.location.protocol !== 'https:') {
-          alert('Camera access requires HTTPS or localhost. Please access via localhost or enable HTTPS.');
-          setShowCamera(false);
-          return;
-        }
-        // If on localhost, try anyway - it might work
+      if (
+        shouldBlockOrderPhotoCamera({
+          hostname: window.location.hostname,
+          protocol: window.location.protocol,
+          hasGetUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+        })
+      ) {
+        alert('Camera access requires HTTPS or localhost. Please access via localhost or enable HTTPS.');
+        setShowCamera(false);
+        return;
       }
 
       navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
