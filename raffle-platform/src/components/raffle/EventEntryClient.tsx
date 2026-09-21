@@ -7,6 +7,15 @@ import type { EventConfig } from "@/lib/types";
 import { trimBonusProofForSubmit, validateBonusProof } from "@/lib/bonusProof";
 import { computeTicketsFromBonuses, resolveBonusRules } from "@/lib/entryMath";
 import {
+  newsletterShowsBonus as newsletterBonusIsOffered,
+  normalizeBaseTickets,
+  normalizeNewsletterBonus,
+  paidTicketPriceCents,
+  paidTicketsCheckoutEnabled,
+  paidTicketsMaxPerPurchase,
+  previewEntryTickets,
+} from "@/lib/entryTicketPreview";
+import {
   countPositivePools,
   defaultPoolTickets,
   emptyPoolTickets,
@@ -62,9 +71,9 @@ export function EventEntryClient({ event }: Props) {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const bonusRules = useMemo(() => resolveBonusRules(event), [event]);
-  const baseTickets = Math.max(1, Math.floor(Number(event.baseTicketsPerEntry) || 2));
+  const baseTickets = normalizeBaseTickets(event.baseTicketsPerEntry);
   const newsletterEnabled = event.newsletterBonusEnabled !== false;
-  const newsletterBonus = Math.max(0, Math.floor(Number(event.newsletterBonusTickets) || 0));
+  const newsletterBonus = normalizeNewsletterBonus(event.newsletterBonusTickets);
   const [bonusById, setBonusById] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(bonusRules.map((r) => [r.id, false])),
   );
@@ -95,21 +104,29 @@ export function EventEntryClient({ event }: Props) {
 
   // Paid-ticket configuration (derived from event sheet via Apps Script). We only render the buy
   // section when admin has explicitly enabled paid tickets AND set a non-zero per-ticket price.
-  const priceCents = Math.max(0, Math.floor(Number(event.ticketPriceCents) || 0));
+  const priceCents = paidTicketPriceCents(event.ticketPriceCents);
   const currency = String(event.ticketCurrency || "usd").toLowerCase();
-  const maxPerPurchase = Math.max(1, Math.floor(Number(event.paidTicketsMaxPerPurchase) || 100));
-  const paidEnabled = Boolean(event.paidTicketsEnabled) && priceCents > 0 && !testMode;
+  const maxPerPurchase = paidTicketsMaxPerPurchase(event.paidTicketsMaxPerPurchase);
+  const paidEnabled = paidTicketsCheckoutEnabled({
+    paidTicketsEnabled: event.paidTicketsEnabled,
+    ticketPriceCents: event.ticketPriceCents,
+    testMode,
+  });
 
   const accent = event.primaryColor || "#c9a227";
   const secondary = event.secondaryColor || "#1c1917";
 
-  const newsletterShowsBonus = newsletterEnabled && newsletterBonus > 0;
+  const newsletterShowsBonus = newsletterBonusIsOffered(newsletterEnabled, newsletterBonus);
 
   const previewTickets = useMemo(() => {
     const baseOnly = computeTicketsFromBonuses(bonusById, bonusRules, baseTickets);
-    if (newsletterShowsBonus && newsletterOptIn) return baseOnly + newsletterBonus;
-    return baseOnly;
-  }, [bonusById, bonusRules, baseTickets, newsletterShowsBonus, newsletterOptIn, newsletterBonus]);
+    return previewEntryTickets({
+      baseOnly,
+      newsletterEnabled,
+      newsletterBonus,
+      newsletterOptIn,
+    });
+  }, [bonusById, bonusRules, baseTickets, newsletterEnabled, newsletterBonus, newsletterOptIn]);
 
   useEffect(() => {
     setPoolTickets((prev) => reconcilePoolTickets(orderedIds, prev, previewTickets));

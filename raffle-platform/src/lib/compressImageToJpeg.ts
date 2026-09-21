@@ -1,3 +1,5 @@
+import { scaleImageDimensions } from "./imageScale.js";
+
 /** Client-only: downscale and encode as JPEG for prize uploads. */
 export function compressImageToJpegBlob(file: File, maxWidth: number, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -5,19 +7,14 @@ export function compressImageToJpegBlob(file: File, maxWidth: number, quality: n
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
-      let w = img.naturalWidth || img.width;
-      let h = img.naturalHeight || img.height;
-      if (w <= 0 || h <= 0) {
+      const scaled = scaleImageDimensions(img.naturalWidth || img.width, img.naturalHeight || img.height, maxWidth);
+      if (!scaled) {
         reject(new Error("Invalid image"));
         return;
       }
-      if (w > maxWidth) {
-        h = (h * maxWidth) / w;
-        w = maxWidth;
-      }
       const canvas = document.createElement("canvas");
-      canvas.width = Math.round(w);
-      canvas.height = Math.round(h);
+      canvas.width = scaled.width;
+      canvas.height = scaled.height;
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         reject(new Error("No canvas"));

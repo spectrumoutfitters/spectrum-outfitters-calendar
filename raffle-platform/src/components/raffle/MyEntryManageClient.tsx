@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import { useSearchParams } from "next/navigation";
 import { trimBonusProofForSubmit, validateBonusProof } from "@/lib/bonusProof";
 import { computeTicketsFromBonuses, resolveBonusRules } from "@/lib/entryMath";
+import { normalizeBaseTickets, paidTicketsManageEnabled } from "@/lib/entryTicketPreview";
 import {
   countPositivePools,
   defaultPoolTickets,
@@ -46,7 +47,7 @@ export function MyEntryManageClient({ event, slug, initialToken = "" }: Props) {
   const [loadStatus, setLoadStatus] = useState<"idle" | "loading" | "error">("idle");
   const [loadMessage, setLoadMessage] = useState<string | null>(null);
 
-  const baseTickets = Math.max(1, Math.floor(Number(event.baseTicketsPerEntry) || 2));
+  const baseTickets = normalizeBaseTickets(event.baseTicketsPerEntry);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -628,7 +629,11 @@ export function MyEntryManageClient({ event, slug, initialToken = "" }: Props) {
               <div className="h-24 sm:h-20" aria-hidden />
             </form>
 
-            {entry && !testMode && event.paidTicketsEnabled && (event.ticketPriceCents ?? 0) > 0 ? (
+            {entry && paidTicketsManageEnabled({
+              paidTicketsEnabled: event.paidTicketsEnabled,
+              ticketPriceCents: event.ticketPriceCents,
+              testMode,
+            }) ? (
               <div className="mt-6">
                 <BuyTicketsCard
                   event={event}
