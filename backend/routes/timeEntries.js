@@ -1,7 +1,7 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
-import { calculateHours, getWeekEndingDate } from '../utils/helpers.js';
+import { calculateHours, getWeekEndingDate, hoursWorkedFromEntry, effectiveBreakMinutes } from '../utils/helpers.js';
 import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { sendPushToAdmins } from '../utils/pushNotifications.js';
 
@@ -226,12 +226,13 @@ router.post('/clock-out', async (req, res) => {
     const clockOutTime = new Date().toISOString();
     // Lunch breaks don't subtract time - only regular breaks do
     const isLunchBreak = notes && notes.toLowerCase().includes('lunch break');
-    const breakMinutesForCalc = isLunchBreak ? 0 : (break_minutes || 0);
+    const storedBreakMinutes = Math.max(0, Number(break_minutes) || 0);
+    const breakMinutesForCalc = effectiveBreakMinutes(notes, storedBreakMinutes);
     const hours = calculateHours(activeEntry.clock_in, clockOutTime, breakMinutesForCalc);
 
     await db.runAsync(
       'UPDATE time_entries SET clock_out = ?, break_minutes = ?, notes = ? WHERE id = ?',
-      [clockOutTime, break_minutes || 0, notes || null, activeEntry.id]
+      [clockOutTime, storedBreakMinutes, notes || null, activeEntry.id]
     );
 
     const entry = await db.getAsync('SELECT * FROM time_entries WHERE id = ?', [activeEntry.id]);
@@ -476,7 +477,7 @@ router.get('/current', async (req, res) => {
       if (!entry.clock_in) return;
       
       // Lunch breaks don't subtract time - only regular breaks do
-      const breakMinutes = (entry.notes && entry.notes.toLowerCase().includes('lunch break')) ? 0 : (entry.break_minutes || 0);
+      const breakMinutes = effectiveBreakMinutes(entry.notes, entry.break_minutes);
       
       if (entry.clock_out) {
         const hours = calculateHours(entry.clock_in, entry.clock_out, breakMinutes) || 0;
@@ -682,19 +683,14 @@ router.get('/employees/status', requireAdmin, async (req, res) => {
         let hoursWorkedToday = 0;
         try {
           const todayEntries = await db.allAsync(
-            `SELECT clock_in, clock_out, break_minutes FROM time_entries 
+            `SELECT clock_in, clock_out, break_minutes, notes FROM time_entries 
              WHERE user_id = ? AND DATE(clock_in) = ?`,
             [employee.id, today]
           );
           
           for (const entry of todayEntries) {
             if (entry.clock_out) {
-              // Completed entry
-              const clockIn = new Date(entry.clock_in);
-              const clockOut = new Date(entry.clock_out);
-              const breakMins = entry.break_minutes || 0;
-              const hoursMs = clockOut - clockIn - (breakMins * 60 * 1000);
-              hoursWorkedToday += hoursMs / (1000 * 60 * 60);
+              hoursWorkedToday += hoursWorkedFromEntry(entry);
             } else {
               // Active entry - calculate up to now
               const clockIn = new Date(entry.clock_in);
@@ -1033,7 +1029,7 @@ router.get('/entries/grouped', async (req, res) => {
       // Calculate hours from work entries (pre-lunch work)
       day.workEntries.forEach(entry => {
         // Lunch breaks don't subtract time - only regular breaks do
-        const breakMinutes = (entry.notes && entry.notes.toLowerCase().includes('lunch break')) ? 0 : (entry.break_minutes || 0);
+        const breakMinutes = effectiveBreakMinutes(entry.notes, entry.break_minutes);
         
         if (entry.isPreLunchWork) {
           // For pre-lunch entries, calculate hours only for the pre-lunch period
@@ -1132,7 +1128,7 @@ router.get('/entries', async (req, res) => {
     // Calculate hours for each entry
     const entriesWithHours = entries.map(entry => {
       const hours = entry.clock_out 
-        ? calculateHours(entry.clock_in, entry.clock_out, entry.break_minutes)
+        ? hoursWorkedFromEntry(entry)
         : null;
       return { ...entry, hours };
     });
@@ -1161,7 +1157,7 @@ router.get('/entries/:id', requireAdmin, async (req, res) => {
     }
     
     const hours = entry.clock_out 
-      ? calculateHours(entry.clock_in, entry.clock_out, entry.break_minutes)
+      ? hoursWorkedFromEntry(entry)
       : null;
     
     res.json({ entry: { ...entry, hours } });
@@ -1316,7 +1312,7 @@ router.post('/entries', requireAdmin, async (req, res) => {
     
     const entry = await db.getAsync('SELECT * FROM time_entries WHERE id = ?', [result.lastID]);
     const hours = entry.clock_out 
-      ? calculateHours(entry.clock_in, entry.clock_out, entry.break_minutes)
+      ? hoursWorkedFromEntry(entry)
       : null;
     
     res.status(201).json({ entry: { ...entry, hours } });
@@ -1362,7 +1358,7 @@ router.put('/entries/:id', requireAdmin, async (req, res) => {
     }
     
     const hours = updatedEntry.clock_out 
-      ? calculateHours(updatedEntry.clock_in, updatedEntry.clock_out, updatedEntry.break_minutes)
+      ? hoursWorkedFromEntry(updatedEntry)
       : null;
 
     res.json({ entry: updatedEntry, hours });
@@ -1413,7 +1409,7 @@ router.get('/report', requireAdmin, async (req, res) => {
     // Calculate totals
     const report = entries.map(entry => {
       const hours = entry.clock_out 
-        ? calculateHours(entry.clock_in, entry.clock_out, entry.break_minutes)
+        ? hoursWorkedFromEntry(entry)
         : 0;
       
       // Calculate hourly rate from weekly salary if provided (assuming 40 hours/week)

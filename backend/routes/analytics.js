@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { sqlEffectiveBreakHoursExpr } from '../utils/helpers.js';
 
 const router = express.Router();
 
@@ -119,7 +120,7 @@ router.get('/employee-performance', async (req, res) => {
         SELECT 
           SUM(CASE 
             WHEN clock_out IS NOT NULL 
-            THEN (julianday(clock_out) - julianday(clock_in)) * 24 - (break_minutes / 60.0)
+            THEN (julianday(clock_out) - julianday(clock_in)) * 24 - (${sqlEffectiveBreakHoursExpr()})
             ELSE 0 
           END) as total_hours_worked
         FROM time_entries
@@ -263,7 +264,7 @@ router.get('/weekly-comparison', async (req, res) => {
           COUNT(DISTINCT CASE WHEN t.status = 'completed' THEN t.id END) as tasks_completed,
           SUM(CASE 
             WHEN te.clock_out IS NOT NULL 
-            THEN (julianday(te.clock_out) - julianday(te.clock_in)) * 24 - (te.break_minutes / 60.0)
+            THEN (julianday(te.clock_out) - julianday(te.clock_in)) * 24 - (${sqlEffectiveBreakHoursExpr('te')})
             ELSE 0 
           END) as hours_worked
         FROM users u
@@ -475,12 +476,12 @@ router.get('/employee-detail/:id', async (req, res) => {
         COUNT(DISTINCT DATE(clock_in)) as days_worked,
         SUM(CASE 
           WHEN clock_out IS NOT NULL 
-          THEN (julianday(clock_out) - julianday(clock_in)) * 24 - (break_minutes / 60.0)
+          THEN (julianday(clock_out) - julianday(clock_in)) * 24 - (${sqlEffectiveBreakHoursExpr()})
           ELSE 0 
         END) as total_hours_worked,
         AVG(CASE 
           WHEN clock_out IS NOT NULL 
-          THEN (julianday(clock_out) - julianday(clock_in)) * 24 - (break_minutes / 60.0)
+          THEN (julianday(clock_out) - julianday(clock_in)) * 24 - (${sqlEffectiveBreakHoursExpr()})
           ELSE NULL 
         END) as avg_hours_per_day
       FROM time_entries

@@ -7,6 +7,7 @@ import { dirname } from 'path';
 import fs from 'fs';
 import { getPayrollDataPath } from '../utils/payrollDataPath.js';
 import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/payrollHistoryRecords.js';
+import { hoursWorkedFromEntry } from '../utils/helpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -329,9 +330,7 @@ router.get('/sync/time-entries', requirePayrollAccess, async (req, res) => {
 
     // Calculate hours for each entry
     const timeData = entries.map(entry => {
-      const clockIn = new Date(entry.clock_in);
-      const clockOut = new Date(entry.clock_out);
-      const hours = (clockOut - clockIn) / (1000 * 60 * 60) - (entry.break_minutes || 0) / 60;
+      const hours = hoursWorkedFromEntry(entry);
       
       return {
         user_id: entry.user_id,
@@ -340,7 +339,7 @@ router.get('/sync/time-entries', requirePayrollAccess, async (req, res) => {
         date: entry.clock_in.split('T')[0],
         clock_in: entry.clock_in,
         clock_out: entry.clock_out,
-        hours: Math.max(0, hours),
+        hours,
         break_minutes: entry.break_minutes || 0,
         hourly_rate: entry.hourly_rate || 0,
         weekly_salary: entry.weekly_salary || 0
@@ -424,9 +423,7 @@ router.post('/sync/import-hours', requirePayrollAccess, async (req, res) => {
 
     // Calculate hours for each entry
     const timeData = entries.map(entry => {
-      const clockIn = new Date(entry.clock_in);
-      const clockOut = new Date(entry.clock_out);
-      const hours = (clockOut - clockIn) / (1000 * 60 * 60) - (entry.break_minutes || 0) / 60;
+      const hours = hoursWorkedFromEntry(entry);
       
       return {
         user_id: entry.user_id,
@@ -435,7 +432,7 @@ router.post('/sync/import-hours', requirePayrollAccess, async (req, res) => {
         date: entry.clock_in.split('T')[0],
         clock_in: entry.clock_in,
         clock_out: entry.clock_out,
-        hours: Math.max(0, hours),
+        hours,
         break_minutes: entry.break_minutes || 0,
         hourly_rate: entry.hourly_rate || 0,
         weekly_salary: entry.weekly_salary || 0

@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { sqlEffectiveBreakHoursExpr } from '../utils/helpers.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -95,7 +96,7 @@ router.get('/', async (req, res) => {
          (
            SELECT COALESCE(SUM(
              (strftime('%s', COALESCE(clock_out, datetime('now'))) - strftime('%s', clock_in)) / 3600.0
-             - break_minutes / 60.0
+             - (${sqlEffectiveBreakHoursExpr()})
            ), 0)
            FROM time_entries
            WHERE user_id = u.id
