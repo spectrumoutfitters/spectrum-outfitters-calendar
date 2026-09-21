@@ -7,6 +7,14 @@ import { dirname } from 'path';
 import fs from 'fs';
 import { getPayrollDataPath } from '../utils/payrollDataPath.js';
 import { loadMergedPayrollHistory, mergeImportPayrollHistory } from '../utils/payrollHistoryRecords.js';
+import {
+  hasPayrollAccess,
+  isMasterAdminRow,
+  isPayrollVaultMetaPayload,
+  isPayrollWriteDataMissing,
+  isSafePayrollFilename,
+  revokePayrollAccessError,
+} from '../utils/payrollAccessGate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,8 +36,8 @@ router.get('/access', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const hasAccess = user.payroll_access === 1 || user.is_master_admin === 1;
-    const isMasterAdmin = user.is_master_admin === 1;
+    const hasAccess = hasPayrollAccess(user);
+    const isMasterAdmin = isMasterAdminRow(user);
 
     res.json({
       hasAccess,
@@ -66,15 +74,15 @@ router.put('/admins/:id/access', requireMasterAdmin, async (req, res) => {
     const { id } = req.params;
     const { payroll_access } = req.body;
 
-    // Prevent master admin from removing their own access
     const targetUser = await db.getAsync('SELECT is_master_admin FROM users WHERE id = ?', [id]);
-    if (targetUser && targetUser.is_master_admin === 1 && payroll_access === false) {
-      return res.status(400).json({ error: 'Cannot remove payroll access from master admin' });
-    }
-
-    // Prevent removing access from yourself
-    if (parseInt(id) === req.user.id && payroll_access === false) {
-      return res.status(400).json({ error: 'Cannot remove your own payroll access' });
+    const revokeError = revokePayrollAccessError({
+      targetIsMasterAdmin: isMasterAdminRow(targetUser),
+      targetId: id,
+      actorId: req.user.id,
+      payrollAccess: payroll_access,
+    });
+    if (revokeError) {
+      return res.status(400).json({ error: revokeError });
     }
 
     await db.runAsync(
@@ -123,8 +131,7 @@ router.get('/path', requirePayrollAccess, (req, res) => {
 router.get('/data/:filename', requirePayrollAccess, (req, res) => {
   try {
     const { filename } = req.params;
-    // Sanitize filename to prevent directory traversal
-    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    if (!isSafePayrollFilename(filename)) {
       return res.status(400).json({ error: 'Invalid filename' });
     }
     
@@ -149,12 +156,11 @@ router.post('/data/:filename', requirePayrollAccess, (req, res) => {
     const { filename } = req.params;
     const { data } = req.body;
     
-    // Sanitize filename to prevent directory traversal
-    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    if (!isSafePayrollFilename(filename)) {
       return res.status(400).json({ error: 'Invalid filename' });
     }
     
-    if (data === undefined || data === null) {
+    if (isPayrollWriteDataMissing(data)) {
       return res.status(400).json({ error: 'Data is required' });
     }
     const dataPath = getPayrollDataPath();
@@ -205,7 +211,7 @@ router.get('/vault-meta', requirePayrollAccess, (req, res) => {
 router.post('/vault-meta', requirePayrollAccess, (req, res) => {
   try {
     const { salt, verifier } = req.body;
-    if (typeof salt !== 'string' || typeof verifier !== 'string') {
+    if (!isPayrollVaultMetaPayload(salt, verifier)) {
       return res.status(400).json({ error: 'salt and verifier (base64 strings) required' });
     }
     const dataPath = getPayrollDataPath();
