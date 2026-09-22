@@ -60,22 +60,7 @@ let cached = { sessions: [], events: [], inventory: [], refillRequests: [], scan
 const PAGE_TITLES = { dashboard: 'Dashboard', sessions: 'Sessions', logins: 'Login history', punches: 'Lunch & punches', inventory: 'Inventory', actions: 'Dev actions' };
 
 function parseDevice(ua) {
-  if (!ua || typeof ua !== 'string') return { type: 'Desktop', browser: '—', os: '—' };
-  const u = ua.toLowerCase();
-  const mobile = /mobile|android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|fennec|minimo|symbian|kindle|silk|meego/i.test(u);
-  let browser = '—';
-  if (u.includes('edg/')) browser = 'Edge';
-  else if (u.includes('chrome')) browser = 'Chrome';
-  else if (u.includes('firefox')) browser = 'Firefox';
-  else if (u.includes('safari') && !u.includes('chrome')) browser = 'Safari';
-  else if (u.includes('electron')) browser = 'Desktop app';
-  let os = '—';
-  if (u.includes('windows')) os = 'Windows';
-  else if (u.includes('mac os') || u.includes('macos')) os = 'macOS';
-  else if (u.includes('linux')) os = 'Linux';
-  else if (u.includes('android')) os = 'Android';
-  else if (u.includes('iphone') || u.includes('ipad')) os = 'iOS';
-  return { type: mobile ? 'Mobile' : 'Desktop', browser, os };
+  return window.monitorDisplay.parseMonitorDevice(ua);
 }
 
 function setError(msg) {
@@ -445,9 +430,7 @@ function renderQuantityLog() {
     const time = q.created_at ? new Date(q.created_at).toLocaleString() : '—';
     const before = q.quantity_before != null ? Number(q.quantity_before) : '—';
     const after = q.quantity_after != null ? Number(q.quantity_after) : '—';
-    const change = typeof before === 'number' && typeof after === 'number' ? (after - before) : '—';
-    const unit = q.item_unit || '';
-    const changeStr = change === '—' ? '—' : (change >= 0 ? '+' : '') + change + ' ' + unit;
+    const changeStr = window.monitorDisplay.formatQuantityChange(q.quantity_before, q.quantity_after, q.item_unit);
     const reason = (q.reason || '—').replace(/_/g, ' ');
     return `<tr>
       <td style="color:var(--text-muted)">${escapeHtml(time)}</td>
@@ -470,11 +453,7 @@ function renderInventory() {
       (it.category_name || '').toLowerCase().includes(q)
     );
   }
-  const lowCount = cached.inventory.filter(it => {
-    const min = it.min_quantity != null ? Number(it.min_quantity) : null;
-    const qty = it.quantity != null ? Number(it.quantity) : 0;
-    return min != null && min > 0 && qty <= min;
-  }).length;
+  const lowCount = cached.inventory.filter((it) => window.monitorDisplay.isMonitorLowStock(it)).length;
   const pendingRefills = (cached.refillRequests || []).filter(r => r.status === 'pending').length;
   if (inventorySummary) {
     if (cached.inventory.length === 0 && !(cached.refillRequests || []).length && !(cached.scanLog || []).length) {

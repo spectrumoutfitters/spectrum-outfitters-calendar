@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import PartsLookup from '../Turn14/PartsLookup';
+import { turn14CatalogPrice } from '../../utils/turn14CatalogPrice';
 
 const ProductManagement = () => {
   const [products, setProducts] = useState([]);
@@ -157,7 +158,7 @@ const ProductManagement = () => {
             setFormData({
               name: part.name || part.description || part.title || '',
               description: part.description || part.name || '',
-              price: part.price || part.pricing?.amount || part.pricing?.value || '0',
+              price: turn14CatalogPrice(part),
               is_active: true
             });
             setActiveTab('products');

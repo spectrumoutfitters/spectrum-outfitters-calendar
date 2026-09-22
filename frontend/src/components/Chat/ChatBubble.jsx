@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../../contexts/SocketContext';
 import ChatWindow from './ChatWindow';
 import api from '../../utils/api';
+import { chatBubbleShouldCountUnread, pickInitialChatConversation } from '../../utils/chatBubbleGate';
 
 const ChatBubble = ({ stacked = false }) => {
   const { socket, unreadCount, setUnreadCount, playNotificationSound } = useSocket();
@@ -17,7 +18,7 @@ const ChatBubble = ({ stacked = false }) => {
     const handleNewMessage = (message) => {
       setNewMessages(prev => [...prev, message]);
       // Sound is handled globally in SocketContext, just update unread count if needed
-      if (!isOpen || selectedConversation?.id !== (message.is_team_message ? 'team' : message.sender_id)) {
+      if (chatBubbleShouldCountUnread(isOpen, selectedConversation?.id, message)) {
         setUnreadCount(prev => prev + 1);
       }
     };
@@ -76,9 +77,7 @@ const ChatBubble = ({ stacked = false }) => {
       return;
     }
     if (conversations.length > 0 && !selectedConversation && !hasAutoSelectedOnce.current) {
-      const teamBoardConv = conversations.find(c => c.id === 'team_board');
-      const adminBoardConv = conversations.find(c => c.id === 'admin_board');
-      setSelectedConversation(teamBoardConv || adminBoardConv || conversations[0]);
+      setSelectedConversation(pickInitialChatConversation(conversations));
       hasAutoSelectedOnce.current = true;
     }
   }, [isOpen, conversations, selectedConversation]);
