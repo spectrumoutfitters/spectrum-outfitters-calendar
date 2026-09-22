@@ -4,6 +4,7 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const { spawn, exec } = require('child_process');
+const { quoteShellPath } = require('./quoteShellPath');
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
 
@@ -214,13 +215,7 @@ function runDeployScript(projectPath, flag) {
   const configPath = path.join(projectPath, 'scripts', 'deploy.config.json');
   if (!fs.existsSync(deployScript)) throw new Error('scripts/deploy.cjs not found. Use "Deploy to server" or run deploy from the project in a terminal.');
   if (!fs.existsSync(configPath)) throw new Error('scripts/deploy.config.json not found. Copy from deploy.config.example.json and set host, user, path.');
-  // Quote path for shell (Windows cmd: "path", escape " as ""; Unix: 'path')
-  function quotePath(p) {
-    const s = String(p);
-    if (process.platform === 'win32') return '"' + s.replace(/"/g, '""') + '"';
-    return "'" + s.replace(/'/g, "'\\''") + "'";
-  }
-  const cmd = 'node ' + quotePath(deployScript) + ' ' + flag;
+  const cmd = 'node ' + quoteShellPath(deployScript) + ' ' + flag;
   return new Promise((resolve, reject) => {
     exec(cmd, { cwd: projectPath, shell: true, timeout: 120000, maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
       const out = String(stderr || stdout).trim();
