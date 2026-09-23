@@ -45,4 +45,96 @@ describe('plaidClient encryption', () => {
     process.env.PLAID_CLIENT_ID = saved.PLAID_CLIENT_ID;
     process.env.PLAID_SECRET = saved.PLAID_SECRET;
   });
+
+  it('rejects a missing or short encryption key before writing ciphertext', async () => {
+    const { encryptToken } = await import('../utils/plaidClient.js');
+    const saved = process.env.PLAID_TOKEN_ENCRYPTION_KEY;
+    try {
+      delete process.env.PLAID_TOKEN_ENCRYPTION_KEY;
+      assert.throws(() => encryptToken('access-sandbox-token'), /PLAID_TOKEN_ENCRYPTION_KEY/);
+      process.env.PLAID_TOKEN_ENCRYPTION_KEY = 'ab'.repeat(15);
+      assert.throws(() => encryptToken('access-sandbox-token'), /PLAID_TOKEN_ENCRYPTION_KEY/);
+    } finally {
+      process.env.PLAID_TOKEN_ENCRYPTION_KEY = saved;
+    }
+  });
+
+  it('isPlaidConfigured requires client id, secret, and encryption key together', async () => {
+    const { isPlaidConfigured } = await import('../utils/plaidClient.js');
+    const saved = {
+      id: process.env.PLAID_CLIENT_ID,
+      secret: process.env.PLAID_SECRET,
+      key: process.env.PLAID_TOKEN_ENCRYPTION_KEY,
+    };
+    const restore = () => {
+      if (saved.id === undefined) delete process.env.PLAID_CLIENT_ID;
+      else process.env.PLAID_CLIENT_ID = saved.id;
+      if (saved.secret === undefined) delete process.env.PLAID_SECRET;
+      else process.env.PLAID_SECRET = saved.secret;
+      if (saved.key === undefined) delete process.env.PLAID_TOKEN_ENCRYPTION_KEY;
+      else process.env.PLAID_TOKEN_ENCRYPTION_KEY = saved.key;
+    };
+    try {
+      process.env.PLAID_CLIENT_ID = 'client';
+      process.env.PLAID_SECRET = 'secret';
+      process.env.PLAID_TOKEN_ENCRYPTION_KEY = 'c'.repeat(64);
+      assert.equal(isPlaidConfigured(), true);
+
+      delete process.env.PLAID_TOKEN_ENCRYPTION_KEY;
+      assert.equal(isPlaidConfigured(), false);
+
+      process.env.PLAID_TOKEN_ENCRYPTION_KEY = 'c'.repeat(64);
+      delete process.env.PLAID_SECRET;
+      assert.equal(isPlaidConfigured(), false);
+
+      process.env.PLAID_SECRET = 'secret';
+      delete process.env.PLAID_CLIENT_ID;
+      assert.equal(isPlaidConfigured(), false);
+    } finally {
+      restore();
+    }
+  });
+
+  it('does not return the access token from tampered ciphertext or another key', async () => {
+    const { encryptToken, decryptToken } = await import('../utils/plaidClient.js');
+    const token = 'access-sandbox-do-not-leak';
+    const encrypted = encryptToken(token);
+    const [iv, cipher] = encrypted.split(':');
+    const flipped = cipher.slice(0, -1) + (cipher.endsWith('0') ? '1' : '0');
+
+    let tampered = null;
+    try {
+      tampered = decryptToken(`${iv}:${flipped}`);
+    } catch {
+      tampered = null;
+    }
+    assert.notEqual(tampered, token);
+
+    const saved = process.env.PLAID_TOKEN_ENCRYPTION_KEY;
+    process.env.PLAID_TOKEN_ENCRYPTION_KEY = 'b'.repeat(64);
+    try {
+      let otherKey = null;
+      try {
+        otherKey = decryptToken(encrypted);
+      } catch {
+        otherKey = null;
+      }
+      assert.notEqual(otherKey, token);
+    } finally {
+      process.env.PLAID_TOKEN_ENCRYPTION_KEY = saved;
+    }
+  });
+
+  it('uses only the first 64 hex characters of a longer key', async () => {
+    const { encryptToken, decryptToken } = await import('../utils/plaidClient.js');
+    const saved = process.env.PLAID_TOKEN_ENCRYPTION_KEY;
+    try {
+      process.env.PLAID_TOKEN_ENCRYPTION_KEY = `${'d'.repeat(64)}ffff`;
+      const encrypted = encryptToken('access-sandbox-long-key');
+      process.env.PLAID_TOKEN_ENCRYPTION_KEY = 'd'.repeat(64);
+      assert.equal(decryptToken(encrypted), 'access-sandbox-long-key');
+    } finally {
+      process.env.PLAID_TOKEN_ENCRYPTION_KEY = saved;
+    }
+  });
 });

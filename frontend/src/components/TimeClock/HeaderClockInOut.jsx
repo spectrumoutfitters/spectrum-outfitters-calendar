@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { calculateElapsedTime, getCurrentCentralTimeString } from '../../utils/helpers';
+import { isStillOnLunchBreak } from '../../utils/clockWidgetLunchState';
 
 const HeaderClockInOut = () => {
   const [status, setStatus] = useState({ clockedIn: false, elapsedHours: '0:00' });
@@ -77,21 +78,7 @@ const HeaderClockInOut = () => {
             }
           });
           
-          const recentEntry = entriesResponse.data.entries
-            .filter(e => e.clock_out && e.notes && e.notes.toLowerCase().includes('lunch break'))
-            .sort((a, b) => new Date(b.clock_out) - new Date(a.clock_out))[0];
-          
-          if (recentEntry) {
-            const returnEntry = entriesResponse.data.entries.find(e => {
-              if (!e.clock_in || e.id === recentEntry.id) return false;
-              const returnTime = new Date(e.clock_in);
-              const lunchOutTime = new Date(recentEntry.clock_out);
-              return returnTime > lunchOutTime;
-            });
-            setIsOnLunchBreak(!returnEntry);
-          } else {
-            setIsOnLunchBreak(false);
-          }
+          setIsOnLunchBreak(isStillOnLunchBreak(entriesResponse.data.entries));
         } catch (err) {
           setIsOnLunchBreak(false);
         }
