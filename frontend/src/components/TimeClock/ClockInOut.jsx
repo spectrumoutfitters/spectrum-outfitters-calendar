@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { calculateElapsedTime } from '../../utils/helpers';
+import { isStillOnLunchBreak } from '../../utils/clockWidgetLunchState';
 import LunchModal from './LunchModal';
 import LunchOvertimeModal from './LunchOvertimeModal';
 import CleanupReminderModal from './CleanupReminderModal';
@@ -75,26 +76,7 @@ const ClockInOut = () => {
             }
           });
           
-          // Find the most recent entry
-          const recentEntry = entriesResponse.data.entries
-            .filter(e => e.clock_out && e.notes && e.notes.toLowerCase().includes('lunch break'))
-            .sort((a, b) => new Date(b.clock_out) - new Date(a.clock_out))[0];
-          
-          // Check if this lunch break entry doesn't have a return entry yet
-          if (recentEntry) {
-            // Check if there's a clock-in after this lunch break
-            const returnEntry = entriesResponse.data.entries.find(e => {
-              if (!e.clock_in || e.id === recentEntry.id) return false;
-              const returnTime = new Date(e.clock_in);
-              const lunchOutTime = new Date(recentEntry.clock_out);
-              return returnTime > lunchOutTime;
-            });
-            
-            // If no return entry found, they're still on lunch break
-            setIsOnLunchBreak(!returnEntry);
-          } else {
-            setIsOnLunchBreak(false);
-          }
+          setIsOnLunchBreak(isStillOnLunchBreak(entriesResponse.data.entries));
         } catch (err) {
           console.error('Error checking lunch break status:', err);
           setIsOnLunchBreak(false);

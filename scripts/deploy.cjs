@@ -14,6 +14,11 @@
 const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const {
+  isBackendUploadExcluded,
+  changedRelativePaths,
+  databaseScriptNames,
+} = require('./deployUploadPlan.cjs');
 
 const scriptDir = __dirname;
 const projectRoot = path.resolve(scriptDir, '..');
@@ -94,12 +99,7 @@ function getFileStats(dir, opts = {}) {
 
 /** Which relative paths are new or changed (mtime/size) vs cache */
 function getChangedPaths(current, cached) {
-  const out = [];
-  for (const [rel, cur] of Object.entries(current)) {
-    const prev = cached[rel];
-    if (!prev || prev.mtime !== cur.mtime || prev.size !== cur.size) out.push(rel);
-  }
-  return out;
+  return changedRelativePaths(current, cached);
 }
 
 const scpOpt = sshKeyPath ? `-i ${quote(sshKeyPath)}` : '';
@@ -115,7 +115,7 @@ function uploadBackend() {
     return;
   }
   const cache = loadCache();
-  const beExclude = (rel) => rel.includes('.env') || rel.endsWith('.db');
+  const beExclude = (rel) => isBackendUploadExcluded(rel);
   const current = getFileStats(be, { exclude: beExclude });
   const changed = force ? Object.keys(current) : getChangedPaths(current, cache.backend || {});
 
@@ -144,7 +144,7 @@ function uploadBackend() {
     const dbDir = path.join(be, 'database');
     if (fs.existsSync(dbDir)) {
       run(`ssh ${sshKeyPath ? sshOpt + ' ' : ''}${remote} "mkdir -p ${remotePath}/backend/database"`);
-      const dbFiles = fs.readdirSync(dbDir).filter((f) => f.endsWith('.js'));
+      const dbFiles = databaseScriptNames(fs.readdirSync(dbDir));
       for (const f of dbFiles) {
         run(`scp ${scpOpt} ${quote(path.join(dbDir, f))} ${remote}:${remotePath}/backend/database/`);
       }
