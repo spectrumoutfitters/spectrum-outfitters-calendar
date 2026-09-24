@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  applyShopMonkeySelectAll,
+  confirmedShopMonkeyItems,
+  shopMonkeySelectionState,
+  toggleShopMonkeySelection,
+} from '../../utils/shopMonkeyWorkItemSelection';
 
 const ShopMonkeyItemSelector = ({ workItems, vehicleInfo, order, onConfirm, onCancel }) => {
   console.log('🎯🎯🎯 ShopMonkeyItemSelector COMPONENT RENDERED!');
@@ -10,35 +16,31 @@ const ShopMonkeyItemSelector = ({ workItems, vehicleInfo, order, onConfirm, onCa
   const safeWorkItems = Array.isArray(workItems) ? workItems : [];
   console.log('Safe work items:', safeWorkItems);
   
-  const [selectedItems, setSelectedItems] = useState(
-    safeWorkItems.map(item => ({ ...item, selected: item.selected !== false }))
-  );
-  const [selectAll, setSelectAll] = useState(safeWorkItems.length > 0 && safeWorkItems.every(item => item.selected !== false));
+  const [selectedItems, setSelectedItems] = useState(() => shopMonkeySelectionState(workItems).items);
+  const [selectAll, setSelectAll] = useState(() => shopMonkeySelectionState(workItems).selectAll);
   
   // Update when workItems prop changes
   useEffect(() => {
     console.log('🔄 ShopMonkeyItemSelector: workItems prop changed:', workItems);
-    const safeItems = Array.isArray(workItems) ? workItems : [];
-    setSelectedItems(safeItems.map(item => ({ ...item, selected: item.selected !== false })));
-    setSelectAll(safeItems.length > 0 && safeItems.every(item => item.selected !== false));
+    const next = shopMonkeySelectionState(workItems);
+    setSelectedItems(next.items);
+    setSelectAll(next.selectAll);
   }, [workItems]);
 
   const toggleItem = (index) => {
-    const updated = [...selectedItems];
-    updated[index].selected = !updated[index].selected;
-    setSelectedItems(updated);
-    setSelectAll(updated.every(item => item.selected));
+    const next = toggleShopMonkeySelection(selectedItems, index);
+    setSelectedItems(next.items);
+    setSelectAll(next.selectAll);
   };
 
   const handleSelectAll = () => {
-    const newSelectAll = !selectAll;
-    setSelectAll(newSelectAll);
-    setSelectedItems(selectedItems.map(item => ({ ...item, selected: newSelectAll })));
+    const next = applyShopMonkeySelectAll(selectedItems, selectAll);
+    setSelectAll(next.selectAll);
+    setSelectedItems(next.items);
   };
 
   const handleConfirm = () => {
-    const selected = selectedItems.filter(item => item.selected);
-    onConfirm(selected);
+    onConfirm(confirmedShopMonkeyItems(selectedItems));
   };
 
   const selectedCount = selectedItems.filter(item => item.selected).length;
