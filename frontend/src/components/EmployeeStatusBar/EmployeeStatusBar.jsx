@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { formatTime, calculateElapsedTime } from '../../utils/helpers';
+import { countEmployeeStatusBar } from '../../utils/employeeStatusBar';
 import { useAuth } from '../../contexts/AuthContext';
 
 const EmployeeStatusBar = () => {
@@ -58,9 +59,7 @@ const EmployeeStatusBar = () => {
     return null;
   }
 
-  const clockedIn = employees.filter(e => e.clockedIn);
-  const onLunch = employees.filter(e => e.onLunch);
-  const totalActive = clockedIn.length + onLunch.length;
+  const statusCounts = countEmployeeStatusBar(employees);
 
   return (
     <>
@@ -71,21 +70,21 @@ const EmployeeStatusBar = () => {
         title="Click to view employee status"
       >
         <span className="hidden sm:inline">👥</span>
-        {clockedIn.length > 0 && (
+        {statusCounts.clockedIn > 0 && (
           <span className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 bg-green-300 rounded-full animate-pulse"></span>
-            <span className="font-semibold">{clockedIn.length}</span>
+            <span className="font-semibold">{statusCounts.clockedIn}</span>
             <span className="hidden md:inline">In</span>
           </span>
         )}
-        {onLunch.length > 0 && (
+        {statusCounts.onLunch > 0 && (
           <span className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 bg-orange-300 rounded-full animate-pulse"></span>
-            <span className="font-semibold">{onLunch.length}</span>
+            <span className="font-semibold">{statusCounts.onLunch}</span>
             <span className="hidden md:inline">Lunch</span>
           </span>
         )}
-        {clockedIn.length === 0 && onLunch.length === 0 && (
+        {statusCounts.clockedIn === 0 && statusCounts.onLunch === 0 && (
           <span className="text-white/70">0 Active</span>
         )}
       </div>
@@ -114,21 +113,21 @@ const EmployeeStatusBar = () => {
               {/* Status Summary */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-green-700">{clockedIn.length}</div>
+                  <div className="text-2xl font-bold text-green-700">{statusCounts.clockedIn}</div>
                   <div className="text-sm text-green-600">Clocked In</div>
                 </div>
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-orange-700">{onLunch.length}</div>
+                  <div className="text-2xl font-bold text-orange-700">{statusCounts.onLunch}</div>
                   <div className="text-sm text-orange-600">On Lunch</div>
                 </div>
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="text-2xl font-bold text-gray-700">
-                    {employees.filter(e => !e.clockedIn && !e.onLunch && e.lastActivity).length}
+                    {statusCounts.clockedOut}
                   </div>
                   <div className="text-sm text-gray-600">Clocked Out</div>
                 </div>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-blue-700">{employees.length}</div>
+                  <div className="text-2xl font-bold text-blue-700">{statusCounts.total}</div>
                   <div className="text-sm text-blue-600">Total Employees</div>
                 </div>
               </div>
