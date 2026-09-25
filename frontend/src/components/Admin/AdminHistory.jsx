@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
+import { filterPunchesByType, lunchHistoryParams, punchHistoryParams } from '../../utils/adminHistoryQuery';
 
 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '—';
 const formatTime = (d) => d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
@@ -33,8 +34,7 @@ export default function AdminHistory() {
   const loadLunchHistory = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { from, to };
-      if (userId) params.user_id = userId;
+      const params = lunchHistoryParams({ from, to, userId });
       const res = await api.get('/time/lunch-history', { params });
       setLunches(res.data.lunches || []);
     } catch (err) {
@@ -48,12 +48,9 @@ export default function AdminHistory() {
   const loadPunchHistory = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { from: from + 'T00:00:00.000Z', to: to + 'T23:59:59.999Z' };
-      if (userId) params.user_id = userId;
+      const params = punchHistoryParams({ from, to, userId });
       const res = await api.get('/time/punch-history', { params });
-      let list = res.data.punches || [];
-      if (punchType) list = list.filter(p => p.type === punchType);
-      setPunches(list);
+      setPunches(filterPunchesByType(res.data.punches, punchType));
     } catch (err) {
       console.error('Punch history error:', err);
       setPunches([]);

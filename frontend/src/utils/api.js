@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { apiFailureAction } from './apiFailure';
 import { withBase } from './basePath';
 
 // Use current hostname for API calls (works for localhost and network IP)
@@ -39,30 +40,25 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle connection refused (backend not running) and empty responses
-    if (error.code === 'ERR_NETWORK' || 
-        error.code === 'ERR_EMPTY_RESPONSE' ||
-        error.message.includes('Network Error') || 
-        error.message.includes('ERR_CONNECTION_REFUSED') ||
-        error.message.includes('Empty response')) {
+    const action = apiFailureAction(error, window.location.pathname);
+    // Handle connection refused (backend not running) and empty responses.
+    // Don't redirect on network errors, let the component handle it.
+    if (action.type === 'network') {
       console.error('❌ Cannot connect to backend server. Is it running?');
       console.error('Backend should be running on http://localhost:5000');
       console.error('Error details:', error.code, error.message);
-      // Don't redirect on network errors, let the component handle it
       return Promise.reject({
         ...error,
         isNetworkError: true,
-        message: 'Cannot connect to server. Please ensure the backend is running on port 5000.'
+        message: action.message,
       });
     }
-    
+
     // Redirect to login on 401 (Unauthorized) or 403 (Forbidden) errors
     // 403 can mean invalid/expired token (should be 401 but some endpoints return 403)
-    const loginPath = withBase('/login');
-    if ((error.response?.status === 401 || error.response?.status === 403) && !window.location.pathname.endsWith('/login')) {
-      // Clear token and redirect to login (use base path when deployed under subpath)
+    if (action.redirectToLogin) {
       localStorage.removeItem('token');
-      window.location.href = loginPath;
+      window.location.href = withBase('/login');
     }
     return Promise.reject(error);
   }

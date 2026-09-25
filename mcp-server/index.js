@@ -15,23 +15,17 @@ import { readFile } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import z from 'zod';
+import { loginEventsEndpoint, resolveSpectrumApiUrl, spectrumApiHeaders } from './spectrumApiRequest.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const API_BASE = (process.env.SPECTRUM_API_BASE_URL || '').replace(/\/+$/, '');
+const API_BASE = process.env.SPECTRUM_API_BASE_URL || '';
 const ADMIN_TOKEN = process.env.SPECTRUM_ADMIN_TOKEN || '';
 const PROJECT_ROOT = process.env.SPECTRUM_PROJECT_ROOT || path.resolve(__dirname, '..');
 
 async function apiFetch(endpoint, options = {}) {
-  if (!API_BASE) {
-    throw new Error('SPECTRUM_API_BASE_URL is not set (e.g. https://login.spectrumoutfitters.com/api)');
-  }
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
-  const headers = {
-    'User-Agent': 'SpectrumMCP/1.0',
-    ...(options.headers || {})
-  };
-  if (ADMIN_TOKEN) headers.Authorization = `Bearer ${ADMIN_TOKEN}`;
+  const url = resolveSpectrumApiUrl(API_BASE, endpoint);
+  const headers = spectrumApiHeaders(ADMIN_TOKEN, options.headers);
   const res = await fetch(url, { ...options, headers, signal: AbortSignal.timeout(15000) });
   const text = await res.text();
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 400)}`);
@@ -79,7 +73,7 @@ server.registerTool('spectrum_login_events', {
     offset: z.number().min(0).optional().describe('Offset for pagination')
   }
 }, async ({ limit = 50, offset = 0 } = {}) => {
-  const data = await apiFetch(`/admin/security/login-events?limit=${limit}&offset=${offset}`);
+  const data = await apiFetch(loginEventsEndpoint(limit, offset));
   const text = JSON.stringify(data, null, 2);
   return {
     content: [{ type: 'text', text }]
