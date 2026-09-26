@@ -9,6 +9,7 @@ import {
   scheduleBackfillWorker,
   syncShopmonkeyOrderToCrm,
 } from '../services/crm/shopmonkeyCrmSync.js';
+import { applyQuickJobLineDiscount } from '../utils/quickJobLineDiscount.js';
 
 const router = express.Router();
 
@@ -744,13 +745,8 @@ router.post('/invoices/:id/apply-quick-job/:jobId', async (req, res) => {
       const unit = it.unit_price_cents != null ? toInt(it.unit_price_cents) : null;
       let total = unit != null ? Math.round(qty * unit) : null;
 
-      if (it.discount_type && it.discount_value != null && total != null) {
-        const dv = Number(it.discount_value);
-        if (it.discount_type === 'percent') {
-          total = Math.max(0, Math.round(total * (1 - dv / 100)));
-        } else if (it.discount_type === 'amount') {
-          total = Math.max(0, total - toInt(dv) || 0);
-        }
+      if (total != null) {
+        total = applyQuickJobLineDiscount(total, it.discount_type, it.discount_value);
       }
 
       await db.runAsync(
