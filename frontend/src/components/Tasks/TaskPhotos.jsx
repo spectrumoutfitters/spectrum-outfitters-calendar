@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import api from '../../utils/api';
+import { taskPhotoPublicUrl } from '../../utils/taskPhotoPublicUrl';
 
 const PHOTO_TYPES = [
   { value: 'before', label: 'Before' },
@@ -72,7 +73,7 @@ const TaskPhotos = ({ taskId, isAdmin }) => {
     }
   };
 
-  const photoUrl = (p) => `/${p.file_path.replace(/\\/g, '/')}`;
+  const photoUrl = (p) => taskPhotoPublicUrl(p.file_path);
 
   return (
     <div>
