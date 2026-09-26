@@ -2,15 +2,13 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { raffleEventIsLive, raffleGrandOpeningUrls } from '../../utils/grandOpeningRaffle';
 
 const GOLD = '#D4A017';
 
 const LS_INFRA = 'so_raffle_infra_collapsed';
 
-const raffleOrigin = (import.meta.env.VITE_RAFFLE_ORIGIN || 'https://raffle.spectrumoutfitters.com').replace(
-  /\/$/,
-  '',
-);
+const { adminUrl, publicEntryUrl, checkUrl } = raffleGrandOpeningUrls(import.meta.env.VITE_RAFFLE_ORIGIN);
 
 const EXAMPLE_BONUS_JSON = `[{"id":"instagram","label":"Follow on Instagram","description":"Tag us in a story","tickets":2},{"id":"review","label":"Google review","tickets":5},{"id":"tiktok","label":"TikTok duet","tickets":3}]`;
 
@@ -19,10 +17,6 @@ const EXAMPLE_BONUS_JSON = `[{"id":"instagram","label":"Follow on Instagram","de
  */
 const GrandOpeningDay = () => {
   const { isAdmin } = useAuth();
-  const adminUrl = `${raffleOrigin}/admin/grand-opening`;
-  const publicEntryUrl = `${raffleOrigin}/e/grand-opening`;
-  const checkUrl = `${raffleOrigin}/api/event/grand-opening`;
-
   const [live, setLive] = useState(null);
   const [checking, setChecking] = useState(true);
   const [infraOpen, setInfraOpen] = useState(() => typeof window !== 'undefined' && localStorage.getItem(LS_INFRA) !== '1');
@@ -33,7 +27,7 @@ const GrandOpeningDay = () => {
     try {
       const res = await fetch(checkUrl, { method: 'GET' });
       const data = await res.json().catch(() => ({}));
-      const ok = res.ok && data?.ok === true && data?.event;
+      const ok = raffleEventIsLive(res.ok, data);
       setLive(ok);
       if (typeof window !== 'undefined') {
         if (ok) {
