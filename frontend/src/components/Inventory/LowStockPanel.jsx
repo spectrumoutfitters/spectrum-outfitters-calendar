@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../utils/api';
+import {
+  lowStockAlreadyRequested,
+  lowStockDisplayQuantity,
+  lowStockIsOut,
+  lowStockStillNeedsReorder,
+} from '../../utils/lowStockPanel';
 
 const LowStockPanel = ({ onNavigateToInventory }) => {
   const [items, setItems] = useState([]);
@@ -23,7 +29,7 @@ const LowStockPanel = ({ onNavigateToInventory }) => {
   useEffect(() => { load(); }, []);
 
   const requestReorder = async (item) => {
-    if (reorderedIds.has(item.id)) return;
+    if (lowStockAlreadyRequested(item.id, reorderedIds)) return;
     setReorderingIds((prev) => new Set([...prev, item.id]));
     try {
       await api.post('/inventory/refill-requests', { item_id: item.id });
@@ -37,7 +43,7 @@ const LowStockPanel = ({ onNavigateToInventory }) => {
 
   const requestReorderAll = async () => {
     setReorderingAll(true);
-    const toRequest = items.filter((it) => !reorderedIds.has(it.id));
+    const toRequest = lowStockStillNeedsReorder(items, reorderedIds);
     for (const item of toRequest) {
       try {
         await api.post('/inventory/refill-requests', { item_id: item.id });
@@ -69,7 +75,7 @@ const LowStockPanel = ({ onNavigateToInventory }) => {
         </div>
         <button
           onClick={requestReorderAll}
-          disabled={reorderingAll || items.every((it) => reorderedIds.has(it.id))}
+          disabled={reorderingAll || lowStockStillNeedsReorder(items, reorderedIds).length === 0}
           className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition"
         >
           {reorderingAll ? 'Requesting…' : 'Reorder All'}
@@ -77,8 +83,8 @@ const LowStockPanel = ({ onNavigateToInventory }) => {
       </div>
       <ul className="divide-y divide-gray-100 dark:divide-neutral-800">
         {items.map((item) => {
-          const isOut = (item.quantity ?? 0) <= 0;
-          const requested = reorderedIds.has(item.id);
+          const isOut = lowStockIsOut(item.quantity);
+          const requested = lowStockAlreadyRequested(item.id, reorderedIds);
           return (
             <li key={item.id} className="flex items-center gap-3 px-4 py-3">
               <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isOut ? 'bg-red-500' : 'bg-amber-400'}`} />
@@ -87,7 +93,7 @@ const LowStockPanel = ({ onNavigateToInventory }) => {
                 <p className="text-xs text-gray-500 dark:text-neutral-400">
                   {item.category_name && <span>{item.category_name} · </span>}
                   <span className={isOut ? 'text-red-600 font-semibold' : 'text-amber-700 font-semibold'}>
-                    {item.quantity ?? 0} {item.unit || 'each'}
+                    {lowStockDisplayQuantity(item.quantity)} {item.unit || 'each'}
                   </span>
                   {item.min_quantity != null && (
                     <span className="text-gray-400"> (min: {item.min_quantity})</span>
