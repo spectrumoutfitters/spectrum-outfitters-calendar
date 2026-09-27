@@ -2,16 +2,11 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { networkInterfaces } from 'os'
 import selfsigned from 'selfsigned'
+import { firstNonInternalIPv4, normalizeViteBasePath, rewriteViteApiPath } from './viteBasePath.js'
 
 // Get first non-internal IPv4 so the cert matches when phone connects via http://<IP>:5173
 function getLocalIP() {
-  const nets = networkInterfaces()
-  for (const name of Object.keys(nets)) {
-    for (const n of nets[name]) {
-      if (n.family === 'IPv4' && !n.internal) return n.address
-    }
-  }
-  return null
+  return firstNonInternalIPv4(networkInterfaces())
 }
 
 export default defineConfig(async () => {
@@ -34,8 +29,7 @@ export default defineConfig(async () => {
   })
 
   // When deployed under a subpath (e.g. spectrumoutfitters.com/so-app), set VITE_BASE_PATH=/so-app
-  const basePath = (process.env.VITE_BASE_PATH || '').replace(/\/+$/, '');
-  const base = basePath ? `${basePath}/` : '/';
+  const { basePath, base } = normalizeViteBasePath(process.env.VITE_BASE_PATH);
 
   const apiProxy = {
     target: 'http://localhost:5000',
@@ -62,8 +56,7 @@ export default defineConfig(async () => {
       ? {
           [`${basePath}/api`]: {
             ...apiProxy,
-            rewrite: (path) =>
-              path.replace(new RegExp(`^${basePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), ''),
+            rewrite: (path) => rewriteViteApiPath(path, basePath),
           },
         }
       : {}),

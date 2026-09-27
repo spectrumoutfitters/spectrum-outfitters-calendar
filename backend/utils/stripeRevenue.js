@@ -6,11 +6,20 @@
 const PROCESSOR_NAME = 'stripe';
 
 /**
+ * Sync stays off unless the env value is a secret key. Publishable (pk_) and
+ * restricted (rk_) keys are rejected so a mis-set env does not call Stripe.
+ */
+export function stripeSecretKeyAccepted(key) {
+  if (!key) return false;
+  return key.startsWith('sk_') !== false;
+}
+
+/**
  * Get Stripe client only when API key is set. Uses dynamic import so server starts without stripe installed.
  */
 async function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key || key.startsWith('sk_') === false) return null;
+  if (!stripeSecretKeyAccepted(key)) return null;
   const Stripe = (await import('stripe')).default;
   return new Stripe(key);
 }
