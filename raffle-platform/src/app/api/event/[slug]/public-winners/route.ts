@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppsScriptUrl } from "@/lib/env";
+import { resolvePublicWinnersFeedUrl } from "@/lib/publicWinnersFeedUrl";
 
 export const dynamic = "force-dynamic";
 
@@ -18,16 +19,13 @@ export async function GET(
   context: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await context.params;
-  if (!slug || slug.length > 80) {
-    return NextResponse.json({ ok: false, error: "invalid_slug" }, { status: 400, headers: CORS_HEADERS });
+  const resolved = resolvePublicWinnersFeedUrl(getAppsScriptUrl(), slug);
+  if ("error" in resolved) {
+    const status = resolved.error === "invalid_slug" ? 400 : 503;
+    return NextResponse.json({ ok: false, error: resolved.error }, { status, headers: CORS_HEADERS });
   }
 
-  const base = getAppsScriptUrl();
-  if (!base) {
-    return NextResponse.json({ ok: false, error: "server_misconfigured" }, { status: 503, headers: CORS_HEADERS });
-  }
-
-  const url = `${base}?action=getPublicWinnersFeed&slug=${encodeURIComponent(slug)}`;
+  const url = resolved.url;
 
   try {
     const res = await fetch(url, {
