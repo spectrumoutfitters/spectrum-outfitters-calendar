@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../utils/api';
 import { formatDateTime, formatDate, getDueDateColor } from '../../utils/helpers';
+import {
+  completedPauseDurationMinutes,
+  showSubmitForReviewPrompt,
+  taskPausePayload,
+  torqueConfirmationAccepted,
+} from '../../utils/employeeTaskReview';
 import { useAuth } from '../../contexts/AuthContext';
 import TaskTimer from './TaskTimer';
 import BarcodeScannerModal from '../Inventory/BarcodeScannerModal';
@@ -179,9 +185,6 @@ const EmployeeTaskModal = ({ task, onClose }) => {
     }
   };
 
-  const allSubtasksCompleted = taskData.subtasks && taskData.subtasks.length > 0 && 
-    taskData.subtasks.every(st => st.is_completed === 1);
-
   const handleAddSubtask = async () => {
     const title = newSubtaskTitle.trim();
     if (!title) return;
@@ -202,7 +205,7 @@ const EmployeeTaskModal = ({ task, onClose }) => {
   };
 
   const handleSubmitForReview = async () => {
-    if (!torquedToSpec) {
+    if (!torqueConfirmationAccepted(torquedToSpec)) {
       alert('Please confirm that everything is torqued to spec');
       return;
     }
@@ -242,17 +245,15 @@ const EmployeeTaskModal = ({ task, onClose }) => {
   };
 
   const handleStartBreak = async () => {
-    if (!breakReason.trim()) {
+    const pausePayload = taskPausePayload(breakReason, breakNotes);
+    if (!pausePayload) {
       alert('Please enter a reason for the pause');
       return;
     }
 
     setLoading(true);
     try {
-      await api.post(`/tasks/${task.id}/break/start`, {
-        reason: breakReason.trim(),
-        notes: breakNotes.trim() || null
-      });
+      await api.post(`/tasks/${task.id}/break/start`, pausePayload);
       await loadFullTaskData(); // Reload task data to get updated break info
       setShowBreakModal(false);
       setBreakReason('');
@@ -371,9 +372,10 @@ const EmployeeTaskModal = ({ task, onClose }) => {
                     <p className="text-xs text-green-700 font-medium mb-1">Pause History:</p>
                     <div className="space-y-1">
                       {taskData.breaks.filter(b => b.break_end).slice(0, 3).map((breakItem) => {
-                        const startTime = new Date(breakItem.break_start);
-                        const endTime = new Date(breakItem.break_end);
-                        const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
+                        const durationMinutes = completedPauseDurationMinutes(
+                          breakItem.break_start,
+                          breakItem.break_end
+                        );
                         return (
                           <p key={breakItem.id} className="text-xs text-green-700">
                             • {breakItem.reason} ({durationMinutes} min)
@@ -532,7 +534,7 @@ const EmployeeTaskModal = ({ task, onClose }) => {
               )}
             </div>
 
-            {allSubtasksCompleted && taskData.status !== 'review' && taskData.status !== 'completed' && (
+            {showSubmitForReviewPrompt(taskData.subtasks, taskData.status) && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <p className="text-sm font-medium text-yellow-800 mb-3">
                   ✓ All tasks completed! Ready to submit for review?
@@ -560,7 +562,7 @@ const EmployeeTaskModal = ({ task, onClose }) => {
                     <div className="flex gap-2">
                       <button
                         onClick={handleSubmitForReview}
-                        disabled={loading || !torquedToSpec}
+                        disabled={loading || !torqueConfirmationAccepted(torquedToSpec)}
                         className="px-4 py-2 bg-success text-white rounded-lg hover:bg-green-600 transition disabled:opacity-50"
                       >
                         {loading ? 'Submitting...' : 'Confirm & Submit'}
@@ -877,7 +879,7 @@ const EmployeeTaskModal = ({ task, onClose }) => {
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={handleStartBreak}
-                  disabled={loading || !breakReason.trim()}
+                  disabled={loading || !taskPausePayload(breakReason, breakNotes)}
                   className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition disabled:opacity-50 text-sm md:text-base min-h-[44px]"
                 >
                   {loading ? 'Pausing...' : 'Start Pause'}
