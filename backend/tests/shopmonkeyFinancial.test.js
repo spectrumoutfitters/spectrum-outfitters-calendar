@@ -42,4 +42,55 @@ describe('aggregatePaymentsByDay', () => {
     const result = aggregatePaymentsByDay([]);
     assert.equal(result.length, 0);
   });
+
+  it('counts Processing charges and treats a missing amount as zero cents', async () => {
+    const { aggregatePaymentsByDay } = await import('../utils/shopmonkey.js');
+
+    const result = aggregatePaymentsByDay([
+      { recordedDate: '2026-03-02', amountCents: 250, status: 'Processing', transactionType: 'Charge' },
+      { recordedDate: '2026-03-02', status: 'succeeded', transactionType: 'Charge' },
+    ]);
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].date, '2026-03-02');
+    assert.equal(result[0].revenue, 2.5);
+    assert.equal(result[0].charge_count, 2);
+    assert.equal(Number.isNaN(result[0].revenue), false);
+  });
+
+  it('uses createdDate when recordedDate is missing and prefers recordedDate when both exist', async () => {
+    const { aggregatePaymentsByDay } = await import('../utils/shopmonkey.js');
+
+    const result = aggregatePaymentsByDay([
+      { createdDate: '2026-03-03T15:00:00Z', amountCents: 1000, status: 'succeeded', transactionType: 'Charge' },
+      {
+        recordedDate: '2026-03-04T01:00:00Z',
+        createdDate: '2026-01-01T00:00:00Z',
+        amountCents: 100,
+        status: 'succeeded',
+        transactionType: 'Charge',
+      },
+    ]);
+
+    const byDate = Object.fromEntries(result.map((d) => [d.date, d]));
+    assert.equal(byDate['2026-03-03'].revenue, 10);
+    assert.equal(byDate['2026-03-04'].revenue, 1);
+    assert.equal(byDate['2026-01-01'], undefined);
+  });
+
+  it('skips rows with no date and nets a refund-only day without incrementing charges', async () => {
+    const { aggregatePaymentsByDay } = await import('../utils/shopmonkey.js');
+
+    const result = aggregatePaymentsByDay([
+      { amountCents: 500, status: 'succeeded', transactionType: 'Charge' },
+      { recordedDate: '', createdDate: '', amountCents: 500, status: 'succeeded', transactionType: 'Charge' },
+      { recordedDate: '2026-03-05', amountCents: 400, status: 'succeeded', transactionType: 'Refund' },
+    ]);
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].date, '2026-03-05');
+    assert.equal(result[0].revenue, -4);
+    assert.equal(result[0].charge_count, 0);
+    assert.equal(result[0].refund_total, 4);
+  });
 });
