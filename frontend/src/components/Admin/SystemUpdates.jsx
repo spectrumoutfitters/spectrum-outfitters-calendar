@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import {
+  bulkApproveBlockReason,
+  systemUpdateEditFlags,
+  systemUpdateReadPercentage,
+  systemUpdateRowFlags,
+  systemUpdateSaveMessage,
+} from '../../utils/systemUpdateForm';
 import { formatDateTime } from '../../utils/helpers';
 
 const SystemUpdates = () => {
@@ -50,15 +57,13 @@ const SystemUpdates = () => {
     try {
       if (editingUpdate) {
         await api.put(`/updates/admin/${editingUpdate.id}`, formData);
-        setMessage({ type: 'success', text: 'Update updated successfully!' });
       } else {
         await api.post('/updates/admin', formData);
-        if (formData.auto_approve) {
-          setMessage({ type: 'success', text: 'Update created and published immediately!' });
-        } else {
-          setMessage({ type: 'success', text: 'Update created and pending approval!' });
-        }
       }
+      setMessage({
+        type: 'success',
+        text: systemUpdateSaveMessage(Boolean(editingUpdate), formData.auto_approve),
+      });
       
       setShowForm(false);
       setEditingUpdate(null);
@@ -82,8 +87,7 @@ const SystemUpdates = () => {
       version: update.version || '',
       update_type: update.update_type,
       priority: update.priority,
-      show_on_login: update.show_on_login === 1,
-      is_active: update.is_active === 1
+      ...systemUpdateEditFlags(update),
     });
     setShowForm(true);
   };
@@ -139,8 +143,9 @@ const SystemUpdates = () => {
   };
 
   const handleBulkApprove = async () => {
-    if (selectedPending.size === 0) {
-      setMessage({ type: 'error', text: 'Please select at least one update to approve' });
+    const blockReason = bulkApproveBlockReason(selectedPending.size);
+    if (blockReason) {
+      setMessage({ type: 'error', text: blockReason });
       return;
     }
 
@@ -193,11 +198,6 @@ const SystemUpdates = () => {
       maintenance: 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-100'
     };
     return colors[type] || colors.feature;
-  };
-
-  const getReadPercentage = (readCount, totalUsers) => {
-    if (!totalUsers || totalUsers === 0) return 0;
-    return Math.round((readCount / totalUsers) * 100);
   };
 
   if (loading) {
@@ -507,7 +507,9 @@ const SystemUpdates = () => {
                   </td>
                 </tr>
               ) : (
-                updates.map((update) => (
+                updates.map((update) => {
+                  const flags = systemUpdateRowFlags(update);
+                  return (
                   <tr key={update.id}>
                     <td className="px-6 py-4">
                       <div className="font-medium text-gray-900">{update.title}</div>
@@ -522,14 +524,14 @@ const SystemUpdates = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
-                        {update.is_pending === 1 ? (
+                        {flags.pending ? (
                           <span className="text-xs text-yellow-600 font-semibold">⏳ Pending Approval</span>
                         ) : (
-                          <span className={`text-xs ${update.is_active === 1 ? 'text-green-600' : 'text-gray-400'}`}>
-                            {update.is_active === 1 ? '✓ Active' : 'Inactive'}
+                          <span className={`text-xs ${flags.active ? 'text-green-600' : 'text-gray-400'}`}>
+                            {flags.active ? '✓ Active' : 'Inactive'}
                           </span>
                         )}
-                        {update.show_on_login === 1 && update.is_pending !== 1 && (
+                        {flags.showOnLogin && (
                           <span className="text-xs text-blue-600">Shows on login</span>
                         )}
                         {update.approved_by_name && (
@@ -540,7 +542,7 @@ const SystemUpdates = () => {
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {update.read_count || 0} / {update.total_users || 0} users
                       <div className="text-xs text-gray-400">
-                        ({getReadPercentage(update.read_count, update.total_users)}%)
+                        ({systemUpdateReadPercentage(update.read_count, update.total_users)}%)
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
@@ -563,7 +565,8 @@ const SystemUpdates = () => {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
