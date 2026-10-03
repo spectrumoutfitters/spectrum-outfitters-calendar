@@ -1,7 +1,12 @@
 import React from 'react';
 import { getPriorityColor, getCategoryColor, formatDate, getDueDateColor } from '../../utils/helpers';
+import { commentCountLabel, countCompletedSubtasks, taskCardActivity } from '../../utils/taskCardSignals';
 
 const TaskCard = ({ task, onClick, dragHandleProps }) => {
+  const subtasks = countCompletedSubtasks(task.subtasks);
+  const commentLabel = commentCountLabel(task.comments);
+  const activity = taskCardActivity(task);
+
   return (
     <div
       onClick={(e) => {
@@ -64,25 +69,25 @@ const TaskCard = ({ task, onClick, dragHandleProps }) => {
       </div>
 
       <div className="mt-2 flex items-center gap-3 text-xs text-gray-400 dark:text-neutral-400">
-        {task.subtasks && task.subtasks.length > 0 && (
+        {subtasks.total > 0 && (
           <span>
-            ✓ {task.subtasks.filter(st => st.is_completed === 1).length}/{task.subtasks.length} items
+            ✓ {subtasks.completed}/{subtasks.total} items
           </span>
         )}
-        {task.comments && task.comments.length > 0 && (
+        {commentLabel && (
           <span>
-            💬 {task.comments.length} comment{task.comments.length !== 1 ? 's' : ''}
+            💬 {commentLabel}
           </span>
         )}
-        {task.status === 'review' && (
+        {activity.needsReview && (
           <span className="text-warning font-semibold">⚠️ Needs Review</span>
         )}
-        {task.active_break && (
+        {activity.onPause && (
           <span className="text-orange-600 font-semibold flex items-center gap-1">
             ⏸️ On Pause
           </span>
         )}
-        {!task.active_break && task.status === 'in_progress' && task.started_at && !task.completed_at && (
+        {activity.working && (
           <span className="text-blue-600 font-semibold flex items-center gap-1">
             <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
             Working
