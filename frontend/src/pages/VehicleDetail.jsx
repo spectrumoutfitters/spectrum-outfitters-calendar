@@ -5,6 +5,7 @@ import PageShell from '../components/ui/PageShell';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import AvatarInitials from '../components/ui/AvatarInitials';
+import { vehicleRecordIdentifier, vehicleRecordTitle } from '../utils/crmVehicleLabel';
 
 const fmtCents = (cents) => {
   const n = Number(cents);
@@ -42,7 +43,7 @@ const VehicleDetail = () => {
   const vehicle = data?.vehicle;
   const invoices = data?.invoices || [];
   const parts = data?.parts || [];
-  const title = vehicle ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ') : 'Vehicle';
+  const title = vehicleRecordTitle(vehicle);
 
   return (
     <PageShell className="py-6">
@@ -59,7 +60,7 @@ const VehicleDetail = () => {
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-neutral-100">{title || 'Vehicle'}</h1>
             <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
-              {vehicle?.vin ? `VIN ${vehicle.vin}` : vehicle?.license_plate ? `Plate ${vehicle.license_plate}` : ''}
+              {vehicleRecordIdentifier(vehicle, '')}
             </p>
           </div>
         </div>

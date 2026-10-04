@@ -7,6 +7,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import AvatarInitials from '../components/ui/AvatarInitials';
+import { customerListVehicleLabel, invoiceListVehicleLabel } from '../utils/crmVehicleLabel';
 
 const fmtCents = (cents) => {
   const n = Number(cents);
@@ -320,11 +321,7 @@ const CRM = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
                   {customers.map((c) => {
-                    const primaryVehicle =
-                      [c.primary_vehicle_year, c.primary_vehicle_make, c.primary_vehicle_model].filter(Boolean).join(' ') ||
-                      c.primary_plate ||
-                      c.primary_vin ||
-                      '—';
+                    const primaryVehicle = customerListVehicleLabel(c);
                     return (
                       <tr
                         key={c.id}
@@ -391,7 +388,7 @@ const CRM = () => {
                     </td>
                     <td className="py-3 px-4 text-gray-700 dark:text-neutral-200">{i.customer_name || '—'}</td>
                     <td className="py-3 px-4 text-gray-700 dark:text-neutral-200">
-                      {[i.year, i.make, i.model].filter(Boolean).join(' ') || i.vin || i.license_plate || '—'}
+                      {invoiceListVehicleLabel(i)}
                     </td>
                     <td className="py-3 px-4 text-gray-500 dark:text-neutral-400">{i.invoice_date || '—'}</td>
                     <td className="py-3 px-4 text-right font-semibold text-gray-900 dark:text-neutral-100">{fmtCents(i.total_cents)}</td>
