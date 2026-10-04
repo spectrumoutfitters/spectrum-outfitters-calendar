@@ -7,6 +7,14 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import AvatarInitials from '../components/ui/AvatarInitials';
 import Chip from '../components/ui/Chip';
+import {
+  canSaveCustomerVehicle,
+  customerVehiclePayload,
+  uppercaseVehicleCode,
+  vehicleFieldTitleCase,
+  vehicleRecordIdentifier,
+  vehicleRecordTitle,
+} from '../utils/crmVehicleLabel';
 
 const fmtCents = (cents) => {
   const n = Number(cents);
@@ -57,17 +65,6 @@ const CustomerDetail = () => {
   const vehicles = data?.vehicles || [];
   const invoices = data?.invoices || [];
   const parts = data?.parts || [];
-
-  const titleCase = (v) => {
-    const s = (v || '').toString().trim();
-    if (!s) return '';
-    return s
-      .toLowerCase()
-      .split(' ')
-      .filter(Boolean)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ');
-  };
 
   const initials = (customer?.display_name || '—')
     .split(' ')
@@ -187,7 +184,7 @@ const CustomerDetail = () => {
                     <input
                       value={vehForm.make}
                       onChange={(e) => setVehForm((s) => ({ ...s, make: e.target.value }))}
-                      onBlur={(e) => setVehForm((s) => ({ ...s, make: titleCase(e.target.value) }))}
+                      onBlur={(e) => setVehForm((s) => ({ ...s, make: vehicleFieldTitleCase(e.target.value) }))}
                       className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-xs text-gray-900 dark:text-neutral-100"
                       placeholder="Toyota"
                     />
@@ -199,7 +196,7 @@ const CustomerDetail = () => {
                     <input
                       value={vehForm.model}
                       onChange={(e) => setVehForm((s) => ({ ...s, model: e.target.value }))}
-                      onBlur={(e) => setVehForm((s) => ({ ...s, model: titleCase(e.target.value) }))}
+                      onBlur={(e) => setVehForm((s) => ({ ...s, model: vehicleFieldTitleCase(e.target.value) }))}
                       className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-xs text-gray-900 dark:text-neutral-100"
                       placeholder="Camry"
                     />
@@ -210,7 +207,7 @@ const CustomerDetail = () => {
                     </label>
                     <input
                       value={vehForm.vin}
-                      onChange={(e) => setVehForm((s) => ({ ...s, vin: e.target.value.toUpperCase() }))}
+                      onChange={(e) => setVehForm((s) => ({ ...s, vin: uppercaseVehicleCode(e.target.value) }))}
                       className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-xs text-gray-900 dark:text-neutral-100 font-mono"
                       placeholder="Optional"
                     />
@@ -221,7 +218,7 @@ const CustomerDetail = () => {
                     </label>
                     <input
                       value={vehForm.license_plate}
-                      onChange={(e) => setVehForm((s) => ({ ...s, license_plate: e.target.value.toUpperCase() }))}
+                      onChange={(e) => setVehForm((s) => ({ ...s, license_plate: uppercaseVehicleCode(e.target.value) }))}
                       className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-xs text-gray-900 dark:text-neutral-100 font-mono"
                       placeholder="Optional"
                     />
@@ -232,18 +229,12 @@ const CustomerDetail = () => {
 
                 <Button
                   type="button"
-                  disabled={vehSaving || (!vehForm.year && !vehForm.make && !vehForm.model)}
+                  disabled={vehSaving || !canSaveCustomerVehicle(vehForm)}
                   onClick={async () => {
                     setVehSaving(true);
                     setVehMsg('');
                     try {
-                      const payload = {
-                        year: vehForm.year || null,
-                        make: vehForm.make || null,
-                        model: vehForm.model || null,
-                        vin: vehForm.vin || null,
-                        license_plate: vehForm.license_plate || null,
-                      };
+                      const payload = customerVehiclePayload(vehForm);
                       await api.post(`/crm/customers/${encodeURIComponent(id)}/vehicles`, payload);
                       const res = await api.get(`/crm/customers/${encodeURIComponent(id)}/history`);
                       setData(res.data || null);
@@ -277,10 +268,10 @@ const CustomerDetail = () => {
                     className="w-full text-left p-4 hover:bg-gray-50 dark:hover:bg-neutral-900 transition"
                   >
                     <p className="font-semibold text-gray-900 dark:text-neutral-100">
-                      {[v.year, v.make, v.model].filter(Boolean).join(' ') || 'Vehicle'}
+                      {vehicleRecordTitle(v)}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
-                      {v.vin ? `VIN ${v.vin}` : v.license_plate ? `Plate ${v.license_plate}` : '—'}
+                      {vehicleRecordIdentifier(v, '—')}
                     </p>
                   </button>
                 ))}
