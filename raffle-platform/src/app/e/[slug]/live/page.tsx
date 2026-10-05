@@ -4,6 +4,7 @@ import { LiveDrawBoardClient } from "@/components/raffle/LiveDrawBoardClient";
 import { LiveDrawUnavailable } from "@/components/raffle/LiveDrawUnavailable";
 import { MissingAppsScriptConfig } from "@/components/raffle/MissingAppsScriptConfig";
 import { fetchEventConfig } from "@/lib/eventServer";
+import { liveDrawPageGate } from "@/lib/rafflePublicPageGate";
 
 /** Avoid caching a notFound state; always re-check event + Apps Script */
 export const dynamic = "force-dynamic";
@@ -23,28 +24,35 @@ export default async function LiveDrawPage(props: PageProps) {
   const { slug } = await props.params;
   const res = await fetchEventConfig(slug, { noStore: true });
 
-  if (!res.ok) {
-    if (res.error === "missing_apps_script_url") {
+  const gate = liveDrawPageGate(res);
+  switch (gate.kind) {
+    case "missing_apps_script":
       return <MissingAppsScriptConfig />;
+    case "cannot_load":
+      return <LiveDrawUnavailable variant="cannot_load" slug={slug} error={gate.error} />;
+    case "no_active_pools":
+      return <LiveDrawUnavailable variant="no_active_pools" slug={slug} />;
+    case "board": {
+      if (!res.ok) {
+        return <LiveDrawUnavailable variant="cannot_load" slug={slug} error={res.error} />;
+      }
+      return (
+        <>
+          <LiveDrawBoardClient slug={slug} event={res.event} />
+          <noscript>
+            <div className="fixed bottom-0 left-0 right-0 bg-amber-900 px-4 py-3 text-center text-sm text-amber-100">
+              Turn on JavaScript to see the live board.{" "}
+              <Link href={`/e/${encodeURIComponent(slug)}`} className="underline">
+                Enter raffle
+              </Link>
+            </div>
+          </noscript>
+        </>
+      );
     }
-    return <LiveDrawUnavailable variant="cannot_load" slug={slug} error={res.error} />;
+    default: {
+      const _exhaustive: never = gate;
+      return _exhaustive;
+    }
   }
-
-  if (res.event.raffles.length === 0) {
-    return <LiveDrawUnavailable variant="no_active_pools" slug={slug} />;
-  }
-
-  return (
-    <>
-      <LiveDrawBoardClient slug={slug} event={res.event} />
-      <noscript>
-        <div className="fixed bottom-0 left-0 right-0 bg-amber-900 px-4 py-3 text-center text-sm text-amber-100">
-          Turn on JavaScript to see the live board.{" "}
-          <Link href={`/e/${encodeURIComponent(slug)}`} className="underline">
-            Enter raffle
-          </Link>
-        </div>
-      </noscript>
-    </>
-  );
 }
