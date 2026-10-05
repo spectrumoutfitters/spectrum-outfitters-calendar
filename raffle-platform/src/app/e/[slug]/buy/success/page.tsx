@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { fetchEventConfig } from "@/lib/eventServer";
+import { paidSuccessEventLabel, paidSuccessManagePath } from "@/lib/paidSuccessManageUrl";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -19,10 +20,8 @@ export default async function BuySuccessPage(props: PageProps) {
   const { token } = await props.searchParams;
   const res = await fetchEventConfig(slug);
 
-  const eventName = res.ok ? res.event.name : "your raffle";
-  const manageUrl = token
-    ? `/e/${encodeURIComponent(slug)}/my-entry?token=${encodeURIComponent(token)}`
-    : `/e/${encodeURIComponent(slug)}`;
+  const eventName = paidSuccessEventLabel(res);
+  const manageUrl = paidSuccessManagePath(slug, token);
 
   return (
     <main className="min-h-dvh bg-stone-50 px-4 py-12 text-stone-900 dark:bg-neutral-950 dark:text-neutral-100">

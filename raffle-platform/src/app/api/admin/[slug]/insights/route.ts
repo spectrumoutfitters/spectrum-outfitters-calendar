@@ -1,34 +1,31 @@
 import { NextResponse } from "next/server";
 import { fetchAppsScriptPost } from "@/lib/appsScriptFetch";
+import {
+  adminUpstreamFromBody,
+  adminUpstreamFromThrow,
+  adminUpstreamPreflight,
+} from "@/lib/adminUpstreamProxy";
 import { getAppsScriptUrl } from "@/lib/env";
 
 /** Admin Insights: deeper dashboard data (pools, revenue, recent entries, top entrants). */
 export async function POST(request: Request, context: { params: Promise<{ slug: string }> }) {
   const { slug } = await context.params;
-  const adminKey = request.headers.get("x-admin-key")?.trim();
-  if (!adminKey) {
-    return NextResponse.json({ ok: false, error: "missing_admin_key" }, { status: 401 });
+  const preflight = adminUpstreamPreflight(request.headers.get("x-admin-key"), getAppsScriptUrl());
+  if (!preflight.ok) {
+    return NextResponse.json(preflight.body, { status: preflight.status });
   }
 
-  const base = getAppsScriptUrl();
-  if (!base) {
-    return NextResponse.json({ ok: false, error: "server_misconfigured" }, { status: 503 });
-  }
   try {
-    const res = await fetchAppsScriptPost(base, { action: "getAdminInsights", slug, adminKey });
+    const res = await fetchAppsScriptPost(preflight.appsScriptUrl, {
+      action: "getAdminInsights",
+      slug,
+      adminKey: preflight.adminKey,
+    });
     const text = await res.text();
-    let data: unknown;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      return NextResponse.json({ ok: false, error: "upstream_not_json" }, { status: 502 });
-    }
-    return NextResponse.json(data, { status: res.ok ? 200 : res.status });
+    const mapped = adminUpstreamFromBody(res.ok, res.status, text);
+    return NextResponse.json(mapped.body, { status: mapped.status });
   } catch (e: unknown) {
-    const name = e instanceof Error ? e.name : "";
-    if (name === "TimeoutError" || name === "AbortError") {
-      return NextResponse.json({ ok: false, error: "apps_script_timeout" }, { status: 504 });
-    }
-    return NextResponse.json({ ok: false, error: "upstream_unreachable" }, { status: 502 });
+    const mapped = adminUpstreamFromThrow(e);
+    return NextResponse.json(mapped.body, { status: mapped.status });
   }
 }

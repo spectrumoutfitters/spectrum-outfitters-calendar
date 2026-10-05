@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { MyEntryManageClient } from "@/components/raffle/MyEntryManageClient";
 import { fetchEventConfig } from "@/lib/eventServer";
+import { myEntryPageGate } from "@/lib/rafflePublicPageGate";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -28,14 +29,21 @@ export default async function MyEntryPage(props: PageProps) {
   const { slug } = await props.params;
   const { token: tokenParam } = await props.searchParams;
   const res = await fetchEventConfig(slug);
-  if (!res.ok) notFound();
-  if (!res.event.active || res.event.raffles.length === 0) notFound();
-
-  const initialToken = typeof tokenParam === "string" ? tokenParam : "";
-
-  return (
-    <Suspense fallback={<Fallback />}>
-      <MyEntryManageClient event={res.event} slug={slug} initialToken={initialToken} />
-    </Suspense>
-  );
+  const gate = myEntryPageGate(res, tokenParam);
+  switch (gate.kind) {
+    case "not_found":
+      return notFound();
+    case "manage": {
+      if (!res.ok) notFound();
+      return (
+        <Suspense fallback={<Fallback />}>
+          <MyEntryManageClient event={res.event} slug={slug} initialToken={gate.initialToken} />
+        </Suspense>
+      );
+    }
+    default: {
+      const _exhaustive: never = gate;
+      return _exhaustive;
+    }
+  }
 }
