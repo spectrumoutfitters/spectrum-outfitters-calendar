@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { addProductToCart, sumCartTotal, updateCartQuantity } from '../utils/storeCart';
 
 // Helper to get backend URL for images
 const getBackendUrl = () => {
@@ -57,36 +58,19 @@ const Products = () => {
   };
 
   const addToCart = (product) => {
-    const existingItem = cart.find(item => item.product_id === product.id);
-    if (existingItem) {
-      setCart(cart.map(item =>
-        item.product_id === product.id
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      ));
-    } else {
-      setCart([...cart, { product_id: product.id, product_name: product.name, price: product.price, quantity: 1 }]);
-    }
+    setCart(addProductToCart(cart, product));
   };
 
   const removeFromCart = (productId) => {
-    setCart(cart.filter(item => item.product_id !== productId));
+    setCart(updateCartQuantity(cart, productId, 0));
   };
 
   const updateQuantity = (productId, quantity) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-    } else {
-      setCart(cart.map(item =>
-        item.product_id === productId
-          ? { ...item, quantity }
-          : item
-      ));
-    }
+    setCart(updateCartQuantity(cart, productId, quantity));
   };
 
   const getCartTotal = () => {
-    return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+    return sumCartTotal(cart);
   };
 
   const handleCheckout = () => {
