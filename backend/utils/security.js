@@ -1,5 +1,7 @@
 import geoip from 'geoip-lite';
 import db from '../database/db.js';
+import { scoreOnPremPresence } from './onPremScore.js';
+import { shouldSkipVpnLookup } from './vpnLookupGate.js';
 
 /**
  * Extract the real client IP from an Express request behind Nginx.
@@ -107,47 +109,13 @@ function ipToLong(ip) {
  */
 export async function computeOnPremScore(ip, browserGeo, ipGeo) {
   const config = await loadOnPremConfig();
-  let score = 0;
-  let networkOk = false;
-  let geoOk = false;
-
-  // Network check (50 pts)
-  if (config.allowedIPs.length > 0) {
-    networkOk = ipMatchesAllowlist(ip, config.allowedIPs);
-    if (networkOk) score += 50;
-  } else {
-    // No allowlist configured — skip network scoring
-    score += 25;
-  }
-
-  // Browser geolocation check (30 pts)
-  if (config.geofence && browserGeo?.lat != null && browserGeo?.lng != null) {
-    const dist = haversineMeters(
-      config.geofence.lat, config.geofence.lng,
-      browserGeo.lat, browserGeo.lng
-    );
-    if (dist <= config.geofence.radiusMeters) {
-      geoOk = true;
-      score += 30;
-    }
-  } else if (!config.geofence) {
-    score += 15;
-  }
-
-  // IP geo check (20 pts) — approximate, city-level
-  if (config.geofence && ipGeo?.lat != null && ipGeo?.lng != null) {
-    const dist = haversineMeters(
-      config.geofence.lat, config.geofence.lng,
-      ipGeo.lat, ipGeo.lng
-    );
-    if (dist <= (config.geofence.radiusMeters || 50000) * 3) {
-      score += 20;
-    }
-  } else if (!config.geofence) {
-    score += 10;
-  }
-
-  return { networkOk, geoOk, score: Math.min(score, 100) };
+  return scoreOnPremPresence({
+    ip,
+    allowedIPs: config.allowedIPs,
+    geofence: config.geofence,
+    browserGeo,
+    ipGeo,
+  });
 }
 
 /**
@@ -200,7 +168,7 @@ export async function recordLoginEvent({
  */
 export function checkVPN(ip) {
   const contact = process.env.GETIPINTEL_CONTACT?.trim();
-  if (!contact || !ip || ip === '127.0.0.1' || ip === '::1' || ip === 'unknown') {
+  if (shouldSkipVpnLookup(ip, contact)) {
     return Promise.resolve(false);
   }
   const cleaned = ip.replace(/^::ffff:/, '');
