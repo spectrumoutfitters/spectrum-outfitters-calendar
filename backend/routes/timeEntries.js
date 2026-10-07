@@ -1,7 +1,7 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
-import { calculateHours, getWeekEndingDate } from '../utils/helpers.js';
+import { calculateHours, getWeekEndingDate, normalizeBreakMinutes } from '../utils/helpers.js';
 import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { sendPushToAdmins } from '../utils/pushNotifications.js';
 
@@ -224,14 +224,16 @@ router.post('/clock-out', async (req, res) => {
     }
 
     const clockOutTime = new Date().toISOString();
-    // Lunch breaks don't subtract time - only regular breaks do
+    // Lunch breaks don't subtract time - only regular breaks do.
+    // Negative break minutes are not a credit; they would inflate paid hours.
+    const storedBreakMinutes = normalizeBreakMinutes(break_minutes);
     const isLunchBreak = notes && notes.toLowerCase().includes('lunch break');
-    const breakMinutesForCalc = isLunchBreak ? 0 : (break_minutes || 0);
+    const breakMinutesForCalc = isLunchBreak ? 0 : storedBreakMinutes;
     const hours = calculateHours(activeEntry.clock_in, clockOutTime, breakMinutesForCalc);
 
     await db.runAsync(
       'UPDATE time_entries SET clock_out = ?, break_minutes = ?, notes = ? WHERE id = ?',
-      [clockOutTime, break_minutes || 0, notes || null, activeEntry.id]
+      [clockOutTime, storedBreakMinutes, notes || null, activeEntry.id]
     );
 
     const entry = await db.getAsync('SELECT * FROM time_entries WHERE id = ?', [activeEntry.id]);
@@ -476,7 +478,7 @@ router.get('/current', async (req, res) => {
       if (!entry.clock_in) return;
       
       // Lunch breaks don't subtract time - only regular breaks do
-      const breakMinutes = (entry.notes && entry.notes.toLowerCase().includes('lunch break')) ? 0 : (entry.break_minutes || 0);
+      const breakMinutes = (entry.notes && entry.notes.toLowerCase().includes('lunch break')) ? 0 : normalizeBreakMinutes(entry.break_minutes);
       
       if (entry.clock_out) {
         const hours = calculateHours(entry.clock_in, entry.clock_out, breakMinutes) || 0;
@@ -692,7 +694,7 @@ router.get('/employees/status', requireAdmin, async (req, res) => {
               // Completed entry
               const clockIn = new Date(entry.clock_in);
               const clockOut = new Date(entry.clock_out);
-              const breakMins = entry.break_minutes || 0;
+              const breakMins = normalizeBreakMinutes(entry.break_minutes);
               const hoursMs = clockOut - clockIn - (breakMins * 60 * 1000);
               hoursWorkedToday += hoursMs / (1000 * 60 * 60);
             } else {
@@ -1033,7 +1035,7 @@ router.get('/entries/grouped', async (req, res) => {
       // Calculate hours from work entries (pre-lunch work)
       day.workEntries.forEach(entry => {
         // Lunch breaks don't subtract time - only regular breaks do
-        const breakMinutes = (entry.notes && entry.notes.toLowerCase().includes('lunch break')) ? 0 : (entry.break_minutes || 0);
+        const breakMinutes = (entry.notes && entry.notes.toLowerCase().includes('lunch break')) ? 0 : normalizeBreakMinutes(entry.break_minutes);
         
         if (entry.isPreLunchWork) {
           // For pre-lunch entries, calculate hours only for the pre-lunch period
@@ -1311,7 +1313,7 @@ router.post('/entries', requireAdmin, async (req, res) => {
     
     const result = await db.runAsync(
       'INSERT INTO time_entries (user_id, clock_in, clock_out, break_minutes, notes, week_ending_date) VALUES (?, ?, ?, ?, ?, ?)',
-      [user_id, clock_in, clock_out || null, break_minutes || 0, notes || null, weekEnding]
+      [user_id, clock_in, clock_out || null, normalizeBreakMinutes(break_minutes), notes || null, weekEnding]
     );
     
     const entry = await db.getAsync('SELECT * FROM time_entries WHERE id = ?', [result.lastID]);
@@ -1344,7 +1346,7 @@ router.put('/entries/:id', requireAdmin, async (req, res) => {
       [
         clock_in || currentEntry.clock_in,
         clock_out !== undefined ? clock_out : currentEntry.clock_out,
-        break_minutes !== undefined ? break_minutes : currentEntry.break_minutes,
+        break_minutes !== undefined ? normalizeBreakMinutes(break_minutes) : normalizeBreakMinutes(currentEntry.break_minutes),
         notes !== undefined ? notes : currentEntry.notes,
         id
       ]

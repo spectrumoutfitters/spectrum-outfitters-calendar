@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../database/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { normalizeBreakMinutes } from '../utils/helpers.js';
 import { callClaude, isAIEnabled } from '../utils/aiService.js';
 import {
   getTodayInHouston,
@@ -1108,7 +1109,7 @@ async function calculateWeeklyPayroll(weekStart, weekEnd) {
       for (const entry of timeEntries) {
         const clockIn = new Date(entry.clock_in);
         const clockOut = new Date(entry.clock_out);
-        const hours = (clockOut - clockIn) / (1000 * 60 * 60) - (entry.break_minutes || 0) / 60;
+        const hours = (clockOut - clockIn) / (1000 * 60 * 60) - normalizeBreakMinutes(entry.break_minutes) / 60;
         totalHours += Math.max(0, hours);
       }
 

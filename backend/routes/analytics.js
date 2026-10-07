@@ -119,7 +119,7 @@ router.get('/employee-performance', async (req, res) => {
         SELECT 
           SUM(CASE 
             WHEN clock_out IS NOT NULL 
-            THEN (julianday(clock_out) - julianday(clock_in)) * 24 - (break_minutes / 60.0)
+            THEN (julianday(clock_out) - julianday(clock_in)) * 24 - ((CASE WHEN break_minutes < 0 THEN 0 ELSE break_minutes END) / 60.0)
             ELSE 0 
           END) as total_hours_worked
         FROM time_entries
@@ -263,7 +263,7 @@ router.get('/weekly-comparison', async (req, res) => {
           COUNT(DISTINCT CASE WHEN t.status = 'completed' THEN t.id END) as tasks_completed,
           SUM(CASE 
             WHEN te.clock_out IS NOT NULL 
-            THEN (julianday(te.clock_out) - julianday(te.clock_in)) * 24 - (te.break_minutes / 60.0)
+            THEN (julianday(te.clock_out) - julianday(te.clock_in)) * 24 - ((CASE WHEN te.break_minutes < 0 THEN 0 ELSE te.break_minutes END) / 60.0)
             ELSE 0 
           END) as hours_worked
         FROM users u
@@ -475,12 +475,12 @@ router.get('/employee-detail/:id', async (req, res) => {
         COUNT(DISTINCT DATE(clock_in)) as days_worked,
         SUM(CASE 
           WHEN clock_out IS NOT NULL 
-          THEN (julianday(clock_out) - julianday(clock_in)) * 24 - (break_minutes / 60.0)
+          THEN (julianday(clock_out) - julianday(clock_in)) * 24 - ((CASE WHEN break_minutes < 0 THEN 0 ELSE break_minutes END) / 60.0)
           ELSE 0 
         END) as total_hours_worked,
         AVG(CASE 
           WHEN clock_out IS NOT NULL 
-          THEN (julianday(clock_out) - julianday(clock_in)) * 24 - (break_minutes / 60.0)
+          THEN (julianday(clock_out) - julianday(clock_in)) * 24 - ((CASE WHEN break_minutes < 0 THEN 0 ELSE break_minutes END) / 60.0)
           ELSE NULL 
         END) as avg_hours_per_day
       FROM time_entries
