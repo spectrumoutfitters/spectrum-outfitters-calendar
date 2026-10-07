@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import PartsArrivedModal from './PartsArrivedModal';
 import NeedAssistanceModal from './NeedAssistanceModal';
 import CustomerArrivedModal from './CustomerArrivedModal';
+import { shouldShowQuickNotifications } from '../../utils/quickNotifyVisibility';
 
 const QuickNotificationButton = ({ stacked = false }) => {
   const { user, isAdmin } = useAuth();
@@ -11,8 +12,7 @@ const QuickNotificationButton = ({ stacked = false }) => {
   const [showNeedAssistance, setShowNeedAssistance] = useState(false);
   const [showCustomerArrived, setShowCustomerArrived] = useState(false);
 
-  // Only show for employees
-  if (isAdmin || !user) return null;
+  if (!shouldShowQuickNotifications({ user, isAdmin })) return null;
 
   const notificationButton = (
     <button

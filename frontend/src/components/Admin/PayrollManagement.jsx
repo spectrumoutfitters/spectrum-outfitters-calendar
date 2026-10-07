@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
-
-const PAYROLL_IFRAME_LOAD_TIMEOUT_MS = 12000;
+import {
+  PAYROLL_IFRAME_LOAD_TIMEOUT_MS,
+  PAYROLL_IFRAME_SRC,
+  payrollPanelKind,
+} from '../../utils/payrollEmbedState';
 
 const PayrollManagement = () => {
   const { user } = useAuth();
@@ -41,7 +44,9 @@ const PayrollManagement = () => {
     }
   };
 
-  if (loading) {
+  const panel = payrollPanelKind({ loading, hasAccess, error, iframeLoadFailed });
+
+  if (panel === 'loading') {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-gray-600 dark:text-neutral-100">Loading...</div>
@@ -49,7 +54,7 @@ const PayrollManagement = () => {
     );
   }
 
-  if (error || !hasAccess) {
+  if (panel === 'denied') {
     return (
       <div className="bg-white dark:bg-neutral-950 rounded-lg shadow-md dark:shadow-neutral-950/50 dark:border dark:border-neutral-700 p-8">
         <div className="text-center">
@@ -78,7 +83,7 @@ const PayrollManagement = () => {
         </div>
 
         <div className="border-2 border-gray-300 dark:border-neutral-700 rounded-lg overflow-hidden" style={{ height: '800px' }}>
-          {iframeLoadFailed ? (
+          {panel === 'unavailable' ? (
             <div className="w-full h-full min-h-[400px] flex flex-col items-center justify-center gap-4 bg-gray-50 dark:bg-neutral-950 p-8 text-center">
               <span className="text-4xl" aria-hidden>⚠️</span>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-neutral-100">Payroll app not available</h3>
@@ -89,7 +94,7 @@ const PayrollManagement = () => {
             </div>
           ) : (
             <iframe
-              src="/payroll-system/index.html"
+              src={PAYROLL_IFRAME_SRC}
               title="Payroll System"
               className="w-full h-full border-0"
               style={{ minHeight: '800px' }}

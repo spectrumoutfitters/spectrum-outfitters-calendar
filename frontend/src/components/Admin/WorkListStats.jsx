@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import {
+  completionPercent,
+  formatAverageWorkMinutes,
+  worklistCategoryLabel,
+  worklistStatsSearchParams,
+} from '../../utils/worklistReport';
 
 const WorkListStats = () => {
   const [loading, setLoading] = useState(true);
@@ -16,9 +22,7 @@ const WorkListStats = () => {
   const loadStats = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filters.start_date) params.append('start_date', filters.start_date);
-      if (filters.end_date) params.append('end_date', filters.end_date);
+      const params = worklistStatsSearchParams(filters);
 
       const response = await api.get(`/admin/worklist/stats?${params.toString()}`);
       setStats(response.data);
@@ -29,16 +33,7 @@ const WorkListStats = () => {
     }
   };
 
-  const getCategoryLabel = (category) => {
-    const labels = {
-      'time_approval': 'Time Approval',
-      'task_review': 'Task Review',
-      'compliance': 'Compliance',
-      'inventory': 'Inventory',
-      'general': 'General'
-    };
-    return labels[category] || category;
-  };
+  const getCategoryLabel = worklistCategoryLabel;
 
   if (loading) {
     return (
@@ -100,7 +95,7 @@ const WorkListStats = () => {
         <div className="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-2">Avg Time</h3>
           <p className="text-3xl font-bold text-purple-600">
-            {stats.averageTimeMinutes ? `${Math.round(stats.averageTimeMinutes)}m` : '-'}
+            {formatAverageWorkMinutes(stats.averageTimeMinutes)}
           </p>
         </div>
       </div>
@@ -111,7 +106,7 @@ const WorkListStats = () => {
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Category Breakdown</h3>
           <div className="space-y-3">
             {stats.categoryBreakdown.map((cat) => {
-              const completionRate = cat.total > 0 ? Math.round((cat.completed / cat.total) * 100) : 0;
+              const completionRate = completionPercent(cat.completed, cat.total);
               return (
                 <div key={cat.category}>
                   <div className="flex justify-between items-center mb-1">
@@ -141,7 +136,7 @@ const WorkListStats = () => {
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Priority Breakdown</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {stats.priorityBreakdown.map((pri) => {
-              const completionRate = pri.total > 0 ? Math.round((pri.completed / pri.total) * 100) : 0;
+              const completionRate = completionPercent(pri.completed, pri.total);
               return (
                 <div key={pri.priority} className="text-center">
                   <p className="text-2xl font-bold text-gray-900">{pri.completed}</p>

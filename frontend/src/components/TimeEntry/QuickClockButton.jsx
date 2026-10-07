@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
 import { calculateElapsedTime } from '../../utils/helpers';
+import { buildQuickClockOutBody } from '../../utils/cleanupClockOut';
 import CleanupChecklist from './CleanupChecklist';
 
 /**
@@ -87,11 +88,7 @@ export default function QuickClockButton({ onClockAction, compact = false }) {
   const handleClockOutConfirm = async ({ cleanup_completed, notes }) => {
     setLoading(true);
     try {
-      await api.post('/time/clock-out', {
-        break_minutes: 0,
-        notes: notes || null,
-        cleanup_completed,
-      });
+      await api.post('/time/clock-out', buildQuickClockOutBody({ cleanup_completed, notes }));
       setShowChecklist(false);
       await loadStatus();
       setConfirmation({ type: 'out', time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) });

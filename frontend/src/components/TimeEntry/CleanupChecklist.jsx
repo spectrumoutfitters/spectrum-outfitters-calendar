@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { buildCleanupConfirmPayload } from '../../utils/cleanupClockOut';
 
 const CHECKLIST_ITEMS = [
   { id: 'work_area', label: 'Clean work area' },
@@ -15,7 +16,7 @@ export default function CleanupChecklist({ onConfirm, onCancel, loading }) {
   const toggle = (id) => setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const handleConfirm = () => {
-    onConfirm({ cleanup_completed: true, notes: notes.trim() || null });
+    onConfirm(buildCleanupConfirmPayload(notes));
   };
 
   return (
