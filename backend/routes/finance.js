@@ -18,6 +18,7 @@ import {
   normalizePayRecordDate,
   dedupePayRecordsList,
 } from '../utils/payrollDedupe.js';
+import { normalizeBreakMinutes } from '../utils/helpers.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -98,7 +99,7 @@ async function getWeeklyExpenses(weekStart, weekEnd) {
       );
       let hours = 0;
       for (const e of entries) {
-        hours += Math.max(0, (new Date(e.clock_out) - new Date(e.clock_in)) / 3600000 - (e.break_minutes || 0) / 60);
+        hours += Math.max(0, (new Date(e.clock_out) - new Date(e.clock_in)) / 3600000 - normalizeBreakMinutes(e.break_minutes) / 60);
       }
       payrollTotal += hours * parseFloat(emp.hourly_rate);
     }
