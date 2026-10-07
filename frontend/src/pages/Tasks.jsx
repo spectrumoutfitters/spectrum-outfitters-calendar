@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import KanbanBoard from '../components/Tasks/KanbanBoard';
 import MyWorkList from './MyWorkList';
+import { initialTasksTab, tasksTabForStatusFilter } from '../utils/tasksBoardTab';
 
 const Tasks = () => {
   const [searchParams] = useSearchParams();
@@ -10,11 +11,11 @@ const Tasks = () => {
   const statusFilter = searchParams.get('status');
 
   // Admins default to All Tasks; employees default to My Tasks
-  const [activeTab, setActiveTab] = useState(isAdmin ? 'all' : 'mine');
+  const [activeTab, setActiveTab] = useState(() => initialTasksTab(isAdmin));
 
   useEffect(() => {
     // If there's a status filter in the URL, switch to All Tasks and scroll to that column
-    if (statusFilter) {
+    if (tasksTabForStatusFilter(statusFilter) === 'all') {
       setActiveTab('all');
       setTimeout(() => {
         const columnElement = document.querySelector(`[data-column-id="${statusFilter}"]`);

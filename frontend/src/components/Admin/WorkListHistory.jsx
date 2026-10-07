@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import {
+  formatHistoryMinutes,
+  worklistCategoryLabel,
+  worklistHistorySearchParams,
+} from '../../utils/worklistReport';
 
 const WorkListHistory = () => {
   const [loading, setLoading] = useState(true);
@@ -17,10 +22,7 @@ const WorkListHistory = () => {
   const loadHistory = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filters.start_date) params.append('start_date', filters.start_date);
-      if (filters.end_date) params.append('end_date', filters.end_date);
-      if (filters.category !== 'all') params.append('category', filters.category);
+      const params = worklistHistorySearchParams(filters);
 
       const response = await api.get(`/admin/worklist/history?${params.toString()}`);
       setHistory(response.data.history || []);
@@ -44,16 +46,7 @@ const WorkListHistory = () => {
     });
   };
 
-  const getCategoryLabel = (category) => {
-    const labels = {
-      'time_approval': 'Time Approval',
-      'task_review': 'Task Review',
-      'compliance': 'Compliance',
-      'inventory': 'Inventory',
-      'general': 'General'
-    };
-    return labels[category] || category;
-  };
+  const getCategoryLabel = worklistCategoryLabel;
 
   if (loading) {
     return (
@@ -140,7 +133,7 @@ const WorkListHistory = () => {
                     <td className="px-4 py-3 text-sm text-gray-600">{entry.completed_by_name || 'Unknown'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{formatDateTime(entry.completed_at)}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">
-                      {entry.time_taken_minutes ? `${entry.time_taken_minutes} min` : '-'}
+                      {formatHistoryMinutes(entry.time_taken_minutes)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{entry.notes || '-'}</td>
                   </tr>
