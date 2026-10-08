@@ -3,6 +3,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'fs';
 import http from 'http';
+import { FRONTEND_DEV_PORT, frontendDevUrl, parseBackendNetworkAddress } from './networkAccess.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -116,10 +117,10 @@ function startBackend() {
     const output = data.toString();
     
     // Extract network IP from backend output
-    const networkMatch = output.match(/Network:\s+http:\/\/([\d.]+):(\d+)/);
+    const networkMatch = parseBackendNetworkAddress(output);
     if (networkMatch) {
-      networkIP = networkMatch[1];
-      const port = networkMatch[2];
+      networkIP = networkMatch.ip;
+      const port = networkMatch.port;
       log('');
       log('═══════════════════════════════════════════════════════');
       log('🌐 NETWORK ACCESS INFORMATION');
@@ -177,8 +178,8 @@ function startFrontend() {
         log('═══════════════════════════════════════════════════════');
         log('✅ APPLICATION READY');
         log('═══════════════════════════════════════════════════════');
-        log(`📱 Network Access: https://${networkIP}:5173`);
-        log(`💻 Local Access:   https://localhost:5173`);
+        log(`📱 Network Access: ${frontendDevUrl(networkIP)}`);
+        log(`💻 Local Access:   ${frontendDevUrl('localhost')}`);
         log('');
         log('📷 On your phone: open the URL above, tap "Advanced" then "Proceed" to allow the dev certificate, then camera scanning will work.');
         log('═══════════════════════════════════════════════════════');
@@ -465,7 +466,7 @@ function createHTML() {
                         // Show network info if available
                         if (data.networkIP) {
                             networkInfo.style.display = 'block';
-                            networkUrl.textContent = 'https://' + data.networkIP + ':5173';
+                            networkUrl.textContent = 'https://' + data.networkIP + ':${FRONTEND_DEV_PORT}';
                         }
                     } else {
                         statusDiv.className = 'status stopped';
