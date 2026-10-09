@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
+import { reimbursementTrackerFigures } from '../../utils/reimbursementTrackerFigures';
 
 const ProfitAndLoss = () => {
   const [loading, setLoading] = useState(true);
@@ -681,29 +682,22 @@ const ProfitAndLoss = () => {
           {reimbursements.sources?.length > 0 && (
             <div className="space-y-3 mb-4">
               {reimbursements.sources.map((src) => {
-                const key = `${src.source_type}:${src.source_id}`;
-                const totalReceived = reimbursements.total_received_by_source[key] || 0;
-                const rhRows = reimbursements.payroll_history_row_count ?? 0;
-                const rhDb = reimbursements.payroll_history_db_count ?? 0;
-                const isMonthly = src.expected_period === 'monthly';
+                const {
+                  key,
+                  totalReceived,
+                  isMonthly,
+                  totalPaid,
+                  payrollPaidHint,
+                  amountOwed,
+                  payRunCount,
+                  accruedShare,
+                  balance,
+                } = reimbursementTrackerFigures(src, {
+                  totalReceivedBySource: reimbursements.total_received_by_source,
+                  payrollHistoryRowCount: reimbursements.payroll_history_row_count,
+                  payrollHistoryDbCount: reimbursements.payroll_history_db_count,
+                });
                 const expectedLabel = isMonthly ? `Expected per month: ${formatCurrency(src.expected_amount)}` : `Expected per pay: ${formatCurrency(src.expected_amount)}`;
-                const payRecords = src.pay_records || [];
-                const totalPaid = src.total_paid_from_payroll != null ? src.total_paid_from_payroll : payRecords.reduce((s, r) => s + (r.amount || 0), 0);
-                const payrollPaidHint =
-                  totalPaid > 0
-                    ? rhDb > 0
-                      ? 'Sum of pays from stored payroll history (Calendar database; file on disk is optional).'
-                      : 'Sum of pays in payroll history'
-                    : rhRows === 0
-                      ? 'No pay history on the server yet. Use Import pay history (JSON) with payroll-history.json from the Payroll app PC.'
-                      : 'No pays matched this person — align Calendar user ID or full name with the Payroll System export.';
-                const amountOwed = src.amount_owed_estimate != null ? src.amount_owed_estimate : 0;
-                const payRunCount = payRecords.length;
-                const accruedShare =
-                  src.cumulative_expected_from_other != null
-                    ? src.cumulative_expected_from_other
-                    : (isMonthly ? 0 : payRunCount * (parseFloat(src.expected_amount) || 0));
-                const balance = accruedShare - totalReceived;
                 return (
                   <div key={key} className="p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
