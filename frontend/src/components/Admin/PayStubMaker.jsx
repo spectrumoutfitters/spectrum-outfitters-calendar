@@ -1,7 +1,13 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { format, endOfMonth, subMonths } from 'date-fns';
 import { generatePayStubsPdf, parsePayDate, paycheckGrossFromEntry, weeklyChecksSharePayWeekDay } from '../../utils/payStubPdf';
-import { computeContractorDeductions, computeW2Deductions } from '../../utils/payrollTaxUS';
+import { computeContractorDeductions } from '../../utils/payrollTaxUS';
+import {
+  anyPriorYtdFieldFilled,
+  formatDeductionFields,
+  parseOptionalTaxYear,
+  sequentialW2DeductionsInRowOrder,
+} from '../../utils/payStubW2Sequence';
 
 const PAY_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Other'];
 const WORKER_TYPES = [
@@ -87,76 +93,6 @@ function emptyMoneyRow(periodEnd) {
     otherLabel: '',
     otherAmount: '',
   };
-}
-
-function moneyFixed2(n) {
-  const x = Number(n);
-  if (!Number.isFinite(x)) return '';
-  return x.toFixed(2);
-}
-
-function sequentialW2DeductionsInRowOrder(
-  rows,
-  payFrequency,
-  filingStatus,
-  workStateCode,
-  priorSocSeed = 0,
-  spreadMonthlyAcrossPaychecks = false,
-) {
-  const tagged = rows.map((row, idx) => ({ row, idx }));
-  tagged.sort((a, b) => +parsePayDate(a.row.periodEnd) - +parsePayDate(b.row.periodEnd));
-  let priorSocSec = Number(priorSocSeed) || 0;
-  const calcByIdx = {};
-  tagged.forEach(({ row, idx }) => {
-    const gross = paycheckGrossFromEntry(
-      Math.max(0, Number(row.gross) || 0),
-      payFrequency,
-      spreadMonthlyAcrossPaychecks,
-    );
-    const calc = computeW2Deductions({
-      gross,
-      payFrequency,
-      filingStatus,
-      workStateCode,
-      priorYtdSocSecWages: priorSocSec,
-    });
-    priorSocSec += calc.oasdiWagesNow ?? 0;
-    calcByIdx[idx] = calc;
-  });
-  return rows.map((_, idx) => {
-    const calc = calcByIdx[idx];
-    return {
-      federal: calc.federal,
-      socialSecurity: calc.socialSecurity,
-      medicare: calc.medicare,
-      medicareBase: calc.medicareBase,
-      medicareAdditional: calc.medicareAdditional,
-      state: calc.state,
-      oasdiWagesNow: calc.oasdiWagesNow ?? 0,
-    };
-  });
-}
-
-function formatDeductionFields(d) {
-  return {
-    federal: moneyFixed2(d.federal),
-    socialSecurity: moneyFixed2(d.socialSecurity),
-    medicare: moneyFixed2(d.medicare),
-    medicareBase: moneyFixed2(d.medicareBase),
-    medicareAdditional: moneyFixed2(d.medicareAdditional),
-    state: moneyFixed2(d.state),
-  };
-}
-
-function parseOptionalTaxYear(raw) {
-  const t = `${raw ?? ''}`.trim();
-  if (!t) return undefined;
-  const y = Number(t);
-  return Number.isFinite(y) && y >= 1970 && y <= 2150 ? y : undefined;
-}
-
-function anyPriorYtdFieldFilled(fields) {
-  return Object.values(fields).some((v) => `${v ?? ''}`.trim() !== '');
 }
 
 const MAX_PAYSTUB_LOGO_BYTES = 2_500_000;
@@ -320,6 +256,7 @@ const PayStubMaker = () => {
       workStateCode,
       employmentType === '1099' ? 0 : Number(`${priorYtdTaxableSocSecWages}`.replace(/,/g, '')) || 0,
       spreadMonthlyAcrossPaychecks,
+      { parsePayDate, paycheckGrossFromEntry },
     );
     const chronFirstIdx =
       baselineRowsForCalc.length === 0
@@ -438,6 +375,7 @@ const PayStubMaker = () => {
         workStateCode,
         priorSocSeed,
         spreadMonthlyAcrossPaychecks,
+        { parsePayDate, paycheckGrossFromEntry },
       );
       working = working.map((row, i) => ({
         ...row,
