@@ -3,6 +3,13 @@ import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import CleanupChecklist from '../TimeEntry/CleanupChecklist';
 import EmployeeTaskModal from '../Tasks/EmployeeTaskModal';
+import {
+  formatBreakRemaining,
+  formatElapsed,
+  formatTaskDuration,
+  shouldShowVacationHandoffChecklist,
+  vacationCountdownHeadline,
+} from '../../utils/employeeDashboardClock';
 
 // ─── Constants ───────────────────────────────────────────────
 
@@ -36,31 +43,6 @@ const getGreeting = (user) => {
   return `Hey, ${name}!`;
 };
 
-const formatElapsed = (ms) => {
-  if (!ms || ms < 0) return '0m';
-  const totalSec = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSec / 3600);
-  const mins = Math.floor((totalSec % 3600) / 60);
-  if (hours === 0) return `${mins}m`;
-  return `${hours}h ${mins}m`;
-};
-
-const formatBreakRemaining = (ms) => {
-  if (!ms || ms < 0) return '0:00';
-  const totalSec = Math.floor(ms / 1000);
-  const mins = Math.floor(totalSec / 60);
-  const secs = totalSec % 60;
-  return `${mins}:${String(secs).padStart(2, '0')}`;
-};
-
-const formatTaskDuration = (minutes) => {
-  if (!minutes) return null;
-  if (minutes < 60) return `${minutes}min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-};
-
 // ─── VacationCountdownWidget ──────────────────────────────
 
 const VACATION_CHECKLIST_ITEMS = [
@@ -76,7 +58,7 @@ function VacationCountdownWidget({ daysOff, onNotifyAdmin }) {
   const [notified, setNotified] = useState(false);
 
   const { days_remaining, start_date } = daysOff;
-  const showChecklist = days_remaining <= 3;
+  const showChecklist = shouldShowVacationHandoffChecklist(days_remaining);
 
   const startLabel = new Date(start_date + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long',
@@ -102,11 +84,7 @@ function VacationCountdownWidget({ daysOff, onNotifyAdmin }) {
       </div>
 
       <p className="text-gray-800 dark:text-blue-100 font-semibold text-base mb-1">
-        {days_remaining === 0
-          ? 'Your time off starts today!'
-          : days_remaining === 1
-          ? '1 day until your time off'
-          : `${days_remaining} days until your time off`}
+        {vacationCountdownHeadline(days_remaining)}
       </p>
       <p className="text-sm text-gray-500 dark:text-blue-300/70 mb-4">
         Starts {startLabel}

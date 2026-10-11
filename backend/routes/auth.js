@@ -6,6 +6,7 @@ import { ensureUserColumns } from '../database/startup.js';
 import { authenticateToken } from '../middleware/auth.js';
 import rateLimit from 'express-rate-limit';
 import { getClientIP, lookupIPGeo, computeOnPremScore, recordLoginEvent, recordLogoutEvent, checkVPNAndNotify } from '../utils/security.js';
+import { loginRateLimitKey } from '../utils/loginRateLimitKey.js';
 
 const router = express.Router();
 
@@ -17,10 +18,7 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Use a key generator that's more forgiving
-  keyGenerator: (req) => {
-    // Use username + IP to be more specific, but still allow retries
-    return req.body?.username ? `${req.ip}-${req.body.username.toLowerCase()}` : req.ip;
-  }
+  keyGenerator: (req) => loginRateLimitKey(req),
 });
 
 // POST /api/auth/login
