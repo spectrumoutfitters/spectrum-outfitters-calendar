@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import api from '../utils/api';
+import { incomingSocketAlert } from '../utils/socketIncomingAlert';
 
 const SocketContext = createContext();
 
@@ -113,27 +114,25 @@ export const SocketProvider = ({ children }) => {
     if (!socket || !user) return;
 
     const handleGlobalNewMessage = async (message) => {
-      // Don't play sound for your own messages
-      if (message.sender_id === user.id) return;
-      
-      const isTeamMessage = message.is_team_message === 1 || message.is_team_message === true;
-      const messageBoardType = message.board_type || message.type || (isTeamMessage ? 'team_board' : null);
-      const messageConversationId = isTeamMessage 
-        ? (messageBoardType === 'admin_board' ? 'admin_board' : 'team_board')
-        : message.sender_id;
-      
-      // Only play sound if not viewing this conversation
-      if (viewingConversationRef.current !== messageConversationId) {
-        playNotificationSound();
-        // Update unread count
-        setUnreadCount(prev => prev + 1);
-      } else {
-        // If viewing the conversation, reload unread count from server to ensure accuracy
-        try {
-          const response = await api.get('/messages/unread-count');
-          setUnreadCount(response.data.totalUnread || 0);
-        } catch (error) {
-          console.error('Error loading unread count:', error);
+      const decision = incomingSocketAlert(message, user.id, viewingConversationRef.current);
+      switch (decision.action) {
+        case 'ignore':
+          return;
+        case 'alert':
+          playNotificationSound();
+          setUnreadCount(prev => prev + 1);
+          return;
+        case 'reload':
+          try {
+            const response = await api.get('/messages/unread-count');
+            setUnreadCount(response.data.totalUnread || 0);
+          } catch (error) {
+            console.error('Error loading unread count:', error);
+          }
+          return;
+        default: {
+          const unexpected = decision.action;
+          throw new Error(`Unexpected socket alert action: ${unexpected}`);
         }
       }
     };
