@@ -496,8 +496,21 @@ function eventToScheduleDates(ev) {
   return { start_date: start, end_date: end };
 }
 
+/**
+ * Text used to classify a Google event.
+ * App pushes use `[SO] Name - Label (reason)`. The name and the parenthetical reason
+ * are free text. Scanning them rewrites the stored type on the next pull
+ * (`Meeting (personal)` → personal_leave, `Sickles - Meeting` → sick_leave).
+ */
+function typeMatchText(summary) {
+  const raw = String(summary || '');
+  const labeled = raw.match(/^\[SO\]\s+.*?\s-\s+([\s\S]+)$/i);
+  const label = (labeled ? labeled[1] : raw).replace(/\s*\([^)]*\)\s*$/, '').trim();
+  return normalizeText(label);
+}
+
 function parseTypeFromSummary(summary) {
-  const s = normalizeText(summary);
+  const s = typeMatchText(summary);
   if (s.includes('vacation')) return 'vacation';
   if (s.includes('sick')) return 'sick_leave';
   if (s.includes('personal')) return 'personal_leave';
